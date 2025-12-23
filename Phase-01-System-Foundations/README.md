@@ -63,10 +63,31 @@
    - Metrics vs Logs vs Traces
 
 10. **Chaos Engineering (Introduction)**
+
     - Why chaos engineering matters
     - Failure injection
     - Netflix Chaos Monkey concept
 
+11. **Back-of-Envelope Calculations**
+
+    - Essential numbers to memorize
+    - Traffic, storage, bandwidth estimation
+    - Server capacity planning
+    - Interview estimation techniques
+
+12. **Consistency Models**
+
+    - Strong vs Eventual consistency
+    - Causal consistency
+    - Read-your-writes, Monotonic reads
+    - When to use each model
+
+13. **Idempotency**
+    - What makes an operation idempotent
+    - Idempotency keys and implementation
+    - Handling retries safely
+    - Production patterns (Stripe, Amazon)
+
 ## Deliverable
 
-Can explain why Netflix/Uber need distributed systems
+Can explain why Netflix/Uber need distributed systems and make quick capacity estimates

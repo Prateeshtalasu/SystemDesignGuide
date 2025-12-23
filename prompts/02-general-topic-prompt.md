@@ -46,7 +46,7 @@ Follow this exact structure:
    - Link to engineering blogs or talks if notable
    - Production war stories and lessons learned
 
-6️⃣ How to implement or apply it
+6️⃣ How to implement or apply it (apply this wherever it required)
    - Code in Java (idiomatic, production-style)
    - Maven/Gradle dependencies if applicable
    - Spring Boot integration if relevant
