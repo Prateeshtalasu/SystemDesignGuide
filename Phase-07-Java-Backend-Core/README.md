@@ -14,13 +14,13 @@
 
 ## Topics:
 
-1. **OOP Fundamentals**
+1. **[OOP Fundamentals](01-oop-fundamentals.md)**
    - Encapsulation, Inheritance, Polymorphism
    - Composition vs Inheritance (prefer composition)
    - Abstract classes vs Interfaces
    - When to use each
 
-2. **SOLID Principles**
+2. **[SOLID Principles](02-solid-principles.md)**
    - Single Responsibility
    - Open/Closed
    - Liskov Substitution
@@ -29,7 +29,7 @@
    - Real code examples for each
    - Anti-patterns to avoid
 
-3. **Collections Deep Dive**
+3. **[Collections Deep Dive](03-collections-deep-dive.md)**
    - ArrayList vs LinkedList (when to use)
    - HashMap internals (buckets, load factor, rehashing)
    - TreeMap vs HashMap
@@ -37,21 +37,21 @@
    - Time complexity for all operations
    - Choosing the right collection
 
-4. **Streams API**
+4. **[Streams API](04-streams-api.md)**
    - Functional programming in Java
    - map, filter, reduce, flatMap
    - Collectors (groupingBy, partitioningBy)
    - Parallel streams (when to use, pitfalls)
    - Custom collectors
 
-5. **Exception Handling**
+5. **[Exception Handling](05-exception-handling.md)**
    - Checked vs Unchecked
    - Try-with-resources
    - Custom exceptions
    - Exception handling in REST APIs
    - Global exception handlers
 
-6. **Java Concurrency**
+6. **[Java Concurrency](06-java-concurrency.md)**
    - Threads (creating, lifecycle)
    - Synchronization (synchronized keyword)
    - Locks (ReentrantLock, ReadWriteLock, StampedLock)
@@ -62,28 +62,28 @@
    - volatile keyword
    - ThreadLocal
 
-7. **Java Memory Model**
+7. **[Java Memory Model](07-java-memory-model.md)**
    - Heap vs Stack
    - Happens-before relationship
    - Visibility guarantees
    - Memory leaks (detection and prevention)
    - Weak references, soft references
 
-8. **Garbage Collection**
+8. **[Garbage Collection](08-garbage-collection.md)**
    - GC basics
    - Generational GC (Young, Old, Metaspace)
    - GC algorithms (Serial, Parallel, CMS, G1, ZGC, Shenandoah)
    - GC tuning basics
    - GC logs analysis
 
-9. **Design Patterns** (Gang of Four)
+9. **[Design Patterns](09-design-patterns.md)** (Gang of Four)
    - **Creational**: Factory, Abstract Factory, Builder, Singleton, Prototype
    - **Structural**: Adapter, Decorator, Facade, Proxy, Composite
    - **Behavioral**: Strategy, Observer, Template Method, State, Command, Chain of Responsibility
    - Repository pattern (Spring Data)
    - Each with Java code examples
 
-10. **Spring Framework Fundamentals**
+10. **[Spring Framework Fundamentals](10-spring-framework-fundamentals.md)**
     - Dependency Injection (DI)
     - Inversion of Control (IoC)
     - Spring Bean lifecycle
@@ -92,7 +92,7 @@
     - Spring Boot auto-configuration
     - Spring MVC architecture
 
-11. **Advanced Java Features**
+11. **[Advanced Java Features](11-advanced-java-features.md)**
     - Generics (wildcards, bounded types, type erasure)
     - Lambda expressions & method references
     - Stream API deep dive
@@ -100,7 +100,7 @@
     - Reflection API basics
     - Annotations (custom annotations, meta-annotations)
 
-12. **JVM Tuning & Performance**
+12. **[JVM Tuning & Performance](12-jvm-tuning-performance.md)**
     - JVM memory tuning
     - GC tuning parameters
     - JVM flags (-Xmx, -Xms, -XX flags)
@@ -108,35 +108,35 @@
     - Profiling tools (JProfiler, VisualVM, async-profiler)
     - Flame graphs
 
-13. **Java Best Practices**
+13. **[Java Best Practices](13-java-best-practices.md)**
     - Effective Java principles
     - Code smells and refactoring
     - Immutability patterns
     - Builder pattern implementation
     - Null safety strategies (Optional, annotations)
 
-14. **Modern Java Features (17+)**
+14. **[Modern Java Features (17+)](14-modern-java-features.md)**
     - Records
     - Sealed classes
     - Pattern matching (instanceof, switch)
     - Text blocks
     - Local variable type inference (var)
 
-15. **Project Loom (Java 21+)**
+15. **[Project Loom (Java 21+)](15-project-loom.md)**
     - Virtual threads
     - Structured concurrency
     - Why virtual threads matter
     - Migration from thread pools
     - When to use virtual threads
 
-16. **Reactive Programming**
+16. **[Reactive Programming](16-reactive-programming.md)**
     - Spring WebFlux basics
     - Mono and Flux
     - Backpressure handling
     - When to use reactive
     - Reactive vs imperative trade-offs
 
-17. **Testing in Java**
+17. **[Testing in Java](17-testing-in-java.md)**
     - JUnit 5 features
     - Mockito (mocking, stubbing, verification)
     - Integration testing with Spring Boot

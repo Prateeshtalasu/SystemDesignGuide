@@ -1,22 +1,415 @@
 # 🚗 Parking Lot System - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Explanation
+
+### Why Each Class Exists
+
+| Class                    | Problem It Owns                           | What Breaks Without It                                      |
+| ------------------------ | ----------------------------------------- | ----------------------------------------------------------- |
+| `Vehicle` (abstract)     | Enforce vehicle types and polymorphism    | Cannot have type-safe vehicle handling, no polymorphism     |
+| `ParkingSpot` (abstract) | Manage individual parking space state     | Cannot track spot occupancy, no spot type behavior          |
+| `ParkingTicket`          | Track parking sessions and calculate fees | Cannot charge for parking, no session tracking              |
+| `ParkingFloor`           | Organize spots by physical location       | Cannot show per-floor availability, no spatial organization |
+| `DisplayBoard`           | Present availability information          | Users cannot see current availability                       |
+| `EntryPanel`             | Handle vehicle entry workflow             | No controlled entry, no ticket issuance                     |
+| `ExitPanel`              | Handle exit and payment workflow          | No payment collection, no controlled exit                   |
+| `PaymentService`         | Coordinate payment processing             | Cannot collect parking fees                                 |
+| `ParkingLot`             | Central coordination of all operations    | Inconsistent state across components                        |
+
+### Why Responsibilities Are Placed Where They Are
+
+**Vehicle.canFitInSpot() vs ParkingSpot.canFitVehicle()**
+
+```java
+// Vehicle knows its own size constraints
+public abstract boolean canFitInSpot(ParkingSpotType spotType);
+
+// Spot delegates compatibility check to vehicle
+public boolean canFitVehicle(Vehicle vehicle) {
+    if (!isAvailable) return false;
+    return vehicle.canFitInSpot(this.type);  // Delegation
+}
+```
+
+**Why this design?**
+
+- Each vehicle type has unique fitting rules (motorcycle fits anywhere, truck needs large)
+- Adding new vehicle types requires only creating new subclass
+- Spot does not need to know about every vehicle type
+
+**ParkingTicket.calculateFee() Placement**
+
+```java
+// Ticket has all data needed for fee calculation
+public double calculateFee() {
+    Duration duration = Duration.between(entryTime, exitTime);
+    double hourlyRate = getHourlyRate();  // Based on spot type
+    return hours * hourlyRate;
+}
+```
+
+**Why in Ticket?**
+
+- Ticket has entry time, exit time, and spot type
+- All data needed is already in the ticket
+- No external dependencies required
+
+**Alternative (if pricing becomes complex):**
+
+```java
+// Extract to PricingService for dynamic pricing
+public class PricingService {
+    public double calculateFee(ParkingTicket ticket) {
+        return strategy.calculate(ticket, getCurrentOccupancy());
+    }
+}
+```
+
+### How Objects Interact at Runtime
+
+**Entry Flow:**
+
+```
+User arrives → EntryPanel.processEntry(vehicle)
+                    │
+                    ▼
+            ParkingLot.parkVehicle(vehicle)
+                    │
+                    ├──► Check: vehicleToTicket.containsKey(plate)?
+                    │         Yes → Return null (already parked)
+                    │
+                    ├──► findAvailableSpot(vehicle)
+                    │         │
+                    │         ▼
+                    │    For each ParkingFloor:
+                    │         floor.findAvailableSpot(vehicle)
+                    │              │
+                    │              ▼
+                    │         For each spot in searchOrder:
+                    │              spot.canFitVehicle(vehicle)?
+                    │                   │
+                    │                   ▼
+                    │              vehicle.canFitInSpot(spotType)?
+                    │
+                    ├──► spot.parkVehicle(vehicle)
+                    │         │
+                    │         ▼
+                    │    spot.isAvailable = false
+                    │    spot.parkedVehicle = vehicle
+                    │
+                    ├──► Create ParkingTicket
+                    │
+                    ├──► activeTickets.put(ticketId, ticket)
+                    │    vehicleToTicket.put(plate, ticket)
+                    │
+                    └──► updateAllDisplayBoards()
+```
+
+**Exit Flow:**
+
+```
+User at exit → ExitPanel.processExit(ticket)
+                    │
+                    ├──► ticket.calculateFee()
+                    │         │
+                    │         ▼
+                    │    Duration = now - entryTime
+                    │    Hours = ceiling(minutes / 60)
+                    │    Fee = hours × hourlyRate
+                    │
+                    ├──► paymentService.processPayment(ticket, fee)
+                    │         │
+                    │         ▼
+                    │    Payment.processPayment()
+                    │         │
+                    │         ▼
+                    │    ticket.markAsPaid(fee)
+                    │
+                    └──► parkingLot.releaseSpot(ticket)
+                              │
+                              ├──► spot.removeVehicle()
+                              │
+                              ├──► activeTickets.remove(ticketId)
+                              │    vehicleToTicket.remove(plate)
+                              │
+                              └──► updateAllDisplayBoards()
+```
+
+---
+
+## Design Patterns Used
+
+### 1. Singleton Pattern
+
+**Where:** `ParkingLot` class
+
+**Why it fits:**
+
+- Only one parking lot should exist in the system
+- All entry/exit panels must share the same state
+- Prevents inconsistent availability counts
+
+```java
+public class ParkingLot {
+    private static ParkingLot instance;
+
+    private ParkingLot(String name, String address) {
+        // Private constructor
+    }
+
+    public static synchronized ParkingLot getInstance(String name, String address) {
+        if (instance == null) {
+            instance = new ParkingLot(name, address);
+        }
+        return instance;
+    }
+}
+```
+
+**Trade-offs:**
+
+| Pros                       | Cons                    |
+| -------------------------- | ----------------------- |
+| Guaranteed single instance | Harder to unit test     |
+| Global access point        | Hidden dependencies     |
+| Lazy initialization        | Can become a god object |
+
+**Interview tip:** Mention that in production, you might use dependency injection instead of Singleton for better testability.
+
+---
+
+### 2. Strategy Pattern
+
+**Where:** `Payment` hierarchy
+
+**Why it fits:**
+
+- Different payment methods have different algorithms
+- Need to switch payment methods at runtime
+- Encapsulates payment-specific logic
+
+```java
+// Strategy interface (implicit via abstract class)
+public abstract class Payment {
+    public abstract boolean processPayment();
+}
+
+// Concrete strategies
+public class CashPayment extends Payment {
+    @Override
+    public boolean processPayment() {
+        // Cash-specific logic: validate amount, calculate change
+    }
+}
+
+public class CardPayment extends Payment {
+    @Override
+    public boolean processPayment() {
+        // Card-specific logic: connect to gateway, validate card
+    }
+}
+```
+
+**How it enables extension:**
+
+```java
+// Adding mobile payment requires no changes to existing code
+public class MobilePayment extends Payment {
+    @Override
+    public boolean processPayment() {
+        // Apple Pay / Google Pay logic
+    }
+}
+```
+
+---
+
+### 3. Template Method Pattern (Implicit)
+
+**Where:** `Vehicle` and `ParkingSpot` hierarchies
+
+**Why it fits:**
+
+- Common structure with varying implementation
+- Base class defines the skeleton, subclasses fill in details
+
+```java
+// Base class defines structure
+public abstract class Vehicle {
+    protected Vehicle(String licensePlate, VehicleType type) {
+        // Common initialization
+    }
+
+    // Subclasses implement this
+    public abstract boolean canFitInSpot(ParkingSpotType spotType);
+}
+
+// Subclass provides specific behavior
+public class Truck extends Vehicle {
+    @Override
+    public boolean canFitInSpot(ParkingSpotType spotType) {
+        return spotType == ParkingSpotType.LARGE;  // Truck-specific rule
+    }
+}
+```
+
+---
+
+### 4. Factory Pattern (Could Be Added)
+
+**Where:** Spot creation
+
+**Current (simple) approach:**
+
+```java
+floor.addParkingSpot(new CompactSpot("F0-C001", 0));
+```
+
+**With Factory Pattern:**
+
+```java
+public class ParkingSpotFactory {
+    public static ParkingSpot createSpot(ParkingSpotType type,
+                                         String spotId, int floor) {
+        switch (type) {
+            case COMPACT: return new CompactSpot(spotId, floor);
+            case LARGE: return new LargeSpot(spotId, floor);
+            case HANDICAPPED: return new HandicappedSpot(spotId, floor);
+            default: throw new IllegalArgumentException("Unknown type");
+        }
+    }
+}
+```
+
+**When to use Factory:**
+
+- When creation logic is complex
+- When you need to hide concrete classes
+- When creation depends on configuration
+
+---
+
+### 5. Composition over Inheritance
+
+**Where:** Throughout the design
+
+```java
+// ParkingFloor CONTAINS DisplayBoard (composition)
+public class ParkingFloor {
+    private final DisplayBoard displayBoard;  // Owns the display
+}
+
+// ParkingLot CONTAINS ParkingFloors (composition)
+public class ParkingLot {
+    private final List<ParkingFloor> floors;  // Owns the floors
+}
+```
+
+**Why composition:**
+
+- Floors cannot exist without a parking lot
+- Display boards are integral to floors
+- Changes to one do not require changes to others
+
+---
+
+## Why Alternatives Were Rejected
+
+### Alternative 1: Single ParkingSpot Class with Type Field
+
+```java
+// Rejected approach
+public class ParkingSpot {
+    private ParkingSpotType type;
+
+    public boolean canFitVehicle(Vehicle vehicle) {
+        switch (type) {
+            case COMPACT: // Logic for compact
+            case LARGE: // Logic for large
+            // ... more cases
+        }
+    }
+}
+```
+
+**Why rejected:**
+
+- Violates OCP (must modify class to add new types)
+- Giant switch statements are hard to maintain
+- Cannot add type-specific behavior easily
+
+---
+
+### Alternative 2: Vehicle Stores Its Parking Spot
+
+```java
+// Rejected approach
+public class Vehicle {
+    private ParkingSpot currentSpot;  // Vehicle knows where it's parked
+}
+```
+
+**Why rejected:**
+
+- Bidirectional dependency (Vehicle ↔ Spot)
+- Harder to manage state consistency
+- Vehicle should not know about parking infrastructure
+
+**Better approach:** Ticket connects Vehicle and Spot
+
+---
+
+### Alternative 3: Global Spot List Instead of Floors
+
+```java
+// Rejected approach
+public class ParkingLot {
+    private List<ParkingSpot> allSpots;  // No floor organization
+}
+```
+
+**Why rejected:**
+
+- Loses physical organization
+- Cannot show per-floor availability
+- Harder to implement floor-specific features
+
+---
+
+### Alternative 4: Ticket Contains Payment Logic
+
+```java
+// Rejected approach
+public class ParkingTicket {
+    public boolean processPayment(String cardNumber) {
+        // Payment processing in ticket
+    }
+}
+```
+
+**Why rejected:**
+
+- Violates SRP (ticket handles both tracking AND payment)
+- Payment logic should be separate
+- Cannot easily swap payment providers
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
 > **Definition**: A class should have only one reason to change.
 
-Let's analyze each class:
-
-| Class | Single Responsibility | Why It Works |
-|-------|----------------------|--------------|
-| `Vehicle` | Hold vehicle identity and type | Only changes if vehicle identification changes |
-| `ParkingSpot` | Manage one parking space | Only changes if spot behavior changes |
-| `ParkingTicket` | Track one parking session | Only changes if ticketing rules change |
-| `ParkingFloor` | Manage spots on one floor | Only changes if floor management changes |
-| `DisplayBoard` | Show availability | Only changes if display format changes |
-| `PaymentService` | Process payments | Only changes if payment logic changes |
-| `ParkingLot` | Orchestrate parking operations | This is the coordination point |
+| Class            | Single Responsibility          | Why It Works                                   |
+| ---------------- | ------------------------------ | ---------------------------------------------- |
+| `Vehicle`        | Hold vehicle identity and type | Only changes if vehicle identification changes |
+| `ParkingSpot`    | Manage one parking space       | Only changes if spot behavior changes          |
+| `ParkingTicket`  | Track one parking session      | Only changes if ticketing rules change         |
+| `ParkingFloor`   | Manage spots on one floor      | Only changes if floor management changes       |
+| `DisplayBoard`   | Show availability              | Only changes if display format changes         |
+| `PaymentService` | Process payments               | Only changes if payment logic changes          |
+| `ParkingLot`     | Orchestrate parking operations | This is the coordination point                 |
 
 **Potential SRP Violation - ParkingTicket:**
 
@@ -27,10 +420,11 @@ public double calculateFee() {
 }
 ```
 
-**Why it's acceptable:**
+**Why it is acceptable:**
+
 - Fee calculation is directly tied to the ticket (duration, spot type)
 - Extracting to a separate `PricingService` would be over-engineering for this scope
-- In a larger system, you'd extract this to support dynamic pricing, promotions, etc.
+- In a larger system, you would extract this to support dynamic pricing
 
 **If we needed to fix it:**
 
@@ -38,7 +432,7 @@ public double calculateFee() {
 // FeeCalculator.java - Separate class for pricing
 public class FeeCalculator {
     private final PricingStrategy strategy;
-    
+
     public double calculate(ParkingTicket ticket) {
         return strategy.calculateFee(ticket);
     }
@@ -51,23 +445,18 @@ public class FeeCalculator {
 
 > **Definition**: Software entities should be open for extension but closed for modification.
 
-**How our design follows OCP:**
-
-#### Adding New Vehicle Types
+**Adding New Vehicle Types:**
 
 ```java
-// Current: Abstract Vehicle class with canFitInSpot() method
-// To add Electric Vehicle:
-
+// To add Electric Vehicle - NO existing code modified
 public class ElectricCar extends Vehicle {
-    
+
     public ElectricCar(String licensePlate) {
         super(licensePlate, VehicleType.ELECTRIC_CAR);
     }
-    
+
     @Override
     public boolean canFitInSpot(ParkingSpotType spotType) {
-        // Electric cars need charging spots or regular spots
         return spotType == ParkingSpotType.ELECTRIC_CHARGING ||
                spotType == ParkingSpotType.COMPACT ||
                spotType == ParkingSpotType.LARGE;
@@ -75,24 +464,18 @@ public class ElectricCar extends Vehicle {
 }
 ```
 
-**No existing code modified!** We just:
-1. Add new enum value: `VehicleType.ELECTRIC_CAR`
-2. Add new spot type: `ParkingSpotType.ELECTRIC_CHARGING`
-3. Create new classes
-
-#### Adding New Payment Methods
+**Adding New Payment Methods:**
 
 ```java
-// To add Mobile Payment (Apple Pay, Google Pay):
-
+// To add Mobile Payment - NO existing code modified
 public class MobilePayment extends Payment {
     private final String walletId;
-    
+
     public MobilePayment(double amount, String walletId) {
         super(amount);
         this.walletId = walletId;
     }
-    
+
     @Override
     public boolean processPayment() {
         // Mobile payment processing logic
@@ -101,23 +484,16 @@ public class MobilePayment extends Payment {
 }
 ```
 
-**No changes to existing Payment classes!**
-
-#### Adding New Spot Types
+**Adding New Spot Types:**
 
 ```java
-// To add Electric Charging Spot:
-
+// To add Electric Charging Spot - NO existing code modified
 public class ElectricChargingSpot extends ParkingSpot {
-    private final double chargingRate; // kW
-    
-    public ElectricChargingSpot(String spotId, int floorNumber, double chargingRate) {
-        super(spotId, ParkingSpotType.ELECTRIC_CHARGING, floorNumber);
-        this.chargingRate = chargingRate;
-    }
-    
-    public double getChargingRate() {
-        return chargingRate;
+    private final double chargingRateKW;
+
+    public ElectricChargingSpot(String spotId, int floor, double chargingRate) {
+        super(spotId, ParkingSpotType.ELECTRIC_CHARGING, floor);
+        this.chargingRateKW = chargingRate;
     }
 }
 ```
@@ -131,21 +507,20 @@ public class ElectricChargingSpot extends ParkingSpot {
 **Testing LSP in our design:**
 
 ```java
-// This code should work with ANY Vehicle subtype
 public void testLSP() {
     List<Vehicle> vehicles = Arrays.asList(
         new Car("CAR-001"),
         new Motorcycle("BIKE-001"),
         new Truck("TRUCK-001")
     );
-    
+
     for (Vehicle vehicle : vehicles) {
         // All vehicles can be checked for spot compatibility
         boolean canFit = vehicle.canFitInSpot(ParkingSpotType.LARGE);
-        
+
         // All vehicles have a license plate
         String plate = vehicle.getLicensePlate();
-        
+
         // All vehicles have a type
         VehicleType type = vehicle.getType();
     }
@@ -153,6 +528,7 @@ public void testLSP() {
 ```
 
 **LSP holds because:**
+
 - All `Vehicle` subclasses implement `canFitInSpot()` correctly
 - No subclass throws unexpected exceptions
 - No subclass has stricter preconditions
@@ -176,16 +552,14 @@ This breaks LSP because code expecting a `Vehicle` would crash.
 
 ### 4. Interface Segregation Principle (ISP)
 
-> **Definition**: Clients should not be forced to depend on interfaces they don't use.
+> **Definition**: Clients should not be forced to depend on interfaces they do not use.
 
 **Current design analysis:**
 
-We don't have explicit interfaces in the current design, but we could improve:
+We use abstract classes, but could improve with interfaces:
 
 ```java
-// Current: ParkingSpot is an abstract class
 // Better: Use interfaces for specific capabilities
-
 public interface Parkable {
     boolean canFitVehicle(Vehicle vehicle);
     boolean parkVehicle(Vehicle vehicle);
@@ -223,7 +597,8 @@ public class VIPSpot implements Parkable, Reservable {
 }
 ```
 
-**Why we didn't over-apply ISP:**
+**Why we did not over-apply ISP:**
+
 - For interview scope, abstract classes are sufficient
 - Adding interfaces everywhere adds complexity without clear benefit
 - ISP becomes important when you have clients that need different capabilities
@@ -262,15 +637,15 @@ public class PaymentService implements PaymentProcessor {
 // High-level module depends on abstraction
 public class ExitPanel {
     private final PaymentProcessor paymentProcessor;  // Interface!
-    
-    public ExitPanel(String panelId, ParkingLot parkingLot, 
-                     PaymentProcessor paymentProcessor) {
-        this.paymentProcessor = paymentProcessor;
+
+    public ExitPanel(String panelId, ParkingLot lot, PaymentProcessor processor) {
+        this.paymentProcessor = processor;
     }
 }
 ```
 
 **Benefits of DIP:**
+
 - Easy to swap payment providers (Stripe → Square)
 - Easy to mock in tests
 - Decouples exit panel from payment implementation
@@ -288,353 +663,80 @@ public synchronized ParkingTicket parkVehicle(Vehicle vehicle) {
 
 ---
 
-## Design Patterns Used
+## SOLID Principles Check
 
-### 1. Singleton Pattern
+| Principle | Rating | Explanation                                                                                                                                                                                                                         | Fix if WEAK/FAIL                                                                                                   | Tradeoff                                                           |
+| --------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| **SRP**   | PASS   | Each class has a single, well-defined responsibility. Vehicle handles identity/type, ParkingSpot manages state, ParkingTicket tracks sessions, etc. Minor concern: ParkingTicket calculates fees, but this is acceptable for scope. | N/A                                                                                                                | -                                                                  |
+| **OCP**   | PASS   | System is open for extension (new vehicle types, payment methods, spot types) without modifying existing code. Vehicle/Payment hierarchies enable this.                                                                             | N/A                                                                                                                | -                                                                  |
+| **LSP**   | PASS   | All Vehicle subclasses properly implement canFitInSpot() without violating base contract. No unexpected exceptions or stricter preconditions.                                                                                       | N/A                                                                                                                | -                                                                  |
+| **ISP**   | WEAK   | Using abstract classes instead of interfaces. For interview scope this is acceptable, but in production would benefit from interface segregation (Parkable, Reservable, ChargingCapable).                                           | Extract interfaces for capabilities (Parkable, Reservable, ChargingCapable) where multiple capabilities are needed | Adds abstraction layer and more files, but increases flexibility   |
+| **DIP**   | WEAK   | ExitPanel depends on concrete PaymentService. Vehicle abstraction is used well, but payment processing could use interface.                                                                                                         | Extract PaymentProcessor interface, inject into ExitPanel constructor                                              | More setup/configuration, but improves testability and flexibility |
 
-**Where:** `ParkingLot` class
+---
 
-**Why it fits:**
-- Only one parking lot should exist in the system
-- All entry/exit panels must share the same state
-- Prevents inconsistent availability counts
+## STEP 7: Complexity Analysis
+
+### Time Complexity
+
+| Operation               | Complexity | Explanation                        |
+| ----------------------- | ---------- | ---------------------------------- |
+| `parkVehicle()`         | O(F × S)   | F = floors, S = spots per floor    |
+| `findAvailableSpot()`   | O(S)       | Linear scan of spots on one floor  |
+| `releaseSpot()`         | O(1)       | Direct access via ticket reference |
+| `getTicket(ticketId)`   | O(1)       | HashMap lookup                     |
+| `findTicketByVehicle()` | O(1)       | HashMap lookup                     |
+| `calculateFee()`        | O(1)       | Simple arithmetic                  |
+| `updateDisplayBoard()`  | O(S)       | Count available spots              |
+
+### Space Complexity
+
+| Data Structure    | Space | Purpose                          |
+| ----------------- | ----- | -------------------------------- |
+| `floors`          | O(F)  | Store floor objects              |
+| `spotsByType`     | O(S)  | Organize spots by type per floor |
+| `spotsById`       | O(S)  | Quick spot lookup by ID          |
+| `activeTickets`   | O(V)  | V = currently parked vehicles    |
+| `vehicleToTicket` | O(V)  | Vehicle → ticket mapping         |
+
+### Bottlenecks at Scale
+
+**10x Usage (100 → 1,000 vehicles):**
+
+- Linear spot search becomes noticeable
+- Solution: Index available spots separately
+
+**100x Usage (100 → 10,000 vehicles):**
+
+- Single ParkingLot lock becomes bottleneck
+- Solution: Partition by floor, parallel processing
+
+### Optimization: Available Spot Index
 
 ```java
-public class ParkingLot {
-    private static ParkingLot instance;
-    
-    private ParkingLot(String name, String address) {
-        // Private constructor
+// Instead of scanning all spots:
+private final Map<ParkingSpotType, Queue<ParkingSpot>> availableSpots;
+
+// O(1) to get available spot
+public ParkingSpot findAvailableSpot(Vehicle vehicle) {
+    for (ParkingSpotType type : getSearchOrder(vehicle)) {
+        ParkingSpot spot = availableSpots.get(type).poll();
+        if (spot != null) return spot;
     }
-    
-    public static synchronized ParkingLot getInstance(String name, String address) {
-        if (instance == null) {
-            instance = new ParkingLot(name, address);
-        }
-        return instance;
-    }
+    return null;
+}
+
+// When vehicle leaves, add back to queue
+public void releaseSpot(ParkingSpot spot) {
+    availableSpots.get(spot.getType()).offer(spot);
 }
 ```
 
-**Trade-offs:**
-| Pros | Cons |
-|------|------|
-| Guaranteed single instance | Harder to unit test |
-| Global access point | Hidden dependencies |
-| Lazy initialization | Can become a god object |
+### Thread Safety Considerations
 
-**Interview tip:** Mention that in production, you might use dependency injection instead of Singleton for better testability.
+**Where Synchronization is Needed:**
 
----
-
-### 2. Strategy Pattern
-
-**Where:** `Payment` hierarchy
-
-**Why it fits:**
-- Different payment methods have different algorithms
-- Need to switch payment methods at runtime
-- Encapsulates payment-specific logic
-
-```java
-// Strategy interface (implicit via abstract class)
-public abstract class Payment {
-    public abstract boolean processPayment();
-}
-
-// Concrete strategies
-public class CashPayment extends Payment {
-    @Override
-    public boolean processPayment() {
-        // Cash-specific logic
-    }
-}
-
-public class CardPayment extends Payment {
-    @Override
-    public boolean processPayment() {
-        // Card-specific logic
-    }
-}
-```
-
-**How it's used:**
-
-```java
-public class PaymentService {
-    public boolean processPayment(ParkingTicket ticket, double amount, 
-                                  PaymentType type) {
-        Payment payment;
-        switch (type) {
-            case CASH:
-                payment = new CashPayment(amount, cashTendered);
-                break;
-            case CARD:
-                payment = new CardPayment(amount, cardNumber);
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown payment type");
-        }
-        return payment.processPayment();
-    }
-}
-```
-
----
-
-### 3. Factory Pattern (Implicit)
-
-**Where:** Spot creation in `ParkingFloor`
-
-**Why it fits:**
-- Encapsulates object creation logic
-- Caller doesn't need to know concrete classes
-
-**Current (simple) approach:**
-
-```java
-// Direct instantiation
-floor.addParkingSpot(new CompactSpot("F0-C001", 0));
-```
-
-**With Factory Pattern:**
-
-```java
-public class ParkingSpotFactory {
-    
-    public static ParkingSpot createSpot(ParkingSpotType type, 
-                                         String spotId, int floor) {
-        switch (type) {
-            case COMPACT:
-                return new CompactSpot(spotId, floor);
-            case LARGE:
-                return new LargeSpot(spotId, floor);
-            case HANDICAPPED:
-                return new HandicappedSpot(spotId, floor);
-            default:
-                throw new IllegalArgumentException("Unknown spot type: " + type);
-        }
-    }
-}
-
-// Usage
-floor.addParkingSpot(ParkingSpotFactory.createSpot(
-    ParkingSpotType.COMPACT, "F0-C001", 0));
-```
-
-**When to use Factory:**
-- When creation logic is complex
-- When you need to hide concrete classes
-- When creation depends on configuration
-
----
-
-### 4. Composition over Inheritance
-
-**Where:** Throughout the design
-
-**Examples:**
-
-```java
-// ParkingFloor CONTAINS DisplayBoard (composition)
-public class ParkingFloor {
-    private final DisplayBoard displayBoard;  // Owns the display
-}
-
-// ParkingLot CONTAINS ParkingFloors (composition)
-public class ParkingLot {
-    private final List<ParkingFloor> floors;  // Owns the floors
-}
-```
-
-**Why composition:**
-- Floors can't exist without a parking lot
-- Display boards are integral to floors
-- Changes to one don't require changes to others
-
----
-
-## Why Alternatives Were Rejected
-
-### Alternative 1: Single ParkingSpot Class with Type Field
-
-```java
-// Rejected approach
-public class ParkingSpot {
-    private ParkingSpotType type;
-    
-    public boolean canFitVehicle(Vehicle vehicle) {
-        // Giant switch statement
-        switch (type) {
-            case COMPACT:
-                // Logic for compact
-            case LARGE:
-                // Logic for large
-            // ... more cases
-        }
-    }
-}
-```
-
-**Why rejected:**
-- Violates OCP (must modify class to add new types)
-- Giant switch statements are hard to maintain
-- Can't add type-specific behavior easily
-
----
-
-### Alternative 2: Vehicle Stores Its Parking Spot
-
-```java
-// Rejected approach
-public class Vehicle {
-    private ParkingSpot currentSpot;  // Vehicle knows where it's parked
-}
-```
-
-**Why rejected:**
-- Bidirectional dependency (Vehicle ↔ Spot)
-- Harder to manage state consistency
-- Vehicle shouldn't know about parking infrastructure
-
-**Better approach:** Ticket connects Vehicle and Spot
-
----
-
-### Alternative 3: Global Spot List Instead of Floors
-
-```java
-// Rejected approach
-public class ParkingLot {
-    private List<ParkingSpot> allSpots;  // No floor organization
-}
-```
-
-**Why rejected:**
-- Loses physical organization
-- Can't show per-floor availability
-- Harder to implement floor-specific features (e.g., "park near entrance")
-
----
-
-### Alternative 4: Ticket Contains Payment Logic
-
-```java
-// Rejected approach
-public class ParkingTicket {
-    public boolean processPayment(String cardNumber) {
-        // Payment processing in ticket
-    }
-}
-```
-
-**Why rejected:**
-- Violates SRP (ticket handles both tracking AND payment)
-- Payment logic should be separate
-- Can't easily swap payment providers
-
----
-
-## What Would Break Without Each Class
-
-| Class | What Breaks Without It |
-|-------|----------------------|
-| `Vehicle` (abstract) | Can't enforce vehicle types, no polymorphism |
-| `ParkingSpot` (abstract) | Can't have different spot behaviors |
-| `ParkingTicket` | Can't track parking sessions or calculate fees |
-| `ParkingFloor` | Can't organize spots by location |
-| `DisplayBoard` | Users can't see availability |
-| `EntryPanel` | No controlled entry point |
-| `ExitPanel` | No controlled exit, no payment processing |
-| `PaymentService` | Can't collect parking fees |
-| `ParkingLot` | No central coordination, inconsistent state |
-
----
-
-## Class Interaction at Runtime
-
-### Entry Flow
-
-```
-User arrives → EntryPanel.processEntry(vehicle)
-                    │
-                    ▼
-            ParkingLot.parkVehicle(vehicle)
-                    │
-                    ├──► Check: vehicleToTicket.containsKey(plate)?
-                    │         Yes → Return null (already parked)
-                    │
-                    ├──► findAvailableSpot(vehicle)
-                    │         │
-                    │         ▼
-                    │    For each ParkingFloor:
-                    │         floor.findAvailableSpot(vehicle)
-                    │              │
-                    │              ▼
-                    │         For each spot in searchOrder:
-                    │              spot.canFitVehicle(vehicle)?
-                    │                   │
-                    │                   ▼
-                    │              vehicle.canFitInSpot(spotType)?
-                    │
-                    ├──► spot.parkVehicle(vehicle)
-                    │         │
-                    │         ▼
-                    │    spot.isAvailable = false
-                    │    spot.parkedVehicle = vehicle
-                    │
-                    ├──► Create ParkingTicket
-                    │
-                    ├──► activeTickets.put(ticketId, ticket)
-                    │    vehicleToTicket.put(plate, ticket)
-                    │
-                    └──► updateAllDisplayBoards()
-                              │
-                              ▼
-                         For each floor:
-                              floor.updateDisplayBoard()
-                                   │
-                                   ▼
-                              displayBoard.update(counts)
-```
-
-### Exit Flow
-
-```
-User at exit → ExitPanel.processExit(ticket)
-                    │
-                    ├──► ticket.calculateFee()
-                    │         │
-                    │         ▼
-                    │    Duration = now - entryTime
-                    │    Hours = ceiling(minutes / 60)
-                    │    Fee = hours × hourlyRate
-                    │
-                    ├──► paymentService.processPayment(ticket, fee)
-                    │         │
-                    │         ▼
-                    │    Payment.processPayment()
-                    │         │
-                    │         ▼
-                    │    ticket.markAsPaid(fee)
-                    │
-                    └──► parkingLot.releaseSpot(ticket)
-                              │
-                              ├──► spot.removeVehicle()
-                              │
-                              ├──► activeTickets.remove(ticketId)
-                              │    vehicleToTicket.remove(plate)
-                              │
-                              └──► updateAllDisplayBoards()
-```
-
----
-
-## Thread Safety Considerations
-
-### Where Synchronization is Needed
-
-1. **Spot allocation** - Two cars can't get the same spot
+1. **Spot allocation** - Two cars cannot get the same spot
 
 ```java
 public synchronized ParkingTicket parkVehicle(Vehicle vehicle) {
@@ -656,11 +758,11 @@ public synchronized boolean parkVehicle(Vehicle vehicle) {
 3. **Ticket tracking** - Use ConcurrentHashMap
 
 ```java
-private final Map<String, ParkingTicket> activeTickets = 
+private final Map<String, ParkingTicket> activeTickets =
     new ConcurrentHashMap<>();
 ```
 
-### Race Condition Example (Without Sync)
+**Race Condition Example (Without Sync):**
 
 ```
 Thread A: Check spot F0-C001 available? → Yes
@@ -669,7 +771,7 @@ Thread A: Park in F0-C001 → Success
 Thread B: Park in F0-C001 → COLLISION! Two cars, one spot
 ```
 
-### With Synchronization
+**With Synchronization:**
 
 ```
 Thread A: Acquire lock on parkVehicle()
@@ -688,16 +790,15 @@ Thread B: Find next available spot
 ### Adding Valet Parking
 
 ```java
-// New class
 public class ValetService {
     private final Queue<Vehicle> waitingVehicles;
     private final List<ValetAttendant> attendants;
-    
+
     public ParkingTicket parkWithValet(Vehicle vehicle) {
         // Attendant parks the vehicle
         // Returns ticket with valet flag
     }
-    
+
     public Vehicle retrieveVehicle(ParkingTicket ticket) {
         // Attendant retrieves the vehicle
     }
@@ -711,23 +812,17 @@ public class ValetService {
 ```java
 public class ReservationService {
     private final Map<String, Reservation> reservations;
-    
-    public Reservation reserve(ParkingSpotType type, 
+
+    public Reservation reserve(ParkingSpotType type,
                                LocalDateTime startTime,
                                Duration duration) {
         // Find and reserve a spot
     }
 }
-
-public class Reservation {
-    private final String reservationId;
-    private final ParkingSpot spot;
-    private final LocalDateTime startTime;
-    private final Duration duration;
-}
 ```
 
-**Changes needed:** 
+**Changes needed:**
+
 - Add `reserved` flag to `ParkingSpot`
 - Modify `findAvailableSpot()` to skip reserved spots
 
@@ -739,7 +834,7 @@ public class MonthlyPass {
     private final Vehicle vehicle;
     private final ParkingSpot assignedSpot;
     private final YearMonth validMonth;
-    
+
     public boolean isValid() {
         return YearMonth.now().equals(validMonth);
     }
@@ -747,6 +842,280 @@ public class MonthlyPass {
 ```
 
 **Changes needed:**
+
 - Modify entry logic to check for valid pass
 - Skip payment for pass holders
 
+---
+
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you scale this for a multi-building parking structure?
+
+**Answer:**
+
+```java
+// Add Building layer above ParkingLot
+public class ParkingComplex {
+    private final List<ParkingLot> buildings;
+    private final LoadBalancer loadBalancer;
+
+    public ParkingTicket findParkingAcrossBuildings(Vehicle vehicle) {
+        // Strategy 1: Round-robin across buildings
+        // Strategy 2: Nearest building with availability
+        // Strategy 3: Building with most available spots
+
+        for (ParkingLot building : loadBalancer.getOrderedBuildings()) {
+            if (!building.isFull(vehicle)) {
+                return building.parkVehicle(vehicle);
+            }
+        }
+        return null;
+    }
+}
+```
+
+**Key considerations:**
+
+- Each building is independent (own singleton or remove singleton pattern)
+- Load balancer decides which building to try first
+- Cross-building ticket lookup requires central registry
+
+---
+
+### Q2: How would you handle peak hours with long entry queues?
+
+**Answer:**
+
+1. **Pre-allocation**: Reserve spots when vehicle detected approaching
+
+```java
+public class SpotReservation {
+    public String reserveSpot(VehicleType type, Duration holdTime) {
+        ParkingSpot spot = findAndLockSpot(type);
+        scheduleRelease(spot, holdTime);
+        return spot.getSpotId();
+    }
+}
+```
+
+2. **Multiple entry lanes**: Each with dedicated spot pools
+
+```java
+public class EntryLane {
+    private final Queue<ParkingSpot> dedicatedSpots;
+    // Reduces contention by partitioning spots
+}
+```
+
+3. **License plate recognition**: Auto-assign spot before arrival
+4. **Overflow handling**: Direct to nearby lots when full
+5. **Dynamic pricing**: Higher rates during peak to reduce demand
+
+---
+
+### Q3: How would you add dynamic pricing (surge pricing)?
+
+**Answer:**
+
+```java
+public interface PricingStrategy {
+    double calculateRate(ParkingSpotType type, LocalDateTime time);
+}
+
+public class DynamicPricingStrategy implements PricingStrategy {
+    private final OccupancyTracker occupancyTracker;
+
+    @Override
+    public double calculateRate(ParkingSpotType type, LocalDateTime time) {
+        double baseRate = getBaseRate(type);
+        double occupancyMultiplier = getOccupancyMultiplier();
+        double timeMultiplier = getTimeMultiplier(time);
+
+        return baseRate * occupancyMultiplier * timeMultiplier;
+    }
+
+    private double getOccupancyMultiplier() {
+        double occupancy = occupancyTracker.getCurrentOccupancy();
+        if (occupancy > 0.9) return 2.0;      // 90%+ full: 2x price
+        if (occupancy > 0.7) return 1.5;      // 70%+ full: 1.5x price
+        return 1.0;
+    }
+
+    private double getTimeMultiplier(LocalDateTime time) {
+        int hour = time.getHour();
+        if (hour >= 9 && hour <= 11) return 1.5;   // Morning rush
+        if (hour >= 17 && hour <= 19) return 1.5;  // Evening rush
+        if (hour >= 22 || hour <= 6) return 0.5;   // Night discount
+        return 1.0;
+    }
+}
+```
+
+---
+
+### Q4: What if we need to support electric vehicle charging?
+
+**Answer:**
+
+```java
+// Add new spot type
+public enum ParkingSpotType {
+    COMPACT, LARGE, HANDICAPPED, ELECTRIC_CHARGING
+}
+
+// New spot class with charging capability
+public class ElectricChargingSpot extends ParkingSpot
+        implements ChargingCapable {
+
+    private final double chargingRateKW;
+    private ChargingSession currentSession;
+
+    public ElectricChargingSpot(String spotId, int floor, double chargingRate) {
+        super(spotId, ParkingSpotType.ELECTRIC_CHARGING, floor);
+        this.chargingRateKW = chargingRate;
+    }
+
+    @Override
+    public void startCharging(ElectricVehicle vehicle) {
+        this.currentSession = new ChargingSession(vehicle, chargingRateKW);
+    }
+
+    @Override
+    public void stopCharging() {
+        this.currentSession.end();
+    }
+}
+
+// Extended ticket for charging
+public class ChargingTicket extends ParkingTicket {
+    private final ChargingSession chargingSession;
+
+    @Override
+    public double calculateFee() {
+        double parkingFee = super.calculateFee();
+        double chargingFee = chargingSession.calculateChargingFee();
+        return parkingFee + chargingFee;
+    }
+}
+```
+
+---
+
+### Q5: How would you handle concurrent access from multiple entry panels?
+
+**Answer:**
+
+Current design uses `synchronized` methods, which works but has limitations.
+
+**Better approach for high concurrency:**
+
+```java
+// Option 1: Optimistic locking with CAS
+public class ParkingSpot {
+    private final AtomicReference<Vehicle> parkedVehicle =
+        new AtomicReference<>(null);
+
+    public boolean parkVehicle(Vehicle vehicle) {
+        // Compare-and-swap: only succeeds if currently null
+        return parkedVehicle.compareAndSet(null, vehicle);
+    }
+}
+
+// Option 2: Fine-grained locks per floor
+public class ParkingFloor {
+    private final ReentrantLock floorLock = new ReentrantLock();
+
+    public ParkingSpot findAvailableSpot(Vehicle vehicle) {
+        floorLock.lock();
+        try {
+            // Find and allocate spot
+        } finally {
+            floorLock.unlock();
+        }
+    }
+}
+
+// Option 3: Lock-free available spot queue
+public class ParkingFloor {
+    private final ConcurrentLinkedQueue<ParkingSpot> availableSpots;
+
+    public ParkingSpot findAvailableSpot(Vehicle vehicle) {
+        return availableSpots.poll();  // Atomic operation
+    }
+
+    public void releaseSpot(ParkingSpot spot) {
+        availableSpots.offer(spot);  // Atomic operation
+    }
+}
+```
+
+---
+
+### Q6: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add reservation system** - Book spots in advance
+2. **Add analytics** - Track peak hours, popular spots, revenue
+3. **Add notification service** - Alert when spot available
+4. **Add admin dashboard** - Monitor in real-time
+5. **Add audit logging** - Track all operations for compliance
+6. **Add rate limiting** - Prevent abuse of entry panels
+7. **Extract pricing to service** - Support A/B testing of pricing strategies
+8. **Add caching layer** - Cache availability counts for display boards
+9. **Add event sourcing** - Full history of all parking events
+10. **Add metrics/monitoring** - Prometheus/Grafana for operations
+
+---
+
+### Q7: What are the tradeoffs in your design?
+
+**Answer:**
+
+| Decision                       | Trade-off                                |
+| ------------------------------ | ---------------------------------------- |
+| Singleton ParkingLot           | Simple global access vs harder to test   |
+| Synchronized methods           | Thread-safe vs potential bottleneck      |
+| In-memory storage              | Fast access vs no persistence            |
+| Linear spot search             | Simple implementation vs O(n) complexity |
+| Fee calculation in Ticket      | Cohesion vs potential SRP violation      |
+| Abstract classes vs Interfaces | Simpler hierarchy vs less flexibility    |
+
+---
+
+### Q8: Common interviewer challenges and responses
+
+**Challenge:** "Your spot search is O(n). How would you optimize it?"
+
+**Response:**
+
+```java
+// Maintain separate queue of available spots per type
+private final Map<ParkingSpotType, Queue<ParkingSpot>> availableSpots;
+
+// O(1) to get available spot
+public ParkingSpot findAvailableSpot(Vehicle vehicle) {
+    for (ParkingSpotType type : getSearchOrder(vehicle)) {
+        ParkingSpot spot = availableSpots.get(type).poll();
+        if (spot != null) return spot;
+    }
+    return null;
+}
+```
+
+**Challenge:** "What if the singleton pattern makes testing difficult?"
+
+**Response:**
+"For production, I would use dependency injection instead. The ParkingLot would be created by a factory or IoC container and injected into panels. This allows easy mocking in tests while maintaining single-instance semantics in production."
+
+**Challenge:** "How do you handle partial failures? What if payment succeeds but spot release fails?"
+
+**Response:**
+"I would implement the saga pattern or use a transactional outbox:
+
+1. Record the intent to release spot
+2. Process payment
+3. Release spot
+4. If step 3 fails, a background job retries
+5. If payment fails, rollback by not releasing spot"

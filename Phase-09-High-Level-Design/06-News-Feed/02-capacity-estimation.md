@@ -31,6 +31,13 @@ Peak factor = 3x (evening hours)
 Peak QPS = 347,000 × 3 = ~1 million QPS
 ```
 
+**Math Verification:**
+- Assumptions: 30B feed requests/day, 86,400 seconds/day, 3x peak multiplier
+- Average QPS: 30,000,000,000 / 86,400 = 347,222 QPS ≈ 347,000 QPS
+- Peak QPS: 347,000 × 3 = 1,041,000 QPS ≈ 1,000,000 QPS (rounded)
+- **DOC MATCHES:** QPS calculations verified ✅
+```
+
 ### Post Creation
 
 **Post Volume:**
@@ -41,6 +48,12 @@ Total posts/day = 500M × 0.5 = 250 million posts/day
 Posts per second (avg) = 250M / 86,400 = 2,900 posts/sec
 Posts per second (peak) = 2,900 × 3 = 8,700 posts/sec
 ```
+
+**Math Verification:**
+- Assumptions: 250M posts/day, 86,400 seconds/day, 3x peak multiplier
+- Average QPS: 250,000,000 / 86,400 = 2,893.5 posts/sec ≈ 2,900 posts/sec
+- Peak QPS: 2,900 × 3 = 8,700 posts/sec
+- **DOC MATCHES:** Post creation QPS verified ✅
 
 ### Fan-out Traffic
 
@@ -53,6 +66,12 @@ Average followers: 200
 Fan-out writes = 247.5M × 200 = 49.5 billion writes/day
 Fan-out writes/sec = 49.5B / 86,400 = 573,000 writes/sec
 ```
+
+**Math Verification:**
+- Assumptions: 247.5M posts from regular users, 200 average followers per user, 86,400 seconds/day
+- Fan-out writes: 247,500,000 × 200 = 49,500,000,000 writes/day
+- Writes/sec: 49,500,000,000 / 86,400 = 572,916.67 writes/sec ≈ 573,000 writes/sec
+- **DOC MATCHES:** Fan-out traffic calculations verified ✅
 
 **For Celebrities (> 10K followers):**
 ```
@@ -84,11 +103,22 @@ Posts per day: 250 million
 Storage per day = 250M × 750 bytes = 187.5 GB/day
 ```
 
+**Math Verification:**
+- Assumptions: 250M posts/day, 750 bytes per post
+- Calculation: 250,000,000 × 750 bytes = 187,500,000,000 bytes = 187.5 GB
+- **DOC MATCHES:** Storage calculations verified ✅
+
 **Annual Post Storage:**
 ```
 Storage per year = 187.5 GB × 365 = 68.4 TB/year
 With 3x replication = 205 TB/year
 ```
+
+**Math Verification:**
+- Assumptions: 187.5 GB/day, 365 days/year, 3x replication
+- Annual: 187.5 GB × 365 = 68,437.5 GB = 68.4 TB
+- With replication: 68.4 × 3 = 205.2 TB ≈ 205 TB
+- **DOC MATCHES:** Storage calculations verified ✅
 
 ### Feed Cache Storage
 
@@ -107,6 +137,14 @@ Total feed cache = 500M × 10 KB = 5 TB
 With hot/cold tiering:
 - Hot (last 24h active): 100M users × 10 KB = 1 TB
 - Warm (last 7 days): 200M users × 10 KB = 2 TB
+```
+
+**Math Verification:**
+- Assumptions: 500M active users, 10 KB per user feed cache
+- Total: 500,000,000 × 10 KB = 5,000,000,000 KB = 5 TB
+- Hot tier: 100,000,000 × 10 KB = 1 TB
+- Warm tier: 200,000,000 × 10 KB = 2 TB
+- **DOC MATCHES:** Cache storage calculations verified ✅
 - Cold (others): Regenerate on demand
 ```
 

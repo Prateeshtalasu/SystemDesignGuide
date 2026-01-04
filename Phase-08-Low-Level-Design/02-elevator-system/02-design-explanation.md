@@ -1,6 +1,12 @@
 # 🛗 Elevator System - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the Elevator System.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -310,6 +316,18 @@ public class ElevatorConfig {
     }
 }
 ```
+
+---
+
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. Elevator manages state/movement, Door controls door operations, ElevatorController coordinates, SchedulingStrategy handles algorithm selection. Minor concern: Elevator class handles movement, stops, weight, and state - but these are tightly coupled to being an elevator. | N/A | - |
+| **OCP** | PASS | System is open for extension (new scheduling algorithms, elevator types) without modifying existing code. Strategy pattern for scheduling enables this perfectly. | N/A | - |
+| **LSP** | PASS | All scheduling strategies properly implement SchedulingStrategy interface without violating contract. All elevator types (if extended) would be substitutable. | N/A | - |
+| **ISP** | PASS | Interfaces are focused. SchedulingStrategy interface is minimal and focused. No clients are forced to depend on methods they don't use. | N/A | - |
+| **DIP** | PASS | High-level module (ElevatorController) depends on abstraction (SchedulingStrategy interface), not concrete implementations. DIP is well applied. | N/A | - |
 
 ---
 
@@ -846,6 +864,315 @@ public void transferPassenger(Elevator from, Elevator to) {
         synchronized (second) {
             // Safe transfer
         }
+    }
+}
+```
+
+---
+
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you handle a stuck elevator?
+
+**Answer:**
+```java
+public class Elevator {
+    private long lastMovementTime;
+    private static final long STUCK_THRESHOLD_MS = 30000;  // 30 seconds
+    
+    public boolean isStuck() {
+        if (state == ElevatorState.MOVING_UP || state == ElevatorState.MOVING_DOWN) {
+            return System.currentTimeMillis() - lastMovementTime > STUCK_THRESHOLD_MS;
+        }
+        return false;
+    }
+    
+    public boolean move() {
+        // ... existing logic ...
+        lastMovementTime = System.currentTimeMillis();
+        return true;
+    }
+}
+
+public class ElevatorController {
+    private ScheduledExecutorService healthChecker;
+    
+    public void startHealthCheck() {
+        healthChecker.scheduleAtFixedRate(() -> {
+            for (Elevator elevator : elevators) {
+                if (elevator.isStuck()) {
+                    handleStuckElevator(elevator);
+                }
+            }
+        }, 10, 10, TimeUnit.SECONDS);
+    }
+    
+    private void handleStuckElevator(Elevator elevator) {
+        elevator.setMaintenance(true);
+        redistributeRequests(elevator);
+        notifyMaintenance(elevator);
+    }
+}
+```
+
+---
+
+### Q2: How would you add VIP/priority floors?
+
+**Answer:**
+```java
+public class PriorityRequest extends ExternalRequest {
+    private final int priority;  // Higher = more important
+    
+    public PriorityRequest(int floor, Direction direction, int priority) {
+        super(floor, direction);
+        this.priority = priority;
+    }
+}
+
+public class PriorityScheduler implements SchedulingStrategy {
+    private final Set<Integer> vipFloors = Set.of(1, 10, 20);  // Lobby, exec floors
+    
+    @Override
+    public Elevator selectElevator(List<Elevator> elevators, ExternalRequest request) {
+        if (isVIPRequest(request)) {
+            // Dedicate an idle elevator if available
+            return findIdleElevator(elevators)
+                .orElse(findNearestElevator(elevators, request));
+        }
+        return standardSelection(elevators, request);
+    }
+    
+    private boolean isVIPRequest(ExternalRequest request) {
+        return vipFloors.contains(request.getFloor()) ||
+               (request instanceof PriorityRequest && 
+                ((PriorityRequest) request).getPriority() > 5);
+    }
+}
+```
+
+---
+
+### Q3: How would you implement destination dispatch?
+
+**Answer:**
+Destination dispatch: Users enter destination BEFORE entering elevator.
+
+```java
+public class DestinationDispatchController extends ElevatorController {
+    
+    // User enters destination at lobby kiosk
+    public int requestElevatorWithDestination(int sourceFloor, int destFloor) {
+        // Find best elevator for this trip
+        Elevator best = findBestElevatorForTrip(sourceFloor, destFloor);
+        
+        if (best != null) {
+            // Add both pickup and destination
+            best.addDestination(sourceFloor);
+            best.addDestination(destFloor);
+            
+            // Return elevator ID so user knows which one to take
+            return best.getId();
+        }
+        
+        return -1;  // No elevator available
+    }
+    
+    private Elevator findBestElevatorForTrip(int source, int dest) {
+        Direction tripDirection = source < dest ? Direction.UP : Direction.DOWN;
+        
+        return elevators.stream()
+            .filter(e -> e.canAcceptRequest(new ExternalRequest(source, tripDirection)))
+            .filter(e -> !willCauseBacktrack(e, source, dest))
+            .min(Comparator.comparingLong(e -> e.estimatedTimeToFloor(source)))
+            .orElse(null);
+    }
+}
+```
+
+---
+
+### Q4: How would you handle peak hours (morning rush)?
+
+**Answer:**
+```java
+public class RushHourOptimizer {
+    
+    // During morning rush, most people go UP from lobby
+    public void optimizeForMorningRush(ElevatorController controller) {
+        // Park some elevators at lobby
+        for (int i = 0; i < controller.getElevators().size() / 2; i++) {
+            Elevator elevator = controller.getElevator(i + 1);
+            if (elevator.getState() == ElevatorState.IDLE) {
+                elevator.addDestination(0);  // Send to lobby
+            }
+        }
+        
+        // Switch to batch loading
+        controller.setScheduler(new BatchLoadingScheduler());
+    }
+}
+
+public class BatchLoadingScheduler implements SchedulingStrategy {
+    
+    @Override
+    public Elevator selectElevator(List<Elevator> elevators, ExternalRequest request) {
+        // During rush, fill elevators before sending
+        // Don't dispatch half-empty elevators
+        
+        Optional<Elevator> loadingElevator = elevators.stream()
+            .filter(e -> e.getCurrentFloor() == request.getFloor())
+            .filter(e -> e.getState() == ElevatorState.STOPPED)
+            .filter(e -> e.getCurrentWeightKg() < e.getMaxWeightKg() * 0.8)
+            .findFirst();
+        
+        if (loadingElevator.isPresent()) {
+            return loadingElevator.get();  // Keep loading current elevator
+        }
+        
+        // Otherwise, send a new one
+        return findNearestIdle(elevators, request);
+    }
+}
+```
+
+---
+
+### Q5: What would you do differently with more time?
+
+**Answer:**
+1. **Add persistence**: Store elevator state in database for recovery
+2. **Add metrics**: Track wait times, trip times, utilization
+3. **Add simulation mode**: Test algorithms without real delays
+4. **Add REST API**: Control system via HTTP
+5. **Add WebSocket**: Real-time position updates to displays
+6. **Add ML-based prediction**: Predict demand based on time/day
+7. **Add energy optimization**: Regenerative braking, sleep mode
+
+---
+
+### Q6: How would you optimize for very tall buildings (100+ floors)?
+
+**Answer:**
+```java
+// Zone-based elevator assignment
+public class ZoneBasedScheduler implements SchedulingStrategy {
+    private final Map<Integer, List<Elevator>> zones;
+    
+    // Zone 1: Floors 1-25 (elevators 1-2)
+    // Zone 2: Floors 26-50 (elevators 3-4)
+    // Zone 3: Floors 51-75 (elevators 5-6)
+    // Zone 4: Floors 76-100 (elevators 7-8)
+    
+    @Override
+    public Elevator selectElevator(List<Elevator> elevators, ExternalRequest request) {
+        int zone = getZoneForFloor(request.getFloor());
+        List<Elevator> zoneElevators = zones.get(zone);
+        
+        // Select from zone-specific elevators
+        return findBestInZone(zoneElevators, request)
+            .orElse(findNearestCrossZone(elevators, request));
+    }
+}
+```
+
+---
+
+### Q7: How would you handle emergency situations?
+
+**Answer:**
+```java
+public enum EmergencyType {
+    FIRE, POWER_OUTAGE, EARTHQUAKE, MEDICAL
+}
+
+public class EmergencyHandler {
+    public void handleEmergency(EmergencyType type, ElevatorController controller) {
+        switch (type) {
+            case FIRE:
+                // Send all elevators to ground floor, disable calls
+                controller.getAllElevators().forEach(e -> {
+                    e.addDestination(0);
+                    e.setEmergencyMode(true);
+                });
+                break;
+            case POWER_OUTAGE:
+                // Use backup power, move to nearest floor
+                controller.getAllElevators().forEach(e -> {
+                    int nearestFloor = e.getCurrentFloor();
+                    e.addDestination(nearestFloor);
+                });
+                break;
+        }
+    }
+}
+```
+
+---
+
+### Q8: What are the tradeoffs between SCAN and LOOK algorithms?
+
+**Answer:**
+
+| Aspect | SCAN | LOOK |
+|--------|------|------|
+| **Efficiency** | Goes to extremes even if no requests | Only goes to furthest request |
+| **Wait Time Bounds** | Guaranteed (worst case: 2× max floors) | Same bounds, but typically faster |
+| **Implementation** | Simpler | Slightly more complex (need to check if requests exist) |
+| **Best For** | Systems requiring strict fairness | Production systems (better performance) |
+
+**Recommendation:** Use LOOK for production - it's more efficient while maintaining the same worst-case guarantees.
+
+---
+
+## STEP 7: Complexity Analysis
+
+### Time Complexity
+
+| Operation | Complexity | Explanation |
+|-----------|------------|-------------|
+| `addDestination()` | O(log n) | ConcurrentSkipListSet.add() |
+| `shouldStop()` | O(log n) | Set.contains() |
+| `move()` | O(1) | Simple state update |
+| `stopAtFloor()` | O(log n) | Set.remove() |
+| `selectElevator()` | O(E) | E = number of elevators |
+| `calculateScore()` | O(S) | S = stops in elevator |
+
+### Space Complexity
+
+| Data Structure | Space | Purpose |
+|----------------|-------|---------|
+| `elevators` | O(E) | Store elevator objects |
+| `upStops` per elevator | O(F) | F = max floors |
+| `downStops` per elevator | O(F) | F = max floors |
+| `pendingRequests` | O(R) | R = pending requests |
+
+### Bottlenecks at Scale
+
+**100 elevators, 100 floors:**
+- `selectElevator()` becomes O(E × S) = O(100 × 100) = O(10,000)
+- Solution: Partition elevators by zone
+
+**1000 requests/second:**
+- `pendingRequests` queue grows unbounded
+- Solution: Rate limiting, request batching
+
+**Optimization: Zone-based Scheduling**
+
+```java
+public class ZonedElevatorController {
+    private final Map<Integer, List<Elevator>> elevatorsByZone;
+    
+    // Zone 1: Floors 0-10
+    // Zone 2: Floors 11-20
+    // Zone 3: Floors 21-30
+    
+    public Elevator selectElevator(ExternalRequest request) {
+        int zone = request.getFloor() / 10;
+        List<Elevator> zoneElevators = elevatorsByZone.get(zone);
+        
+        // Only search within zone
+        return scheduler.selectElevator(zoneElevators, request);
     }
 }
 ```

@@ -17,7 +17,7 @@
 
 ### STAR Framework
 
-1. **STAR Method**
+1. **[STAR Method](01-star-method.md)**
    - Situation: Set the context
    - Task: Your responsibility
    - Action: What YOU did (not the team)
@@ -27,7 +27,7 @@
 
 ### Core Story Types
 
-2. **Project Ownership Stories**
+2. **[Project Ownership Stories](02-project-ownership-stories.md)**
 
    - "Tell me about a project you owned"
    - End-to-end responsibility
@@ -35,7 +35,7 @@
    - Scope and complexity
    - Stakeholder management
 
-3. **Conflict Resolution**
+3. **[Conflict Resolution](03-conflict-resolution.md)**
 
    - Technical disagreements
    - Convincing skeptical stakeholders
@@ -43,7 +43,7 @@
    - Handling pushback
    - Maintaining relationships
 
-4. **Technical Decision-Making**
+4. **[Technical Decision-Making](04-technical-decision-making.md)**
 
    - Trade-off analysis framework
    - How you evaluate options
@@ -51,7 +51,7 @@
    - Risk assessment
    - Reversible vs irreversible decisions
 
-5. **Working with Ambiguity**
+5. **[Working with Ambiguity](05-working-with-ambiguity.md)**
 
    - Clarifying vague requirements
    - Starting with incomplete info
@@ -59,7 +59,7 @@
    - Dealing with uncertainty
    - Making progress despite unknowns
 
-6. **Failure Stories**
+6. **[Failure Stories](06-failure-stories.md)**
    - Production incidents
    - What you learned
    - How you improved
@@ -68,7 +68,7 @@
 
 ### Leadership
 
-7. **Leadership Principles**
+7. **[Leadership Principles](07-leadership-principles.md)**
 
    - Leading without authority
    - Technical leadership
@@ -77,7 +77,7 @@
    - Technical decision ownership
    - Building consensus
 
-8. **Cross-Functional Collaboration**
+8. **[Cross-Functional Collaboration](08-cross-functional-collaboration.md)**
 
    - Working with product managers
    - Working with designers
@@ -85,7 +85,7 @@
    - Stakeholder communication
    - Managing expectations
 
-9. **Influence & Persuasion**
+9. **[Influence & Persuasion](09-influence-persuasion.md)**
 
    - Convincing teams to adopt new tech
    - Technical proposal writing (RFC, ADR)
@@ -93,7 +93,7 @@
    - Handling pushback
    - Data-driven arguments
 
-10. **Mentoring Stories**
+10. **[Mentoring Stories](10-mentoring-stories.md)**
     - Teaching others
     - Code review feedback
     - Onboarding new team members
@@ -102,7 +102,7 @@
 
 ### Company-Specific Preparation
 
-11. **Amazon Leadership Principles**
+11. **[Amazon Leadership Principles](11-amazon-leadership-principles.md)**
 
     - Customer Obsession
     - Ownership
@@ -120,7 +120,7 @@
     - Deliver Results
     - Prepare 2-3 stories per principle
 
-12. **Google's Googliness**
+12. **[Google's Googliness](12-google-googliness.md)**
 
     - Collaboration
     - Intellectual humility
@@ -128,7 +128,7 @@
     - Taking action
     - Culture fit signals
 
-13. **Meta's Core Values**
+13. **[Meta's Core Values](13-meta-core-values.md)**
     - Move Fast
     - Be Bold
     - Focus on Impact
@@ -137,7 +137,7 @@
 
 ### Communication Skills
 
-14. **System Design Communication**
+14. **[System Design Communication](14-system-design-communication.md)**
 
     - How to present designs
     - Handling interruptions
@@ -145,7 +145,7 @@
     - Whiteboarding skills
     - Time management in interviews
 
-15. **Explaining Technical Concepts**
+15. **[Explaining Technical Concepts](15-explaining-technical-concepts.md)**
     - Adjusting to audience level
     - Using analogies
     - Visual communication

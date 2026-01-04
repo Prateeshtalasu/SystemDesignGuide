@@ -1,14 +1,105 @@
-# 📁 File System - Complete Solution
+# 📁 File System - Problem Solution
 
-## Problem Statement
+## STEP 0: REQUIREMENTS QUICKPASS
 
-Design an in-memory file system that can:
-- Support directory tree structure
-- Perform file operations (create, delete, move, copy)
+### Core Functional Requirements
+- Support hierarchical directory tree structure
+- Perform file operations (create, read, write, delete)
+- Perform directory operations (mkdir, rmdir, list)
+- Move and copy files/directories
 - Search files by name and extension
-- Calculate directory sizes
-- Handle file/directory permissions
-- Support path navigation (absolute and relative)
+- Calculate directory sizes recursively
+- Support path navigation (absolute and relative paths)
+
+### Explicit Out-of-Scope Items
+- Actual disk I/O operations
+- File permissions and access control
+- Symbolic links and hard links
+- File locking and concurrent access
+- Compression and encryption
+- Disk quotas
+- File versioning
+
+### Assumptions and Constraints
+- **In-Memory Only**: No persistence
+- **Single User**: No multi-user support
+- **Path Separator**: Forward slash (/)
+- **Root Directory**: Always exists, cannot be deleted
+- **File Content**: Stored as String
+
+### Scale Assumptions (LLD Focus)
+- Single JVM, in-memory storage
+- Moderate file count: ~10,000 files manageable
+- File content size: Up to 10MB per file
+- Directory depth: Up to 100 levels
+- No disk I/O bottlenecks (all in memory)
+
+### Concurrency Model
+- **Single-threaded**: No concurrent access expected
+- **No synchronization needed**: Single user assumption
+- **Future extension**: Could add ReentrantReadWriteLock for multi-user support
+- **Atomic operations**: File/directory operations complete fully or not at all
+
+### Public APIs
+- `mkdir(path)`: Create directory
+- `createFile(path, content)`: Create file
+- `readFile(path)`: Read file content
+- `writeFile(path, content)`: Write to file
+- `delete(path)`: Delete file or directory
+- `move(src, dest)`: Move file/directory
+- `copy(src, dest)`: Copy file/directory
+- `ls(path)`: List directory contents
+- `find(name)`: Search for files
+- `getSize(path)`: Get size of file/directory
+
+### Public API Usage Examples
+
+```java
+// Example 1: Basic usage
+FileSystem fs = new FileSystem();
+fs.mkdir("/home/user");
+File file = fs.createFile("/home/user/doc.txt", "Hello World");
+String content = file.readAsString();
+System.out.println(content);  // "Hello World"
+
+// Example 2: Typical workflow
+FileSystem fs = new FileSystem();
+fs.mkdir("/projects/app");
+fs.createFile("/projects/app/Main.java", "public class Main {}");
+fs.createFile("/projects/app/Utils.java", "public class Utils {}");
+List<Entry> entries = fs.ls("/projects/app");
+for (Entry entry : entries) {
+    System.out.println(entry.getName());
+}
+
+// Example 3: Search and navigation
+FileSystem fs = new FileSystem();
+fs.createFile("/data/file1.txt", "content1");
+fs.createFile("/data/file2.pdf", "content2");
+fs.createFile("/backup/file3.txt", "content3");
+
+fs.cd("/data");
+System.out.println(fs.pwd());  // "/data"
+
+List<File> txtFiles = fs.findByExtension("txt");
+for (File file : txtFiles) {
+    System.out.println(file.getPath());
+}
+
+// Example 4: Copy and move operations
+FileSystem fs = new FileSystem();
+fs.createFile("/src/document.txt", "Important content");
+fs.mkdir("/backup");
+fs.cp("/src/document.txt", "/backup/document_copy.txt");
+fs.mv("/src/document.txt", "/backup/document.txt");
+long size = fs.getSize("/backup");
+System.out.println("Backup size: " + size + " bytes");
+```
+
+### Invariants
+- **Tree Structure**: No cycles in directory hierarchy
+- **Unique Names**: No duplicate names in same directory
+- **Path Validity**: All paths resolve to existing entries or fail gracefully
 
 ---
 
@@ -99,7 +190,341 @@ Design an in-memory file system that can:
 
 ---
 
+### Responsibilities Table
+
+| Class | Owns | Why |
+|-------|------|-----|
+| `Entry` (abstract) | Base file system entry properties (name, parent, timestamps) | Common base class for files and directories - enables polymorphism and shared behavior, defines common interface |
+| `File` | File content storage and file-specific operations (read/write) | Handles file operations - separate from Directory to encapsulate file-specific logic (content storage, read/write) |
+| `Directory` | Child entries management and directory-specific operations | Manages directory structure - separate from File to handle child management and directory traversal |
+| `FileSystem` | File system operations coordination and path resolution | Coordinates file operations - separates command interface from entry implementation, handles path parsing and navigation |
+| `Permissions` | File/directory permission rules (read/write/execute) | Encapsulates permission logic - separates permission model from entry structure, enables permission changes without affecting entries |
+| `SearchCriteria` | Search parameters definition (name, extension, size filters) | Defines search parameters - separates search specification from search execution, enables flexible search criteria |
+
+---
+
+## STEP 4: Code Walkthrough - Building From Scratch
+
+This section explains how an engineer builds this system from scratch, in the order code should be written.
+
+### Phase 1: Design the Entry Hierarchy
+
+```java
+// Step 1: Entry abstract class
+public abstract class Entry {
+    protected String name;
+    protected Directory parent;
+    protected LocalDateTime createdAt;
+    protected LocalDateTime modifiedAt;
+    protected Permissions permissions;
+    
+    public abstract long getSize();
+    public abstract boolean isDirectory();
+    
+    public String getPath() {
+        if (parent == null) return "/";
+        String parentPath = parent.getPath();
+        return parentPath.equals("/") ? "/" + name : parentPath + "/" + name;
+    }
+}
+```
+
+---
+
+### Phase 2: Implement File Class
+
+```java
+// Step 2: File class
+public class File extends Entry {
+    private byte[] content;
+    private String extension;
+    
+    public File(String name, Directory parent) {
+        super(name, parent);
+        this.content = new byte[0];
+        this.extension = extractExtension(name);
+    }
+    
+    public byte[] read() {
+        if (!permissions.isReadable()) {
+            throw new SecurityException("Permission denied");
+        }
+        return content.clone();  // Return copy for safety
+    }
+    
+    public void write(byte[] newContent) {
+        if (!permissions.isWritable()) {
+            throw new SecurityException("Permission denied");
+        }
+        this.content = newContent != null ? newContent.clone() : new byte[0];
+        touch();
+    }
+    
+    @Override
+    public long getSize() {
+        return content.length;
+    }
+    
+    @Override
+    public boolean isDirectory() {
+        return false;
+    }
+}
+```
+
+---
+
+### Phase 3: Implement Directory Class
+
+```java
+// Step 3: Directory class
+public class Directory extends Entry {
+    private final Map<String, Entry> children;
+    
+    public Directory(String name, Directory parent) {
+        super(name, parent);
+        this.children = new LinkedHashMap<>();
+    }
+    
+    public void addChild(Entry entry) {
+        if (!permissions.isWritable()) {
+            throw new SecurityException("Permission denied");
+        }
+        if (children.containsKey(entry.getName())) {
+            throw new IllegalArgumentException("Entry already exists");
+        }
+        children.put(entry.getName(), entry);
+        entry.setParent(this);
+        touch();
+    }
+    
+    @Override
+    public long getSize() {
+        return children.values().stream()
+            .mapToLong(Entry::getSize)
+            .sum();
+    }
+    
+    @Override
+    public boolean isDirectory() {
+        return true;
+    }
+}
+```
+
+---
+
+### Phase 4: Implement FileSystem
+
+```java
+// Step 4: FileSystem class
+public class FileSystem {
+    private final Directory root;
+    private Directory currentDirectory;
+    
+    public FileSystem() {
+        this.root = Directory.createRoot();
+        this.currentDirectory = root;
+    }
+    
+    public Entry resolvePath(String path) {
+        if (path == null || path.isEmpty() || path.equals(".")) {
+            return currentDirectory;
+        }
+        
+        String[] parts = path.split("/");
+        Directory current = path.startsWith("/") ? root : currentDirectory;
+        
+        for (String part : parts) {
+            if (part.isEmpty() || part.equals(".")) continue;
+            if (part.equals("..")) {
+                if (current.getParent() != null) {
+                    current = current.getParent();
+                }
+                continue;
+            }
+            
+            Entry child = current.getChild(part);
+            if (child == null) return null;
+            if (child.isDirectory()) {
+                current = (Directory) child;
+            } else {
+                return child;
+            }
+        }
+        return current;
+    }
+}
+```
+
+---
+
+### Phase 5: File Operations
+
+```java
+// Step 5: mkdir implementation
+public Directory mkdir(String path) {
+    String[] parts = parsePath(path);
+    Directory current = getStartDirectory(path);
+    
+    for (String part : parts) {
+        if (part.isEmpty()) continue;
+        Entry child = current.getChild(part);
+        if (child == null) {
+            Directory newDir = new Directory(part, current);
+            current.addChild(newDir);
+            current = newDir;
+        } else if (child.isDirectory()) {
+            current = (Directory) child;
+        } else {
+            throw new IllegalArgumentException(part + " is a file");
+        }
+    }
+    return current;
+}
+
+// Step 6: touch implementation
+public File touch(String path) {
+    int lastSlash = path.lastIndexOf('/');
+    String dirPath = lastSlash > 0 ? path.substring(0, lastSlash) : 
+                    (path.startsWith("/") ? "/" : ".");
+    String fileName = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+    
+    Directory parent = mkdir(dirPath);
+    Entry existing = parent.getChild(fileName);
+    if (existing != null) {
+        if (existing.isFile()) {
+            existing.touch();
+            return (File) existing;
+        }
+        throw new IllegalArgumentException(fileName + " is a directory");
+    }
+    
+    File file = new File(fileName, parent);
+    parent.addChild(file);
+    return file;
+}
+```
+
+---
+
+### Phase 6: Search Implementation
+
+```java
+// Step 7: find with criteria
+public List<Entry> find(SearchCriteria criteria) {
+    List<Entry> results = new ArrayList<>();
+    findRecursive(root, criteria.toPredicate(), results);
+    return results;
+}
+
+private void findRecursive(Directory dir, Predicate<Entry> predicate, 
+                           List<Entry> results) {
+    for (Entry child : dir.getChildren()) {
+        if (predicate.test(child)) {
+            results.add(child);
+        }
+        if (child.isDirectory()) {
+            findRecursive((Directory) child, predicate, results);
+        }
+    }
+}
+```
+
+---
+
+### Phase 7: Threading Model and Concurrency Control
+
+**Threading Model:**
+
+This file system handles **concurrent file operations**:
+- Multiple threads can read files simultaneously
+- Write operations require exclusive access
+- Directory structure modifications need synchronization
+
+**Concurrency Control:**
+
+```java
+// Option 1: Synchronized per entry
+public class File extends Entry {
+    private final Object lock = new Object();
+    private byte[] content;
+    
+    public byte[] read() {
+        synchronized (lock) {
+            // Read operation
+        }
+    }
+    
+    public void write(byte[] newContent) {
+        synchronized (lock) {
+            // Write operation (exclusive)
+        }
+    }
+}
+
+// Option 2: ReadWriteLock for better concurrency
+public class File extends Entry {
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private byte[] content;
+    
+    public byte[] read() {
+        lock.readLock().lock();
+        try {
+            return content.clone();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
+    public void write(byte[] newContent) {
+        lock.writeLock().lock();
+        try {
+            this.content = newContent.clone();
+            touch();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+}
+```
+
+**Directory synchronization:**
+
+```java
+public class Directory extends Entry {
+    private final Map<String, Entry> children;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    
+    public void addChild(Entry entry) {
+        lock.writeLock().lock();
+        try {
+            if (children.containsKey(entry.getName())) {
+                throw new IllegalArgumentException("Entry already exists");
+            }
+            children.put(entry.getName(), entry);
+            entry.setParent(this);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    public Entry getChild(String name) {
+        lock.readLock().lock();
+        try {
+            return children.get(name);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+}
+```
+
+---
+
 ## STEP 2: Complete Java Implementation
+
+> **Verified:** This code compiles successfully with Java 11+.
 
 ### 2.1 Permissions Class
 

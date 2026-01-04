@@ -38,6 +38,129 @@ Authorization: Bearer {api_key}
 
 ---
 
+## API Versioning Strategy
+
+We use URL path versioning (`/v1/`, `/v2/`) because:
+- Easy to understand and implement
+- Clear in logs and documentation
+- Allows running multiple versions simultaneously
+
+**Backward Compatibility Rules:**
+
+Non-breaking changes (no version bump):
+- Adding new optional fields
+- Adding new endpoints
+- Adding new error codes
+
+Breaking changes (require new version):
+- Removing fields
+- Changing field types
+- Changing endpoint paths
+- Changing authentication
+
+**Deprecation Policy:**
+1. Announce deprecation 6 months in advance
+2. Return Deprecation header
+3. Maintain old version for 12 months after new version release
+
+---
+
+## Rate Limiting Headers
+
+Every response includes rate limit information:
+
+```http
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640000000
+```
+
+**Rate Limits by Tier:**
+
+| Tier | Requests/hour |
+|------|---------------|
+| Anonymous | 100 |
+| Authenticated | 10,000 |
+| Premium | 100,000 |
+
+---
+
+## Error Model
+
+All error responses follow this standard envelope structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "field_name",  // Optional
+      "reason": "Specific reason"  // Optional
+    },
+    "request_id": "req_123456"  // For tracing
+  }
+}
+```
+
+**Error Codes Reference:**
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | INVALID_INPUT | Request validation failed |
+| 400 | CONTENT_TOO_LARGE | Paste content exceeds size limit |
+| 400 | INVALID_SYNTAX | Syntax highlighting language not supported |
+| 401 | UNAUTHORIZED | Authentication required |
+| 403 | FORBIDDEN | Insufficient permissions |
+| 404 | NOT_FOUND | Paste not found |
+| 403 | PASSWORD_REQUIRED | Password required to access paste |
+| 429 | RATE_LIMITED | Rate limit exceeded |
+| 500 | INTERNAL_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+**Error Response Examples:**
+
+```json
+// 400 Bad Request - Content too large
+{
+  "error": {
+    "code": "CONTENT_TOO_LARGE",
+    "message": "Paste content exceeds 10 MB limit",
+    "details": {
+      "max_size": 10485760,
+      "actual_size": 15728640
+    },
+    "request_id": "req_abc123"
+  }
+}
+
+// 403 Forbidden - Password required
+{
+  "error": {
+    "code": "PASSWORD_REQUIRED",
+    "message": "This paste is password protected",
+    "details": {},
+    "request_id": "req_xyz789"
+  }
+}
+
+// 429 Rate Limited
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded. Please try again later.",
+    "details": {
+      "limit": 100,
+      "remaining": 0,
+      "reset_at": "2024-01-15T11:00:00Z"
+    },
+    "request_id": "req_def456"
+  }
+}
+```
+
+---
+
 ## Core API Endpoints
 
 ### 1. Create Paste
@@ -735,6 +858,161 @@ public class ContentValidator {
 Deprecation: true
 Sunset: Sat, 01 Jul 2025 00:00:00 GMT
 Link: <https://api.pastebin.com/v2/pastes>; rel="successor-version"
+```
+
+---
+
+## Idempotency Model
+
+### What is Idempotency?
+
+An operation is **idempotent** if performing it multiple times has the same effect as performing it once. This is critical for handling retries, network failures, and duplicate requests when creating pastes.
+
+### Idempotent Operations in Pastebin
+
+| Operation | Idempotent? | Mechanism |
+|-----------|-------------|-----------|
+| **Create Paste** | ✅ Yes | Idempotency key or content hash deduplication |
+| **Get Paste** | ✅ Yes | Read-only, no side effects |
+| **Delete Paste** | ✅ Yes | DELETE is idempotent (safe to retry) |
+| **Update Paste** | ✅ Yes | Version-based updates prevent conflicts |
+| **Record View** | ⚠️ At-least-once | Deduplication by (paste_id, ip_hash, timestamp) |
+
+### Idempotency Implementation
+
+**1. Paste Creation with Idempotency Key:**
+
+```java
+@PostMapping("/v1/pastes")
+public ResponseEntity<PasteResponse> createPaste(
+        @RequestBody CreatePasteRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    
+    // If idempotency key provided, check for existing paste
+    if (idempotencyKey != null) {
+        Paste existing = pasteRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing != null) {
+            return ResponseEntity.ok(PasteResponse.from(existing));
+        }
+    }
+    
+    // Check for content deduplication (optional: if same content + user)
+    if (request.getUserId() != null) {
+        String contentHash = DigestUtils.sha256Hex(request.getContent());
+        Paste duplicate = pasteRepository.findByContentHashAndUserId(contentHash, request.getUserId());
+        if (duplicate != null && duplicate.getCreatedAt().isAfter(Instant.now().minus(1, ChronoUnit.HOURS))) {
+            // Same content created within last hour, return existing
+            return ResponseEntity.ok(PasteResponse.from(duplicate));
+        }
+    }
+    
+    // Create new paste
+    Paste paste = pasteService.createPaste(request, idempotencyKey);
+    
+    return ResponseEntity.status(201).body(PasteResponse.from(paste));
+}
+```
+
+**2. Content Deduplication (Storage-Level):**
+
+```java
+public Paste createPaste(CreatePasteRequest request, String idempotencyKey) {
+    // Calculate content hash
+    String contentHash = DigestUtils.sha256Hex(request.getContent());
+    
+    // Check if content already stored (deduplication)
+    StorageKey existingKey = storageService.findByContentHash(contentHash);
+    
+    String storageKey;
+    if (existingKey != null) {
+        // Content already exists, reuse storage
+        storageKey = existingKey.getKey();
+        storageService.incrementReferenceCount(storageKey);
+    } else {
+        // New content, upload to S3
+        storageKey = storageService.uploadContent(request.getContent(), contentHash);
+    }
+    
+    // Create paste metadata
+    Paste paste = Paste.builder()
+        .id(generatePasteId())
+        .contentHash(contentHash)
+        .storageKey(storageKey)
+        .idempotencyKey(idempotencyKey)
+        .title(request.getTitle())
+        .syntax(request.getSyntax())
+        .visibility(request.getVisibility())
+        .expiresAt(calculateExpiration(request.getExpiresIn()))
+        .build();
+    
+    return pasteRepository.save(paste);
+}
+```
+
+**3. View Count Deduplication:**
+
+```java
+// Deduplicate view counts by (paste_id, ip_hash, timestamp)
+public void recordView(String pasteId, String ipAddress) {
+    String ipHash = DigestUtils.sha256Hex(ipAddress).substring(0, 16);
+    long timestamp = System.currentTimeMillis() / 1000; // Round to second
+    String dedupKey = String.format("view:%s:%s:%d", pasteId, ipHash, timestamp);
+    
+    // Set if absent (idempotent)
+    Boolean isNew = redisTemplate.opsForValue()
+        .setIfAbsent(dedupKey, "1", Duration.ofMinutes(5));
+    
+    if (Boolean.TRUE.equals(isNew)) {
+        // New view, increment counter
+        incrementViewCount(pasteId);
+    }
+    // Duplicate view, ignore
+}
+```
+
+### Idempotency Key Generation
+
+**Client-Side (Recommended):**
+```javascript
+// Generate UUID v4 for each request
+const idempotencyKey = crypto.randomUUID();
+fetch('/v1/pastes', {
+    headers: {
+        'Idempotency-Key': idempotencyKey
+    },
+    body: pasteData
+});
+```
+
+**Server-Side (Fallback):**
+```java
+// If client doesn't provide key, generate from content hash + user
+String idempotencyKey = DigestUtils.sha256Hex(
+    request.getContent() + 
+    (request.getUserId() != null ? request.getUserId() : "anonymous")
+);
+```
+
+### Duplicate Detection Window
+
+| Operation | Deduplication Window | Storage |
+|-----------|---------------------|---------|
+| Paste Creation | 24 hours | PostgreSQL (idempotency_key unique index) |
+| Content Deduplication | Forever | S3 (content hash) |
+| View Counts | 5 minutes | Redis |
+| Update Operations | 1 hour | PostgreSQL (version-based) |
+
+### Idempotency Key Storage
+
+```sql
+-- Add idempotency_key column with unique index
+ALTER TABLE pastes ADD COLUMN idempotency_key VARCHAR(255);
+CREATE UNIQUE INDEX idx_pastes_idempotency_key ON pastes(idempotency_key) 
+WHERE idempotency_key IS NOT NULL;
+
+-- Add content_hash for deduplication
+ALTER TABLE pastes ADD COLUMN content_hash VARCHAR(64);
+CREATE INDEX idx_pastes_content_hash ON pastes(content_hash);
 ```
 
 ---

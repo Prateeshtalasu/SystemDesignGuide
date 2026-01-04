@@ -1,15 +1,117 @@
-# 🏧 ATM System - Complete Solution
+# 🏧 ATM System - Problem Solution
 
-## Problem Statement
+## STEP 0: REQUIREMENTS QUICKPASS
 
-Design an ATM system that can:
+### Core Functional Requirements
 - Authenticate users via card and PIN
-- Support account operations (balance inquiry, withdrawal, deposit, transfer)
-- Handle cash dispensing with multiple denominations
-- Log all transactions
-- Handle concurrent access safely
-- Support multiple account types (checking, savings)
-- Handle edge cases (insufficient funds, machine out of cash)
+- Support balance inquiry for linked accounts
+- Support cash withdrawal with denomination selection
+- Support cash deposit
+- Support fund transfer between accounts
+- Support PIN change
+- Handle cash dispensing with multiple denominations ($100, $50, $20, $10)
+- Log all transactions with timestamps
+- Support multiple account types (Checking, Savings)
+
+### Explicit Out-of-Scope Items
+- Check deposit and imaging
+- Bill payment services
+- Account opening/closing
+- Credit card cash advances
+- Foreign currency exchange
+- Mini-statement printing
+- Card-less transactions (mobile banking)
+- Biometric authentication
+- Real-time fraud detection
+- Integration with external banking networks
+
+### Assumptions and Constraints
+- **Single Bank**: ATM serves one bank's customers only
+- **In-Memory Storage**: No external database
+- **Fixed Denominations**: $100, $50, $20, $10 bills only
+- **Daily Withdrawal Limit**: $1000 per card per day
+- **PIN Attempts**: 3 attempts before card is blocked
+- **Session Timeout**: Auto-logout after 30 seconds of inactivity
+- **No Partial Dispense**: If exact amount can't be dispensed, transaction fails
+- **Simulated Hardware**: Card reader, dispenser, keypad are simulated
+
+### Scale Assumptions
+- **Single Process**: Runs within a single JVM
+- **Single ATM**: One ATM instance per system
+- **Moderate Load**: Up to 100 transactions per hour
+
+### Concurrency Model Expectations
+- **Synchronized Cash Dispenser**: Prevent race conditions on cash inventory
+- **Thread-Safe Transaction Log**: Multiple transactions logged safely
+- **Atomic Balance Updates**: Account balance changes are atomic
+- **Session Isolation**: Each ATM session is independent
+
+### Public APIs (Main methods exposed for interaction)
+- `ATM.insertCard(Card)`: Start session with card
+- `ATM.enterPin(String)`: Authenticate with PIN
+- `ATM.selectAccount(AccountType)`: Choose account for transaction
+- `ATM.checkBalance()`: Get current balance
+- `ATM.withdraw(amount)`: Withdraw cash
+- `ATM.deposit(amount)`: Deposit cash
+- `ATM.transfer(toAccount, amount)`: Transfer funds
+- `ATM.changePin(oldPin, newPin)`: Change PIN
+- `ATM.ejectCard()`: End session
+- `ATM.cancel()`: Cancel current operation
+
+### Public API Usage Examples
+```java
+// Example 1: Basic usage
+Bank bank = Bank.getInstance("National Bank");
+Customer customer = bank.createCustomer("Alice", "alice@email.com", 
+                                       "555-1234", "123 Main St");
+CheckingAccount account = bank.createCheckingAccount(customer, 5000.00);
+Card card = bank.issueCard(customer, "1234");
+ATM atm = bank.createATM("Downtown Branch");
+
+// Insert card and authenticate
+atm.getController().insertCard(card);
+atm.getController().authenticate("1234");
+atm.getController().selectAccount(0);
+
+// Example 2: Typical workflow
+// Check balance
+atm.getController().checkBalance();
+
+// Withdraw cash
+atm.getController().withdraw(200.00);
+
+// Deposit cash
+atm.getController().deposit(500.00);
+
+// Transfer funds
+atm.getController().transfer(savingsAccount.getAccountNumber(), 1000.00);
+
+// End session
+atm.getController().endSession();
+
+// Example 3: Edge case - Wrong PIN attempts
+atm.getController().insertCard(card);
+atm.getController().authenticate("0000");  // Wrong - 2 attempts remaining
+atm.getController().authenticate("0000");  // Wrong - 1 attempt remaining
+atm.getController().authenticate("0000");  // Wrong - Card blocked
+
+// Example 4: Edge case - Insufficient funds
+atm.getController().withdraw(10000.00);  // Balance only $5000
+// Transaction fails: "Insufficient funds or limit exceeded"
+
+// Example 5: Edge case - ATM out of cash
+atm.getController().withdraw(50000.00);  // ATM doesn't have enough
+// Transaction fails: "ATM cannot dispense this amount"
+```
+
+### Invariants the System Must Always Maintain
+- **Card-Session Binding**: Only one session per card at a time
+- **PIN Security**: PIN never stored in plain text, never logged
+- **Balance Consistency**: Account balance = initial + deposits - withdrawals
+- **Cash Inventory**: Dispensed cash ≤ available cash in ATM
+- **Transaction Atomicity**: Either complete transaction or full rollback
+- **Daily Limit**: Total withdrawals ≤ daily limit per card
+- **Audit Trail**: Every transaction is logged with timestamp
 
 ---
 
@@ -71,7 +173,269 @@ Design an ATM system that can:
 
 ---
 
-## STEP 2: Complete Java Implementation
+### Responsibilities Table
+
+| Class | Owns | Why |
+|-------|------|-----|
+| `ATM` | ATM hardware components and overall ATM instance | Central container for all hardware - singleton ensures single ATM instance, owns all hardware components |
+| `ATMController` | ATM operation workflow and transaction coordination | Coordinates user interaction flow - separates workflow logic from hardware and account operations |
+| `Card` | Card authentication data (card number, PIN, expiration) | Encapsulates card identity and authentication - enables card validation and PIN checking |
+| `CardReader` | Card reading and validation operations | Handles card hardware interaction - separates hardware concerns from business logic |
+| `Account` (abstract) | Account balance and transaction history | Base class for account types - enables polymorphism, defines common account operations |
+| `CheckingAccount` | Checking account-specific balance and rules | Implements checking account logic - separate from savings to handle different rules and constraints |
+| `SavingsAccount` | Savings account-specific balance and rules | Implements savings account logic - separate from checking for different interest and withdrawal rules |
+| `Transaction` (abstract) | Transaction execution template and state | Base class for transaction types - template method pattern enables consistent transaction execution |
+| `WithdrawalTransaction` | Withdrawal operation logic and validation | Handles withdrawal-specific logic - separate class enables withdrawal rules without affecting other transaction types |
+| `DepositTransaction` | Deposit operation logic and validation | Handles deposit-specific logic - separate from withdrawal to enable independent changes |
+| `TransferTransaction` | Transfer operation logic between accounts | Handles transfer-specific logic - separate transaction type for multi-account operations |
+| `BalanceInquiryTransaction` | Balance inquiry operation | Handles read-only balance check - separate transaction type for query operations |
+| `CashDispenser` | Cash inventory and dispensing operations | Manages cash hardware and inventory - separates cash handling from transaction logic |
+| `CashSlot` | Cash deposit slot operations | Handles deposit hardware - separates deposit hardware from transaction logic |
+| `Screen` | Display output and user messaging | Handles display output - separates UI presentation from business logic |
+| `Keypad` | User input capture and validation | Handles input hardware - separates input capture from business logic |
+
+---
+
+## STEP 4: Code Walkthrough - Building From Scratch
+
+This section explains how an engineer builds this system from scratch, in the order code should be written.
+
+### Phase 1: Define the Domain (Enums First)
+
+```java
+// Step 1: TransactionType enum
+public enum TransactionType {
+    BALANCE_INQUIRY,
+    WITHDRAWAL,
+    DEPOSIT,
+    TRANSFER,
+    PIN_CHANGE
+}
+
+// Step 2: ATMState enum
+public enum ATMState {
+    IDLE,
+    CARD_INSERTED,
+    AUTHENTICATED,
+    TRANSACTION_IN_PROGRESS,
+    OUT_OF_SERVICE,
+    OUT_OF_CASH
+}
+```
+
+---
+
+### Phase 2: Build Account System
+
+```java
+// Step 3: Account abstract class
+public abstract class Account {
+    protected final String accountNumber;
+    protected final AccountType type;
+    protected final Customer owner;
+    protected double balance;
+    protected final ReentrantLock lock;
+    
+    public boolean withdraw(double amount) {
+        lock.lock();
+        try {
+            if (amount <= 0 || !canWithdraw(amount)) {
+                return false;
+            }
+            balance -= amount;
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+
+// Step 4: CheckingAccount
+public class CheckingAccount extends Account {
+    private double dailyWithdrawalLimit;
+    private double withdrawnToday;
+    
+    @Override
+    protected boolean canWithdraw(double amount) {
+        if (balance < amount) return false;
+        if (withdrawnToday + amount > dailyWithdrawalLimit) return false;
+        return true;
+    }
+}
+```
+
+---
+
+### Phase 3: Build Card and Authentication
+
+```java
+// Step 5: Card class
+public class Card {
+    private final String cardNumber;
+    private String pin;
+    private boolean isBlocked;
+    private int failedPinAttempts;
+    private static final int MAX_PIN_ATTEMPTS = 3;
+    
+    public boolean validatePin(String enteredPin) {
+        if (isBlocked) return false;
+        if (pin.equals(enteredPin)) {
+            failedPinAttempts = 0;
+            return true;
+        }
+        failedPinAttempts++;
+        if (failedPinAttempts >= MAX_PIN_ATTEMPTS) {
+            isBlocked = true;
+        }
+        return false;
+    }
+}
+```
+
+---
+
+### Phase 4: Build Hardware Components
+
+```java
+// Step 6: CashDispenser
+public class CashDispenser {
+    private final Map<Integer, Integer> cashInventory;
+    private static final int[] DENOMINATIONS = {100, 50, 20, 10, 5, 1};
+    
+    public synchronized boolean dispenseCash(double amount) {
+        Map<Integer, Integer> billsToDispense = calculateBills((int)amount);
+        if (billsToDispense == null) return false;
+        
+        for (Map.Entry<Integer, Integer> entry : billsToDispense.entrySet()) {
+            cashInventory.merge(entry.getKey(), -entry.getValue(), Integer::sum);
+        }
+        return true;
+    }
+}
+```
+
+---
+
+### Phase 5: Build Transactions
+
+```java
+// Step 7: Transaction abstract class
+public abstract class Transaction {
+    protected final String transactionId;
+    protected final TransactionType type;
+    protected final Account account;
+    protected final double amount;
+    protected TransactionStatus status;
+    
+    public abstract boolean execute();
+}
+
+// Step 8: WithdrawalTransaction
+public class WithdrawalTransaction extends Transaction {
+    private final CashDispenser cashDispenser;
+    
+    @Override
+    public boolean execute() {
+        if (!account.withdraw(amount)) {
+            fail("Insufficient funds");
+            return false;
+        }
+        if (!cashDispenser.dispenseCash(amount)) {
+            account.deposit(amount);  // Rollback
+            fail("Failed to dispense");
+            return false;
+        }
+        complete();
+        return true;
+    }
+}
+```
+
+---
+
+### Phase 6: Build Controller
+
+```java
+// Step 9: ATMController
+public class ATMController {
+    private final ATM atm;
+    private ATMState state;
+    private Card currentCard;
+    private Account selectedAccount;
+    
+    public boolean insertCard(Card card) {
+        if (state != ATMState.IDLE) return false;
+        Card readCard = atm.getCardReader().readCard(card);
+        if (readCard == null) return false;
+        currentCard = readCard;
+        state = ATMState.CARD_INSERTED;
+        return true;
+    }
+    
+    public boolean authenticate(String pin) {
+        if (state != ATMState.CARD_INSERTED) return false;
+        if (currentCard.validatePin(pin)) {
+            state = ATMState.AUTHENTICATED;
+            return true;
+        }
+        return false;
+    }
+}
+```
+
+---
+
+### Phase 7: Threading Model and Concurrency Control
+
+**Threading Model:**
+
+This system handles **concurrent ATM sessions**:
+- Multiple users can attempt to use different ATMs
+- Single ATM serves one user at a time (state machine)
+- Account operations must be thread-safe
+
+**Concurrency Control:**
+
+```java
+// Account-level locking
+public class Account {
+    private final ReentrantLock lock;
+    
+    public boolean withdraw(double amount) {
+        lock.lock();  // Only one thread per account
+        try {
+            // Critical section
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+
+// ATM-level state machine
+public class ATM {
+    private final Object stateLock = new Object();
+    private ATMState state;
+    
+    public boolean insertCard(Card card) {
+        synchronized (stateLock) {
+            if (state != ATMState.IDLE) return false;
+            state = ATMState.CARD_INSERTED;
+            return true;
+        }
+    }
+}
+```
+
+**Why this model?**
+- Account locks prevent concurrent withdrawals from same account
+- ATM state machine ensures single-user session per ATM
+- Cash dispenser synchronized for inventory safety
+
+---
+
+## STEP 2: Complete Final Implementation
+
+> **Verified:** This code compiles successfully with Java 11+.
 
 ### 2.1 Enums
 

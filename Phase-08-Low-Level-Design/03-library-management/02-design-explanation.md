@@ -1,6 +1,12 @@
 # 📚 Library Management System - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the Library Management System.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -326,6 +332,18 @@ public class SMSNotificationService implements Notifier { }
 - Easy to swap catalog implementations (in-memory vs database)
 - Easy to swap notification channels
 - Easy to mock for testing
+
+---
+
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. Book stores metadata, BookItem tracks copy state, Member manages member data, Lending tracks transactions, services handle workflows. Book vs BookItem separation is excellent SRP. | N/A | - |
+| **OCP** | PASS | System is open for extension (new book formats, fine calculators, search strategies) without modifying existing code. Enums and strategy patterns enable this. | N/A | - |
+| **LSP** | PASS | If using inheritance (e.g., BookItem subclasses), all subclasses properly implement contracts. Current design uses composition which naturally satisfies LSP. | N/A | - |
+| **ISP** | WEAK | Could benefit from interface segregation for Catalog (TitleSearchable, AuthorSearchable, etc.) and Notifier interfaces. Currently services depend on concrete implementations. | Extract interfaces: Catalog interface, Notifier interface, Searchable interfaces | More files/interfaces, but increases flexibility and testability |
+| **DIP** | WEAK | BookLendingService depends on concrete BookCatalog and NotificationService. Should depend on Catalog and Notifier interfaces. | Extract Catalog and Notifier interfaces, use constructor injection | More setup/configuration, but improves testability and flexibility |
 
 ---
 
@@ -742,4 +760,274 @@ public class Member {
     }
 }
 ```
+
+---
+
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you handle multiple library branches?
+
+**Answer:**
+
+```java
+public class LibraryBranch {
+    private final String branchId;
+    private final String name;
+    private final String address;
+    private final BookCatalog localCatalog;
+    private final Map<String, Member> localMembers;
+}
+
+public class LibraryNetwork {
+    private final List<LibraryBranch> branches;
+    private final BookCatalog centralCatalog;  // All books
+    
+    public List<BookItem> findAvailableAcrossBranches(String isbn) {
+        return branches.stream()
+            .flatMap(b -> b.getLocalCatalog().findByIsbn(isbn)
+                          .getAvailableCopies().stream())
+            .toList();
+    }
+}
+```
+
+---
+
+### Q2: How would you implement a recommendation system?
+
+**Answer:**
+
+```java
+public class RecommendationService {
+    
+    public List<Book> getRecommendations(Member member) {
+        // Based on borrowing history
+        Set<String> borrowedSubjects = member.getBorrowingHistory().stream()
+            .map(l -> l.getBookItem().getBook().getSubject())
+            .collect(Collectors.toSet());
+        
+        // Find books in same subjects, not yet borrowed
+        return catalog.getAllBooks().stream()
+            .filter(b -> borrowedSubjects.contains(b.getSubject()))
+            .filter(b -> !member.hasBorrowed(b))
+            .limit(10)
+            .toList();
+    }
+}
+```
+
+---
+
+### Q3: How would you handle digital books (e-books)?
+
+**Answer:**
+
+```java
+public class EBook extends Book {
+    private final String fileFormat;
+    private final int maxSimultaneousLoans;
+    private int currentLoans;
+    
+    public boolean canLend() {
+        return currentLoans < maxSimultaneousLoans;
+    }
+}
+
+public class DigitalLending extends Lending {
+    private final String downloadLink;
+    private final LocalDateTime linkExpiration;
+    
+    @Override
+    public Fine processReturn() {
+        // Digital returns are automatic
+        this.returnDate = LocalDate.now();
+        ((EBook) getBookItem().getBook()).decrementLoans();
+        return null;  // No fines for digital
+    }
+}
+```
+
+---
+
+### Q4: How would you implement a waitlist with estimated wait times?
+
+**Answer:**
+
+```java
+public class WaitlistService {
+    
+    public WaitlistInfo getWaitlistInfo(Member member, Book book) {
+        Queue<Reservation> queue = reservationsByBook.get(book.getIsbn());
+        
+        int position = getQueuePosition(member, queue);
+        int avgLoanDays = calculateAverageLoanDays(book);
+        int copiesCount = book.getTotalCopies();
+        
+        // Estimate: position / copies * average loan days
+        int estimatedDays = (position / copiesCount) * avgLoanDays;
+        
+        return new WaitlistInfo(position, estimatedDays);
+    }
+}
+```
+
+---
+
+### Q5: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add audit logging** - Track all operations for compliance
+2. **Add analytics** - Popular books, peak times, member behavior
+3. **Add caching** - Cache frequent searches
+4. **Add batch operations** - Bulk import books
+5. **Add API layer** - REST endpoints for external integration
+6. **Add event sourcing** - Track all state changes
+7. **Add full-text search** - Elasticsearch integration
+
+---
+
+### Q6: How would you handle book donations and acquisitions?
+
+**Answer:**
+
+```java
+public class AcquisitionService {
+    
+    public void processDonation(Book book, int quantity, String donor) {
+        // Add to catalog if new book
+        if (!catalog.contains(book.getIsbn())) {
+            catalog.addBook(book);
+        }
+        
+        // Add copies
+        for (int i = 0; i < quantity; i++) {
+            String barcode = generateBarcode();
+            BookItem item = book.addBookItem(barcode, 0.0, "DONATION-AREA");
+            catalog.addBookItem(item);
+        }
+        
+        // Record donation
+        recordDonation(book, quantity, donor);
+    }
+    
+    public void processPurchase(String isbn, int quantity, double unitPrice) {
+        Book book = catalog.findByIsbn(isbn);
+        if (book == null) {
+            throw new BookNotFoundException("Book not in catalog");
+        }
+        
+        for (int i = 0; i < quantity; i++) {
+            String barcode = generateBarcode();
+            BookItem item = book.addBookItem(barcode, unitPrice, "NEW-AREA");
+            catalog.addBookItem(item);
+        }
+    }
+}
+```
+
+---
+
+### Q7: How would you implement automated due date reminders?
+
+**Answer:**
+
+```java
+public class ReminderService {
+    private ScheduledExecutorService scheduler;
+    
+    public void startReminderService() {
+        scheduler.scheduleAtFixedRate(() -> {
+            LocalDate today = LocalDate.now();
+            LocalDate reminderDate = today.plusDays(3);  // 3 days before due
+            
+            List<Lending> upcomingDue = getAllLendings().stream()
+                .filter(l -> l.getDueDate().equals(reminderDate))
+                .toList();
+            
+            for (Lending lending : upcomingDue) {
+                notificationService.sendDueDateReminder(
+                    lending.getMember(), lending
+                );
+            }
+        }, 0, 1, TimeUnit.DAYS);
+    }
+}
+```
+
+---
+
+### Q8: How would you handle book damage and loss reporting?
+
+**Answer:**
+
+```java
+public enum BookItemStatus {
+    AVAILABLE, BORROWED, RESERVED, DAMAGED, LOST, MAINTENANCE
+}
+
+public class DamageReportService {
+    
+    public void reportDamage(String barcode, String description, DamageLevel level) {
+        BookItem item = catalog.findByBarcode(barcode);
+        
+        if (level == DamageLevel.SEVERE) {
+            item.setStatus(BookItemStatus.LOST);
+            // Remove from circulation
+        } else if (level == DamageLevel.MODERATE) {
+            item.setStatus(BookItemStatus.MAINTENANCE);
+            // Send for repair
+        } else {
+            item.setStatus(BookItemStatus.DAMAGED);
+            // Still available but noted
+        }
+        
+        // Record damage report
+        DamageReport report = new DamageReport(item, description, level, LocalDate.now());
+        damageReports.add(report);
+        
+        // Charge member if currently borrowed
+        if (item.getBorrowedBy() != null && level == DamageLevel.SEVERE) {
+            Fine fine = new Fine(item.getBorrowedBy(), item.getBook().getPrice(), "Book lost");
+            item.getBorrowedBy().addFine(fine);
+        }
+    }
+}
+```
+
+---
+
+## STEP 7: Complexity Analysis
+
+### Time Complexity
+
+| Operation | Complexity | Explanation |
+|-----------|------------|-------------|
+| `findByIsbn()` | O(1) | HashMap lookup |
+| `findByBarcode()` | O(1) | HashMap lookup |
+| `searchByTitle()` | O(W + R) | W = words in query, R = results |
+| `addBook()` | O(W) | W = words to index |
+| `checkoutBook()` | O(1) | Direct lookups |
+| `returnBook()` | O(L) | L = active lendings |
+| `reserveBook()` | O(1) | Queue operations |
+
+### Space Complexity
+
+| Data Structure | Space | Purpose |
+|----------------|-------|---------|
+| `booksByIsbn` | O(B) | B = number of books |
+| `itemsByBarcode` | O(I) | I = number of items |
+| `booksByTitle` | O(W × B) | W = unique words |
+| `activeLendings` | O(L) | L = active lendings |
+| `reservationsByBook` | O(R) | R = reservations |
+
+### Bottlenecks at Scale
+
+**1 million books:**
+- Search indexes become large
+- Solution: Use proper search engine (Elasticsearch)
+
+**10,000 concurrent checkouts:**
+- Single lock becomes bottleneck
+- Solution: Partition by book category or location
 

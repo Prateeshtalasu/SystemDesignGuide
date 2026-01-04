@@ -1,14 +1,16 @@
-# 🔹 PROMPT 3: LLD PROMPT (LOW-LEVEL DESIGN)
-
-> **Usage:** Use this for object-oriented design problems.  
-> **Examples:** Parking Lot, LRU Cache, ATM, Library Management, Elevator System, etc.
-
----
-
-```
 Design the system: <LLD PROBLEM NAME>
 
 STRICT REQUIREMENTS:
+
+STEP 0: REQUIREMENTS QUICKPASS
+Before designing anything, clearly state:
+- Core functional requirements
+- Explicit out-of-scope items
+- Assumptions and constraints
+- Scale assumptions (single process vs multi-threaded, single JVM vs distributed)
+- Concurrency model expectations
+- Public APIs (main methods that will be exposed)
+- Invariants the system must always maintain
 
 STEP 1: COMPLETE REFERENCE SOLUTION
 Present the final, clean design upfront as the "answer key":
@@ -43,7 +45,10 @@ Show how engineers write this from scratch:
 - What comes next in the sequence
 - How logic evolves as you build
 - How state flows through the system
-- Concurrency concerns and thread safety
+- Threading model and concurrency control
+  * What is shared state
+  * Locking strategy or lock-free approach
+  * Deadlock and starvation prevention
 - Full Java code with comments explaining decisions
 
 STEP 5: SIMULATION / DRY RUN
@@ -53,14 +58,15 @@ Walk through concrete examples:
 - Show state changes after each call
 - Trace through 2-3 different scenarios
 - Include at least one edge case scenario
+- Include one concurrency scenario (simultaneous access)
 
-STEP 6: EDGE CASES & TESTING
+STEP 6: EDGE CASES & TESTING STRATEGY
 - Boundary conditions (empty, null, max values)
 - Invalid inputs and error handling
-- Concurrent access scenarios
-- How would you unit test each class?
-- What mocks/stubs are needed?
+- Concurrent access scenarios and race conditions
+- Unit test strategy for each class
 - Integration test approach
+- Load and stress testing approach
 
 STEP 7: COMPLEXITY ANALYSIS
 - Time complexity for each major operation
@@ -71,7 +77,7 @@ STEP 7: COMPLEXITY ANALYSIS
 STEP 8: INTERVIEW FOLLOW-UPS (WITH ANSWERS)
 Questions and complete answers on:
 - How would you scale this?
-- How would you handle concurrency?
+- How would you handle higher concurrency?
 - How would you extend for new requirements?
 - What are the tradeoffs in your design?
 - What would you do differently with more time?
@@ -79,9 +85,9 @@ Questions and complete answers on:
 
 OUTPUT FILE STRUCTURE:
 This prompt generates content for 3 files:
-- STEP 1-2, 4-5 → `01-problem-solution.md` (complete code with comments)
-- STEP 2-3 → `02-design-explanation.md` (SOLID principles, design decisions, patterns)
-- STEP 4-5, 7 → `03-code-walkthrough.md` (line-by-line explanation, simulation, testing)
+- STEP 0-1, 4 → `01-problem-solution.md` (final design + full code)
+- STEP 2-3, 7 → `02-design-explanation.md` (design decisions, SOLID, complexity)
+- STEP 5-6, 8 → `03-simulation-testing.md` (dry runs, edge cases, tests, interview Q&A)
 
 RULES:
 - No skipping fundamentals
@@ -89,10 +95,9 @@ RULES:
 - Explain every design pattern when used
 - Prefer clarity over cleverness
 - Show the simple version before optimizations
+- Build baseline first, then list extension points
 - Time management: Aim for 45-minute solution time
 - Level-specific guidance:
   * L4: Focus on working solution, basic OOP
   * L5: SOLID principles, design patterns, edge cases
   * L6: Multiple approaches, advanced patterns, scalability considerations
-```
-

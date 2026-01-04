@@ -19,6 +19,179 @@ CDN Edge:   https://suggest-edge.search.com/v1
 
 ---
 
+## API Versioning Strategy
+
+We use URL path versioning (`/v1/`, `/v2/`) because:
+- Easy to understand and implement
+- Clear in logs and documentation
+- Allows running multiple versions simultaneously
+
+**Backward Compatibility Rules:**
+
+Non-breaking changes (no version bump):
+- Adding new optional fields
+- Adding new endpoints
+- Adding new error codes
+
+Breaking changes (require new version):
+- Removing fields
+- Changing field types
+- Changing endpoint paths
+
+**Deprecation Policy:**
+1. Announce deprecation 6 months in advance
+2. Return Deprecation header
+3. Maintain old version for 12 months after new version release
+
+---
+
+## Rate Limiting Headers
+
+Every response includes rate limit information:
+
+```http
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640000000
+```
+
+**Rate Limits:**
+
+| Tier | Requests/minute |
+|------|-----------------|
+| Anonymous | 60 |
+| Authenticated | 1000 |
+
+---
+
+## Error Model
+
+All error responses follow this standard envelope structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "field_name",  // Optional
+      "reason": "Specific reason"  // Optional
+    },
+    "request_id": "req_123456"  // For tracing
+  }
+}
+```
+
+**Error Codes Reference:**
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | INVALID_INPUT | Request validation failed |
+| 400 | INVALID_QUERY | Query parameter is invalid |
+| 400 | QUERY_TOO_SHORT | Query must be at least 1 character |
+| 400 | QUERY_TOO_LONG | Query exceeds maximum length |
+| 429 | RATE_LIMITED | Rate limit exceeded |
+| 500 | INTERNAL_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+**Error Response Examples:**
+
+```json
+// 400 Bad Request - Query too short
+{
+  "error": {
+    "code": "QUERY_TOO_SHORT",
+    "message": "Query must be at least 1 character",
+    "details": {
+      "field": "q",
+      "reason": "Empty query provided"
+    },
+    "request_id": "req_abc123"
+  }
+}
+
+// 429 Rate Limited
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded. Please try again later.",
+    "details": {
+      "limit": 60,
+      "remaining": 0,
+      "reset_at": "2024-01-15T11:00:00Z"
+    },
+    "request_id": "req_xyz789"
+  }
+}
+```
+
+---
+
+## Idempotency Implementation
+
+**Idempotency-Key Header:**
+
+For write operations (if any, e.g., admin endpoints for updating the index), clients must include `Idempotency-Key` header:
+
+```http
+Idempotency-Key: <uuid-v4>
+```
+
+**Server-Side Algorithm:**
+
+1. Check Redis key `idempotency:{key}`
+2. If exists, return stored response (status code + body)
+3. Else process request, store response with 24h TTL
+4. Return response to client
+
+**Implementation:**
+
+```java
+@PostMapping("/admin/v1/index/update")
+public ResponseEntity<IndexUpdateResponse> updateIndex(
+        @RequestBody IndexUpdateRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    
+    if (idempotencyKey != null) {
+        // Check if request already processed
+        String cachedResponse = redisTemplate.opsForValue()
+            .get("idempotency:" + idempotencyKey);
+        if (cachedResponse != null) {
+            return ResponseEntity.ok(parseResponse(cachedResponse));
+        }
+    }
+    
+    // Process request
+    IndexUpdateResponse response = indexService.updateIndex(request);
+    
+    // Cache response for 24 hours if idempotency key provided
+    if (idempotencyKey != null) {
+        redisTemplate.opsForValue().set(
+            "idempotency:" + idempotencyKey,
+            serialize(response),
+            Duration.ofHours(24)
+        );
+    }
+    
+    return ResponseEntity.status(200).body(response);
+}
+```
+
+**Idempotent Endpoints:**
+
+| Endpoint | Idempotent? | Mechanism |
+|----------|-------------|-----------|
+| GET /v1/suggestions | ✅ Yes | Read-only, no side effects |
+| POST /admin/v1/index/update | ✅ Yes | Idempotency-Key header |
+
+**Retry-Safe Semantics:**
+
+- Clients can safely retry requests with the same Idempotency-Key
+- Server returns the same response for duplicate requests
+- Prevents duplicate index updates or other side effects
+
+---
+
 ## Core API Endpoint
 
 ### Get Suggestions

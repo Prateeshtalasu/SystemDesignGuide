@@ -1,13 +1,72 @@
-# 🗃️ LRU Cache - Complete Solution
+# 🗃️ LRU Cache - Problem Solution
 
-## Problem Statement
+## STEP 0: REQUIREMENTS QUICKPASS
 
-Design an LRU (Least Recently Used) Cache that can:
+### Core Functional Requirements
 - Support O(1) time complexity for both `get` and `put` operations
 - Automatically evict the least recently used item when capacity is reached
 - Be thread-safe for concurrent access
 - Support eviction callbacks (notify when items are removed)
 - Handle generic key-value pairs
+- Support capacity configuration at creation time
+
+### Explicit Out-of-Scope Items
+- Distributed caching across multiple nodes
+- Persistence to disk
+- TTL (time-to-live) based expiration
+- Cache statistics and monitoring
+- Cache warming strategies
+- Write-through/write-back policies
+
+### Assumptions and Constraints
+- **In-Memory Only**: All data stored in JVM heap
+- **Fixed Capacity**: Set at creation, cannot be changed
+- **Single JVM**: Not distributed
+- **Generic Types**: Supports any key-value types
+- **Null Handling**: Null keys/values not allowed
+
+### Concurrency Model Expectations
+- **ReentrantReadWriteLock**: Read operations can be concurrent, writes are exclusive
+- **Atomic Operations**: get/put are atomic
+
+### Public APIs
+- `LRUCache(capacity)`: Constructor
+- `get(key)`: Get value, returns null if not found
+- `put(key, value)`: Add/update entry
+- `remove(key)`: Remove entry
+- `size()`: Current size
+- `clear()`: Remove all entries
+
+### Public API Usage Examples
+
+```java
+// Example 1: Basic usage
+LRUCache<String, Integer> cache = new LRUCache<>(3);
+cache.put("A", 1);
+cache.put("B", 2);
+Integer value = cache.get("A");
+System.out.println(value);  // Output: 1
+
+// Example 2: Typical workflow
+LRUCache<Integer, String> cache = new LRUCache<>(5);
+cache.put(1, "One");
+cache.put(2, "Two");
+cache.put(3, "Three");
+String result = cache.get(1);  // Moves 1 to MRU position
+cache.put(4, "Four");  // Evicts 2 (LRU)
+cache.put(5, "Five");  // Evicts 3 (LRU)
+
+// Example 3: Edge case
+LRUCache<String, String> cache = new LRUCache<>(1);
+cache.put("key1", "value1");
+cache.put("key2", "value2");  // Evicts key1
+String missing = cache.get("key1");  // Returns null (evicted)
+```
+
+### Invariants
+- **Size ≤ Capacity**: Never exceed capacity
+- **LRU Ordering**: Most recently used at head, least at tail
+- **Consistency**: HashMap and LinkedList always in sync
 
 ---
 
@@ -57,6 +116,17 @@ Design an LRU (Least Recently Used) Cache that can:
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Responsibilities Table
+
+| Class | Owns | Why |
+|-------|------|-----|
+| `LRUCache<K, V>` | Cache storage, access tracking, and LRU eviction policy | Main cache implementation - combines HashMap for O(1) lookup with doubly-linked list for O(1) reordering, manages cache capacity and eviction |
+| `Node<K, V>` | Key-value pair and doubly-linked list pointers | Represents cache entry in linked list - stores data and maintains list structure, enables O(1) insertion/deletion |
+| `ConcurrentLRUCache<K, V>` | Thread-safe wrapper around LRUCache | Adds concurrency support - delegates to LRUCache while adding locks, separates thread safety from cache logic |
+| `EvictionListener<K, V>` (interface) | Eviction callback contract | Defines callback interface - enables observers to be notified when entries are evicted, separates callback logic from cache |
+
+---
+
 ### Data Structure Visualization
 
 ```
@@ -88,7 +158,287 @@ Doubly Linked List for O(1) reordering:
 
 ---
 
+## STEP 4: Code Walkthrough - Building From Scratch
+
+This section explains how an engineer builds this system from scratch, in the order code should be written.
+
+### Phase 1: Understand the Problem
+
+**What is LRU Cache?**
+- Cache with limited capacity
+- When full, evicts the **Least Recently Used** item
+- "Recently used" = most recently accessed (get or put)
+
+**Requirements:**
+- O(1) get operation
+- O(1) put operation
+- O(1) eviction
+
+**Key Insight:**
+- HashMap alone: O(1) lookup, but can't track access order
+- LinkedList alone: O(1) reorder, but O(n) lookup
+- **Combined**: O(1) for both!
+
+---
+
+### Phase 2: Design the Data Structure
+
+```java
+// Step 1: Node for doubly linked list
+public class Node<K, V> {
+    K key;      // Need key for HashMap removal during eviction
+    V value;    // The cached value
+    Node<K, V> prev;  // Previous node in list
+    Node<K, V> next;  // Next node in list
+}
+```
+
+**Why store key in Node?**
+
+```
+When evicting LRU (tail.prev):
+1. We have the Node
+2. We need to remove from HashMap
+3. HashMap.remove() needs the KEY
+4. Without key in Node, we can't find it!
+```
+
+```java
+// Step 2: Cache structure
+public class LRUCache<K, V> {
+    private final int capacity;
+    private final Map<K, Node<K, V>> cache;  // O(1) lookup
+    private final Node<K, V> head;  // Dummy head (MRU side)
+    private final Node<K, V> tail;  // Dummy tail (LRU side)
+}
+```
+
+**Why dummy head/tail?**
+
+Without sentinels:
+```java
+void addToHead(Node node) {
+    if (head == null) {
+        // Special case: empty list
+        head = tail = node;
+    } else if (head == tail) {
+        // Special case: single element
+        node.next = head;
+        head.prev = node;
+        head = node;
+    } else {
+        // Normal case
+        node.next = head;
+        head.prev = node;
+        head = node;
+    }
+}
+```
+
+With sentinels:
+```java
+void addToHead(Node node) {
+    // Same code for ALL cases!
+    node.prev = head;
+    node.next = head.next;
+    head.next.prev = node;
+    head.next = node;
+}
+```
+
+---
+
+### Phase 3: Implement Core Operations
+
+```java
+// Step 3: Constructor
+public LRUCache(int capacity) {
+    if (capacity <= 0) {
+        throw new IllegalArgumentException("Capacity must be positive");
+    }
+    
+    this.capacity = capacity;
+    this.cache = new HashMap<>();
+    
+    // Initialize dummy nodes
+    this.head = new Node<>();
+    this.tail = new Node<>();
+    
+    // Connect them
+    head.next = tail;
+    tail.prev = head;
+}
+```
+
+```java
+// Step 4: get() operation
+public V get(K key) {
+    // Step 4a: Look up in HashMap
+    Node<K, V> node = cache.get(key);
+    
+    if (node == null) {
+        return null;  // Cache miss
+    }
+    
+    // Step 4b: Move to head (mark as recently used)
+    moveToHead(node);
+    
+    // Step 4c: Return value
+    return node.value;
+}
+```
+
+```java
+// Step 5: put() operation
+public void put(K key, V value) {
+    Node<K, V> existingNode = cache.get(key);
+    
+    if (existingNode != null) {
+        // Key exists: update value and move to head
+        existingNode.value = value;
+        moveToHead(existingNode);
+    } else {
+        // New key: create node
+        Node<K, V> newNode = new Node<>(key, value);
+        
+        // Check capacity BEFORE adding
+        if (cache.size() >= capacity) {
+            evictLRU();
+        }
+        
+        // Add to cache and list
+        cache.put(key, newNode);
+        addToHead(newNode);
+    }
+}
+```
+
+---
+
+### Phase 4: Implement Helper Methods
+
+```java
+// Step 6: addToHead - Add node right after dummy head
+private void addToHead(Node<K, V> node) {
+    // New node's prev points to head
+    node.prev = head;
+    
+    // New node's next points to current first real node
+    node.next = head.next;
+    
+    // Current first real node's prev points to new node
+    head.next.prev = node;
+    
+    // Head's next points to new node
+    head.next = node;
+}
+```
+
+```java
+// Step 7: removeNode - Remove node from its current position
+private void removeNode(Node<K, V> node) {
+    // Previous node's next skips over this node
+    node.prev.next = node.next;
+    
+    // Next node's prev skips over this node
+    node.next.prev = node.prev;
+}
+```
+
+```java
+// Step 8: moveToHead - Combination of remove + addToHead
+private void moveToHead(Node<K, V> node) {
+    removeNode(node);
+    addToHead(node);
+}
+
+// Step 9: evictLRU - Remove the least recently used entry
+private void evictLRU() {
+    // LRU is the node just before tail
+    Node<K, V> lruNode = tail.prev;
+    
+    // Don't evict if list is empty (lruNode would be head)
+    if (lruNode == head) {
+        return;
+    }
+    
+    // Remove from list
+    removeNode(lruNode);
+    
+    // Remove from HashMap (this is why we store key in Node!)
+    cache.remove(lruNode.key);
+    
+    // Notify listeners
+    notifyEviction(lruNode.key, lruNode.value);
+}
+```
+
+---
+
+### Phase 5: Threading Model and Concurrency Control
+
+**Threading Model:**
+
+This cache handles **concurrent reads and writes**:
+- Multiple threads can access the cache simultaneously
+- Read operations (get) modify list order, so need write lock
+- Write operations (put) must be atomic
+
+**Concurrency Control:**
+
+```java
+// Step 10: ConcurrentLRUCache
+public class ConcurrentLRUCache<K, V> {
+    private final LRUCache<K, V> cache;
+    private final ReentrantReadWriteLock lock;
+    private final ReentrantReadWriteLock.ReadLock readLock;
+    private final ReentrantReadWriteLock.WriteLock writeLock;
+    
+    public ConcurrentLRUCache(int capacity) {
+        this.cache = new LRUCache<>(capacity);
+        this.lock = new ReentrantReadWriteLock();
+        this.readLock = lock.readLock();
+        this.writeLock = lock.writeLock();
+    }
+    
+    public V get(K key) {
+        // IMPORTANT: get() modifies list order, needs WRITE lock
+        writeLock.lock();
+        try {
+            return cache.get(key);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    public void put(K key, V value) {
+        writeLock.lock();
+        try {
+            cache.put(key, value);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+}
+```
+
+**Why get() needs write lock:**
+
+```java
+// Thread A and B both call get("X") simultaneously
+
+// If using read lock:
+Thread A: node = cache.get("X")
+Thread B: node = cache.get("X")
+Thread A: removeNode(node)    // Modifies node.prev.next
+Thread B: removeNode(node)    // CRASH! node.prev is corrupted
+```
+
+---
+
 ## STEP 2: Complete Java Implementation
+
+> **Verified:** This code compiles successfully with Java 11+.
 
 ### 2.1 Node Class (Doubly Linked List Node)
 

@@ -38,6 +38,12 @@ Peak QPS (assume 5x average):
 ≈ 200 views/second (peak)
 ```
 
+**Math Verification:**
+- Assumptions: 100M views/month, 30 days/month, 86,400 seconds/day, 5x peak multiplier
+- Average QPS: 100,000,000 / 30 / 86,400 = 38.58 QPS ≈ 39 QPS
+- Peak QPS: 38.58 × 5 = 192.9 QPS ≈ 200 QPS (rounded)
+- **DOC MATCHES:** Traffic summary table shows 40 avg, 200 peak for paste views ✅
+
 ### Traffic Summary
 
 | Operation | Average QPS | Peak QPS (5x) |
@@ -72,6 +78,12 @@ Based on real-world usage patterns:
 ≈ 100 KB average (rounded for easy math)
 ```
 
+**Math Verification:**
+- Assumptions: Size distribution (30% @ 500B, 40% @ 5KB, 20% @ 50KB, 9% @ 500KB, 1% @ 5MB)
+- Calculation: (0.30×500) + (0.40×5,000) + (0.20×50,000) + (0.09×500,000) + (0.01×5,000,000) = 107,150 bytes
+- Conversion: 107,150 bytes ÷ 1,024 = 104.6 KB ≈ 100 KB (rounded)
+- **DOC MATCHES:** Storage calculations use 100 KB average ✅
+
 **Note**: The 1% of very large pastes contribute significantly to storage.
 
 ### Storage Per Paste
@@ -91,6 +103,11 @@ Storage per paste = 100 KB
 
 Monthly storage = 10M × 100 KB = 1 TB / month
 ```
+
+**Math Verification:**
+- Assumptions: 10M pastes/month, 100 KB per paste
+- Calculation: 10,000,000 × 100 KB = 1,000,000,000 KB = 1,000,000 MB = 1,000 GB = 1 TB
+- **DOC MATCHES:** Annual projection table shows 1 TB/month, 12 TB/year ✅
 
 ### Annual Storage Projection
 
@@ -129,6 +146,12 @@ Paste creation:
 Incoming bandwidth = 20 × 100 KB = 2 MB/s = 16 Mbps
 ```
 
+**Math Verification:**
+- Assumptions: 20 paste creations/sec (peak), 100 KB average paste size
+- Calculation: 20 ops/sec × 100 KB = 2,000 KB/sec = 2 MB/sec
+- Conversion: 2 MB/sec × 8 bits/byte = 16 Mbps
+- **DOC MATCHES:** Bandwidth summary table shows 16 Mbps incoming ✅
+
 ### Outgoing Bandwidth (Downloads)
 
 ```
@@ -139,6 +162,12 @@ Paste views:
 Outgoing bandwidth = 200 × 100 KB = 20 MB/s = 160 Mbps
 ```
 
+**Math Verification:**
+- Assumptions: 200 paste views/sec (peak), 100 KB average paste size
+- Calculation: 200 ops/sec × 100 KB = 20,000 KB/sec = 20 MB/sec
+- Conversion: 20 MB/sec × 8 bits/byte = 160 Mbps
+- **DOC MATCHES:** Bandwidth summary table shows 160 Mbps outgoing (without CDN) ✅
+
 ### With CDN Caching
 
 Popular pastes are cached at CDN edges:
@@ -146,6 +175,11 @@ Popular pastes are cached at CDN edges:
 Assume 70% cache hit rate
 Origin bandwidth = 160 Mbps × 0.30 = 48 Mbps
 ```
+
+**Math Verification:**
+- Assumptions: 160 Mbps outgoing bandwidth, 70% CDN cache hit rate (30% miss rate)
+- Calculation: 160 Mbps × 0.30 = 48 Mbps origin bandwidth
+- **DOC MATCHES:** Bandwidth summary table shows 48 Mbps outgoing with CDN ✅
 
 ### Bandwidth Summary
 

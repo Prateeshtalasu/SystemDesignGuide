@@ -11,6 +11,205 @@ News feed APIs prioritize:
 
 ---
 
+## Base URL Structure
+
+```
+Production: https://api.social.com/v1
+```
+
+---
+
+## API Versioning Strategy
+
+We use URL path versioning (`/v1/`, `/v2/`) because:
+- Easy to understand and implement
+- Clear in logs and documentation
+- Allows running multiple versions simultaneously
+
+**Backward Compatibility Rules:**
+
+Non-breaking changes (no version bump):
+- Adding new optional fields
+- Adding new endpoints
+- Adding new error codes
+
+Breaking changes (require new version):
+- Removing fields
+- Changing field types
+- Changing endpoint paths
+
+**Deprecation Policy:**
+1. Announce deprecation 6 months in advance
+2. Return Deprecation header
+3. Maintain old version for 12 months after new version release
+
+---
+
+## Authentication
+
+### JWT Token Authentication
+
+```http
+GET /v1/feed
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+---
+
+## Rate Limiting Headers
+
+Every response includes rate limit information:
+
+```http
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640000000
+```
+
+**Rate Limits:**
+
+| Tier | Requests/minute |
+|------|-----------------|
+| Free | 60 |
+| Pro | 1000 |
+| Enterprise | 10000 |
+
+---
+
+## Error Model
+
+All error responses follow this standard envelope structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "field_name",  // Optional
+      "reason": "Specific reason"  // Optional
+    },
+    "request_id": "req_123456"  // For tracing
+  }
+}
+```
+
+**Error Codes Reference:**
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | INVALID_INPUT | Request validation failed |
+| 401 | UNAUTHORIZED | Authentication required |
+| 403 | FORBIDDEN | Insufficient permissions |
+| 404 | NOT_FOUND | Resource not found |
+| 429 | RATE_LIMITED | Rate limit exceeded |
+| 500 | INTERNAL_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+**Error Response Examples:**
+
+```json
+// 401 Unauthorized
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required",
+    "details": {},
+    "request_id": "req_abc123"
+  }
+}
+
+// 429 Rate Limited
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded. Please try again later.",
+    "details": {
+      "limit": 60,
+      "remaining": 0,
+      "reset_at": "2024-01-15T11:00:00Z"
+    },
+    "request_id": "req_xyz789"
+  }
+}
+```
+
+---
+
+## Idempotency Implementation
+
+**Idempotency-Key Header:**
+
+Clients must include `Idempotency-Key` header for all write operations:
+```http
+Idempotency-Key: <uuid-v4>
+```
+
+**Deduplication Storage:**
+
+Idempotency keys are stored in Redis with 24-hour TTL:
+```
+Key: idempotency:{key}
+Value: Serialized response
+TTL: 24 hours
+```
+
+**Retry Semantics:**
+
+1. Client sends request with Idempotency-Key
+2. Server checks Redis for existing key
+3. If found: Return cached response (same status code + body)
+4. If not found: Process request, cache response, return result
+5. Retries with same key within 24 hours return cached response
+
+**Per-Endpoint Idempotency:**
+
+| Endpoint | Idempotent? | Mechanism |
+|----------|-------------|-----------|
+| POST /v1/posts | Yes | Idempotency-Key header |
+| PUT /v1/posts/{id} | Yes | Idempotency-Key or version-based |
+| DELETE /v1/posts/{id} | Yes | Safe to retry (idempotent by design) |
+| POST /v1/posts/{id}/like | Yes | Idempotency-Key header (dedupe by user+post) |
+| POST /v1/posts/{id}/comment | Yes | Idempotency-Key header |
+
+**Implementation Example:**
+
+```java
+@PostMapping("/v1/posts")
+public ResponseEntity<PostResponse> createPost(
+        @RequestBody CreatePostRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    
+    // Check for existing idempotency key
+    if (idempotencyKey != null) {
+        String cacheKey = "idempotency:" + idempotencyKey;
+        String cachedResponse = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            PostResponse response = objectMapper.readValue(cachedResponse, PostResponse.class);
+            return ResponseEntity.status(response.getStatus()).body(response);
+        }
+    }
+    
+    // Create post
+    Post post = postService.createPost(request, idempotencyKey);
+    PostResponse response = PostResponse.from(post);
+    
+    // Cache response if idempotency key provided
+    if (idempotencyKey != null) {
+        String cacheKey = "idempotency:" + idempotencyKey;
+        redisTemplate.opsForValue().set(
+            cacheKey, 
+            objectMapper.writeValueAsString(response),
+            Duration.ofHours(24)
+        );
+    }
+    
+    return ResponseEntity.status(201).body(response);
+}
+```
+
+---
+
 ## Core API Endpoints
 
 ### 1. Get Feed

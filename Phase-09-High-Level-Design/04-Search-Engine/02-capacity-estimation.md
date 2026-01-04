@@ -68,6 +68,12 @@ Text content only = 10B pages × 5 KB
                  = 50 TB
 ```
 
+**Math Verification:**
+- Assumptions: 10B pages, 20 KB compressed HTML per page, 5 KB text per page
+- Compressed HTML: 10,000,000,000 × 20 KB = 200,000,000,000 KB = 200 TB
+- Text content: 10,000,000,000 × 5 KB = 50,000,000,000 KB = 50 TB
+- **DOC MATCHES:** Storage summary shows 200 TB + 50 TB = 250 TB ✅
+
 ### Inverted Index Storage
 
 **Index Structure:**
@@ -99,6 +105,14 @@ Compressed index estimate:
 Total inverted index ≈ 120 TB (compressed)
 ```
 
+**Math Verification:**
+- Assumptions: 10M unique terms, posting lists vary by frequency
+- High-frequency (10K terms): 10,000 × 1.2 GB = 12 TB
+- Medium-frequency (1M terms): 1,000,000 × 100 MB = 100 TB
+- Low-frequency (9M terms): 9,000,000 × 1 MB = 9 TB
+- Total: 12 + 100 + 9 = 121 TB ≈ 120 TB (rounded)
+- **DOC MATCHES:** Storage summary shows 120 TB for inverted index ✅
+
 ### Document Metadata Storage
 
 **Per Document:**
@@ -118,6 +132,11 @@ Total per document: ~430 bytes
 ```
 10B documents × 430 bytes = 4.3 TB
 ```
+
+**Math Verification:**
+- Assumptions: 10B documents, 430 bytes per document
+- Calculation: 10,000,000,000 × 430 bytes = 4,300,000,000,000 bytes = 4.3 TB
+- **DOC MATCHES:** Storage summary shows 4.3 TB for metadata ✅
 
 ### URL Frontier Storage (Crawler)
 

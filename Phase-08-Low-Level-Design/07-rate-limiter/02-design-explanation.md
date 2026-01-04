@@ -1,6 +1,12 @@
 # 🚦 Rate Limiter - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the Rate Limiter.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -229,6 +235,18 @@ public class RateLimiterFactory {
     }
 }
 ```
+
+---
+
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. RateLimiter interface defines contract, TokenBucketRateLimiter manages tokens, SlidingWindowRateLimiter manages windows, RateLimiterFactory creates instances. Clear separation. | N/A | - |
+| **OCP** | PASS | System is open for extension (new rate limiting algorithms) without modifying existing code. Strategy pattern enables this. | N/A | - |
+| **LSP** | PASS | All RateLimiter implementations properly implement the RateLimiter interface contract. They are substitutable. | N/A | - |
+| **ISP** | PASS | RateLimiter interface is minimal and focused. Clients only depend on what they need (tryAcquire method). No unused methods. | N/A | - |
+| **DIP** | WEAK | Factory depends on concrete implementations. Could use RateLimiterProvider interface abstraction. Mentioned in DIP section but not fully implemented. | Extract RateLimiterProvider interface, use dependency injection | More abstraction layers, but improves testability and algorithm extensibility |
 
 ---
 
@@ -492,7 +510,150 @@ private static class Window {
 
 ---
 
-## Complexity Analysis
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you handle clock skew in distributed systems?
+
+**Answer:**
+
+```java
+// Use logical clocks or centralized time
+public class ClockSyncRateLimiter implements RateLimiter {
+    private final TimeService timeService;  // Centralized time
+    
+    @Override
+    public boolean tryAcquire(String key) {
+        long now = timeService.getCurrentTime();  // From central server
+        // Use 'now' for all calculations
+        // ... rest of logic
+    }
+}
+
+// Or use NTP-synchronized time with tolerance
+public class TolerantRateLimiter implements RateLimiter {
+    private static final long CLOCK_TOLERANCE_MS = 100;
+    
+    private void cleanup(Deque<Long> timestamps, long windowStart) {
+        // Add tolerance to account for clock skew
+        long adjustedWindowStart = windowStart - CLOCK_TOLERANCE_MS;
+        while (!timestamps.isEmpty() && timestamps.peekFirst() < adjustedWindowStart) {
+            timestamps.pollFirst();
+        }
+    }
+}
+```
+
+---
+
+### Q2: How would you implement priority-based rate limiting?
+
+**Answer:**
+
+```java
+public class PriorityRateLimiter implements RateLimiter {
+    private final Map<Priority, RateLimiter> limiters;
+    
+    public PriorityRateLimiter(int totalCapacity) {
+        // High priority gets 50%, medium 30%, low 20%
+        limiters = new EnumMap<>(Priority.class);
+        limiters.put(Priority.HIGH, new TokenBucketRateLimiter((int)(totalCapacity * 0.5), 10));
+        limiters.put(Priority.MEDIUM, new TokenBucketRateLimiter((int)(totalCapacity * 0.3), 10));
+        limiters.put(Priority.LOW, new TokenBucketRateLimiter((int)(totalCapacity * 0.2), 10));
+    }
+    
+    public boolean tryAcquire(String key, Priority priority) {
+        // Try own bucket first
+        if (limiters.get(priority).tryAcquire(key)) {
+            return true;
+        }
+        
+        // High priority can borrow from lower priorities
+        if (priority == Priority.HIGH) {
+            if (limiters.get(Priority.MEDIUM).tryAcquire(key)) return true;
+            if (limiters.get(Priority.LOW).tryAcquire(key)) return true;
+        }
+        
+        return false;
+    }
+}
+```
+
+---
+
+### Q3: How would you implement rate limiting with quotas?
+
+**Answer:**
+
+```java
+public class QuotaRateLimiter implements RateLimiter {
+    private final Map<String, Quota> quotas;
+    private final RateLimiter burstLimiter;  // Per-second burst limit
+    
+    @Override
+    public boolean tryAcquire(String key) {
+        Quota quota = quotas.get(key);
+        if (quota == null) {
+            return false;  // No quota assigned
+        }
+        
+        // Check burst limit (short-term)
+        if (!burstLimiter.tryAcquire(key)) {
+            return false;
+        }
+        
+        // Check quota (long-term)
+        if (quota.getRemaining() <= 0) {
+            return false;
+        }
+        
+        quota.consume(1);
+        return true;
+    }
+}
+
+class Quota {
+    private final long total;
+    private long used;
+    private final long resetPeriodMs;
+    private long resetTime;
+    
+    public boolean consume(long amount) {
+        if (used + amount > total) {
+            return false;
+        }
+        used += amount;
+        return true;
+    }
+    
+    public long getRemaining() {
+        long now = System.currentTimeMillis();
+        if (now >= resetTime) {
+            used = 0;
+            resetTime = now + resetPeriodMs;
+        }
+        return total - used;
+    }
+}
+```
+
+---
+
+### Q4: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add distributed rate limiting** - Use Redis or distributed cache for multi-server scenarios
+2. **Add adaptive rate limiting** - Dynamically adjust limits based on system load
+3. **Add rate limit headers** - Return X-RateLimit-* headers to clients
+4. **Add priority queues** - Prioritize requests based on user tiers
+5. **Add rate limit analytics** - Track and report rate limit violations
+6. **Add circuit breaker integration** - Combine with circuit breakers for resilience
+7. **Add rate limit overrides** - Allow admin override for specific users/keys
+8. **Add smooth rate limiting** - Distribute requests evenly over time window
+
+---
+
+## STEP 7: Complexity Analysis
 
 ### Time Complexity
 
@@ -518,9 +679,18 @@ private static class Window {
 
 k = number of unique keys, n = requests per window
 
----
+### Bottlenecks at Scale
 
-## Interview Follow-ups
+**10x Usage (1K → 10K keys):**
+- Problem: Memory usage grows linearly (O(k)), in-memory storage becomes significant, synchronized methods cause contention
+- Solution: Use distributed rate limiter (Redis) for shared state, implement key-based sharding
+- Tradeoff: Network latency added, requires external dependency (Redis)
+
+**100x Usage (1K → 100K keys):**
+- Problem: Single instance can't handle all keys, memory pressure, lock contention on shared structures
+- Solution: Shard rate limiters by key hash across multiple instances, use distributed coordination (Redis cluster)
+- Tradeoff: Higher infrastructure complexity, need consistent hashing and distributed coordination
+
 
 ### Q1: How would you handle rate limiting across multiple servers?
 

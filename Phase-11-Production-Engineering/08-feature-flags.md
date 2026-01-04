@@ -1,0 +1,921 @@
+# 🚩 Feature Flags
+
+## 0️⃣ Prerequisites
+
+Before diving into feature flags, you should understand:
+
+- **Application Configuration**: How applications read configuration (environment variables, config files)
+- **Deployment Basics**: How code is deployed to production (covered in Topic 7)
+- **A/B Testing Concepts**: The idea of testing different versions with different user groups
+
+Quick refresher on **configuration**: Applications often use configuration files or environment variables to change behavior without redeploying code. Feature flags are a special type of configuration that controls whether features are enabled.
+
+---
+
+## 1️⃣ What Problem Does This Exist to Solve?
+
+### The Pain Before Feature Flags
+
+Imagine deploying a new feature:
+
+**Problem 1: The "Big Bang" Release**
+
+```
+Monday: Developer finishes feature
+Tuesday: Code review
+Wednesday: Merge to main
+Thursday: Deploy to production
+Friday 3 PM: Feature goes live to 100% of users
+Friday 3:15 PM: Critical bug discovered
+Friday 3:30 PM: Emergency rollback
+Friday 4:00 PM: Entire deployment reverted, feature removed
+```
+
+All-or-nothing deployment. If something breaks, everyone is affected.
+
+**Problem 2: The "Long-Lived Feature Branch"**
+
+```
+Week 1: Create feature branch
+Week 2-4: Develop feature
+Week 5: Merge conflicts with main (main moved forward)
+Week 6: Fix conflicts, retest
+Week 7: Finally merge
+Week 8: Deploy (but feature isn't ready for users yet)
+```
+
+Feature is complete but hidden in code. Can't deploy incrementally. Merge conflicts accumulate.
+
+**Problem 3: The "Can't Test in Production" Problem**
+
+```
+Staging environment:
+- 1 database
+- 10 test users
+- No real traffic
+
+Production:
+- 10 databases (sharded)
+- 10 million users
+- 100,000 requests/second
+
+Feature works in staging, breaks in production.
+Why? Different scale, different data patterns, different user behavior.
+```
+
+**Problem 4: The "Emergency Rollback Takes Hours"**
+
+```
+3:00 PM: Deploy new version
+3:15 PM: Bug discovered
+3:20 PM: Start rollback process
+3:30 PM: Build previous version
+3:45 PM: Deploy previous version
+4:00 PM: Service restored
+
+Downtime: 45 minutes
+```
+
+Rollback requires code deployment, which takes time.
+
+**Problem 5: The "Can't Disable Without Deploy"**
+
+```
+Feature is live, causing issues.
+To disable:
+1. Revert code change
+2. Build new version
+3. Deploy new version
+4. Wait for deployment (15-30 minutes)
+
+During this time, users experience the broken feature.
+```
+
+### What Breaks Without Feature Flags
+
+| Scenario              | Without Feature Flags    | With Feature Flags         |
+| --------------------- | ------------------------ | -------------------------- |
+| Gradual rollout       | All-or-nothing           | 1% → 10% → 50% → 100%      |
+| Instant rollback      | Requires code deployment | Toggle flag, instant       |
+| A/B testing           | Separate deployments     | Same code, different flags |
+| Feature development   | Long-lived branches      | Trunk-based development    |
+| Production testing    | Can't test safely        | Test with small %          |
+| Emergency kill switch | Slow rollback            | Instant disable            |
+
+---
+
+## 2️⃣ Intuition and Mental Model
+
+### The Light Switch Analogy
+
+Think of feature flags as **light switches for code**.
+
+**Without light switches**:
+
+- To turn off a light, you must rewire the house (redeploy code)
+- All lights turn on/off together (all-or-nothing)
+- Changing lighting requires an electrician (developer)
+
+**With light switches**:
+
+- Flip a switch to turn lights on/off instantly (toggle feature)
+- Control individual lights (per-feature control)
+- Non-technical people can operate switches (product managers can control)
+
+### Feature Flag Mental Model
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FEATURE FLAG SYSTEM                            │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Feature Flag Service                        │   │
+│  │              (LaunchDarkly, Unleash, etc.)               │   │
+│  │                                                           │   │
+│  │  Feature: "new-payment-processor"                        │   │
+│  │  Status: ENABLED                                         │   │
+│  │  Rollout: 25% of users                                   │   │
+│  │  Targeting:                                             │   │
+│  │    - User IDs: [1001, 1002, ...]                        │   │
+│  │    - Countries: ["US", "CA"]                             │   │
+│  │    - Beta testers: true                                 │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              │ API call                           │
+│                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Your Application                           │   │
+│  │                                                           │   │
+│  │  if (featureFlag.isEnabled("new-payment-processor")) {  │   │
+│  │      newPaymentProcessor.process();                      │   │
+│  │  } else {                                                │   │
+│  │      oldPaymentProcessor.process();                     │   │
+│  │  }                                                       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key insight**: The same code is deployed to everyone. Feature flags control which code path executes.
+
+---
+
+## 3️⃣ How It Works Internally
+
+### Feature Flag Evaluation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              FEATURE FLAG EVALUATION                             │
+│                                                                  │
+│  1. Application requests flag value                             │
+│     flagService.isEnabled("new-feature", userId)                │
+│                                                                  │
+│  2. Flag service evaluates rules:                               │
+│                                                                  │
+│     ┌─────────────────────────────────────────────────────┐     │
+│     │  Rule 1: Is user in beta testers list?            │     │
+│     │  → YES: Return ENABLED                             │     │
+│     │  → NO: Continue                                     │     │
+│     └─────────────────────────────────────────────────────┘     │
+│                      │                                           │
+│                      ▼                                           │
+│     ┌─────────────────────────────────────────────────────┐     │
+│     │  Rule 2: Is user ID in allowlist?                  │     │
+│     │  → YES: Return ENABLED                             │     │
+│     │  → NO: Continue                                     │     │
+│     └─────────────────────────────────────────────────────┘     │
+│                      │                                           │
+│                      ▼                                           │
+│     ┌─────────────────────────────────────────────────────┐     │
+│     │  Rule 3: Percentage rollout (25%)                    │     │
+│     │  → Hash(userId + flagKey) % 100 < 25                 │     │
+│     │  → YES: Return ENABLED                             │     │
+│     │  → NO: Return DISABLED                              │     │
+│     └─────────────────────────────────────────────────────┘     │
+│                                                                  │
+│  3. Return boolean result                                        │
+│     true or false                                                │
+│                                                                  │
+│  4. Application uses result to choose code path                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Consistent Hashing for Percentage Rollouts
+
+```java
+// Consistent hashing ensures same user always gets same result
+public boolean isEnabled(String flagKey, String userId) {
+    // Hash user ID + flag key for consistent assignment
+    int hash = (userId + flagKey).hashCode();
+    int bucket = Math.abs(hash) % 100;
+
+    // If rollout is 25%, users in buckets 0-24 get the feature
+    return bucket < rolloutPercentage;
+}
+```
+
+**Why consistent hashing?**
+
+- Same user always gets same result (no flickering)
+- Deterministic (reproducible)
+- Even distribution across 0-99 buckets
+
+### Flag Types
+
+**1. Release Flags**: Control feature visibility
+
+```java
+if (featureFlag.isEnabled("new-checkout-flow")) {
+    return newCheckoutFlow();
+} else {
+    return oldCheckoutFlow();
+}
+```
+
+**2. Experiment Flags**: A/B testing
+
+```java
+String variant = featureFlag.getVariant("button-color", userId);
+// Returns: "red", "blue", or "control"
+```
+
+**3. Ops Flags**: Operational controls
+
+```java
+if (featureFlag.isEnabled("enable-caching")) {
+    return cache.get(key);
+} else {
+    return database.query(key);
+}
+```
+
+**4. Kill Switches**: Emergency disable
+
+```java
+if (featureFlag.isEnabled("payment-processing")) {
+    processPayment();
+} else {
+    throw new ServiceUnavailableException("Payment temporarily disabled");
+}
+```
+
+---
+
+## 4️⃣ Simulation: Implementing Feature Flags
+
+### Step 1: Simple In-Memory Feature Flag
+
+```java
+// Simple feature flag service
+@Service
+public class SimpleFeatureFlagService {
+
+    private final Map<String, Boolean> flags = new ConcurrentHashMap<>();
+
+    public boolean isEnabled(String flagKey) {
+        return flags.getOrDefault(flagKey, false);
+    }
+
+    public void setFlag(String flagKey, boolean enabled) {
+        flags.put(flagKey, enabled);
+    }
+}
+```
+
+```java
+// Using the flag
+@RestController
+public class PaymentController {
+
+    @Autowired
+    private SimpleFeatureFlagService featureFlag;
+
+    @PostMapping("/payments")
+    public PaymentResponse processPayment(@RequestBody PaymentRequest request) {
+        if (featureFlag.isEnabled("new-payment-processor")) {
+            return newPaymentProcessor.process(request);
+        } else {
+            return oldPaymentProcessor.process(request);
+        }
+    }
+}
+```
+
+**Limitation**: Only boolean, no user targeting, no percentage rollouts.
+
+### Step 2: User-Based Feature Flags
+
+```java
+@Service
+public class UserFeatureFlagService {
+
+    private final Map<String, FeatureFlagConfig> flags = new ConcurrentHashMap<>();
+
+    public boolean isEnabled(String flagKey, String userId) {
+        FeatureFlagConfig config = flags.get(flagKey);
+        if (config == null) {
+            return false;
+        }
+
+        // Check allowlist
+        if (config.getAllowlist().contains(userId)) {
+            return true;
+        }
+
+        // Check blocklist
+        if (config.getBlocklist().contains(userId)) {
+            return false;
+        }
+
+        // Percentage rollout
+        if (config.getRolloutPercentage() > 0) {
+            int hash = (userId + flagKey).hashCode();
+            int bucket = Math.abs(hash) % 100;
+            return bucket < config.getRolloutPercentage();
+        }
+
+        return config.isDefaultEnabled();
+    }
+
+    public void updateFlag(String flagKey, FeatureFlagConfig config) {
+        flags.put(flagKey, config);
+    }
+}
+
+@Data
+class FeatureFlagConfig {
+    private boolean defaultEnabled;
+    private int rolloutPercentage;
+    private Set<String> allowlist = new HashSet<>();
+    private Set<String> blocklist = new HashSet<>();
+}
+```
+
+### Step 3: Integration with LaunchDarkly
+
+```xml
+<!-- pom.xml -->
+<dependency>
+    <groupId>com.launchdarkly</groupId>
+    <artifactId>launchdarkly-java-server-sdk</artifactId>
+    <version>6.2.0</version>
+</dependency>
+```
+
+```java
+// LaunchDarkly configuration
+@Configuration
+public class LaunchDarklyConfig {
+
+    @Value("${launchdarkly.sdk-key}")
+    private String sdkKey;
+
+    @Bean
+    public LDClient ldClient() {
+        LDConfig config = new LDConfig.Builder()
+            .http(Components.httpConfiguration()
+                .connectTimeout(Duration.ofSeconds(5))
+                .socketTimeout(Duration.ofSeconds(5)))
+            .build();
+
+        return new LDClient(sdkKey, config);
+    }
+}
+```
+
+```java
+// Using LaunchDarkly
+@Service
+public class LaunchDarklyFeatureFlagService {
+
+    @Autowired
+    private LDClient ldClient;
+
+    public boolean isEnabled(String flagKey, String userId) {
+        LDUser user = new LDUser.Builder(userId).build();
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+
+    public String getVariant(String flagKey, String userId, String defaultValue) {
+        LDUser user = new LDUser.Builder(userId).build();
+        return ldClient.stringVariation(flagKey, user, defaultValue);
+    }
+}
+```
+
+```java
+// Spring Boot integration
+@RestController
+public class PaymentController {
+
+    @Autowired
+    private LaunchDarklyFeatureFlagService featureFlag;
+
+    @PostMapping("/payments")
+    public PaymentResponse processPayment(@RequestBody PaymentRequest request) {
+        String userId = request.getUserId();
+
+        if (featureFlag.isEnabled("new-payment-processor", userId)) {
+            return newPaymentProcessor.process(request);
+        } else {
+            return oldPaymentProcessor.process(request);
+        }
+    }
+}
+```
+
+### Step 4: Feature Flag with Context
+
+```java
+// Rich context for targeting
+@Service
+public class ContextualFeatureFlagService {
+
+    @Autowired
+    private LDClient ldClient;
+
+    public boolean isEnabled(String flagKey, UserContext context) {
+        LDUser user = new LDUser.Builder(context.getUserId())
+            .email(context.getEmail())
+            .country(context.getCountry())
+            .custom("subscriptionTier", context.getSubscriptionTier())
+            .custom("accountAge", context.getAccountAgeDays())
+            .build();
+
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+
+@Data
+class UserContext {
+    private String userId;
+    private String email;
+    private String country;
+    private String subscriptionTier;
+    private int accountAgeDays;
+}
+```
+
+---
+
+## 5️⃣ Feature Flag Lifecycle
+
+### Lifecycle Stages
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FEATURE FLAG LIFECYCLE                         │
+│                                                                  │
+│  1. DEVELOPMENT                                                 │
+│     Flag created, default: DISABLED                             │
+│     Code written with flag check                               │
+│     Flag tested in development environment                     │
+│                                                                  │
+│  2. TESTING                                                      │
+│     Flag enabled for QA team (user targeting)                   │
+│     Integration tests run with flag enabled                     │
+│                                                                  │
+│  3. STAGING                                                      │
+│     Flag enabled for staging environment                        │
+│     E2E tests validate feature                                  │
+│                                                                  │
+│  4. PRODUCTION - INTERNAL                                        │
+│     Flag enabled for internal users only                       │
+│     Dogfooding (team uses feature)                             │
+│                                                                  │
+│  5. PRODUCTION - BETA                                            │
+│     Flag enabled for beta testers (5-10% of users)            │
+│     Monitor metrics, collect feedback                           │
+│                                                                  │
+│  6. PRODUCTION - GRADUAL ROLLOUT                                │
+│     10% → 25% → 50% → 75% → 100%                                │
+│     Monitor at each stage                                       │
+│                                                                  │
+│  7. PRODUCTION - FULLY ENABLED                                  │
+│     Flag enabled for 100% of users                             │
+│     Monitor for days/weeks                                      │
+│                                                                  │
+│  8. CLEANUP                                                      │
+│     Remove flag check from code                                 │
+│     Delete flag from service                                    │
+│     Deploy code without flag                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Gradual Rollout Example
+
+```java
+// Monitoring during rollout
+@Service
+public class PaymentService {
+
+    @Autowired
+    private FeatureFlagService featureFlag;
+
+    @Autowired
+    private MetricsService metrics;
+
+    public PaymentResponse processPayment(PaymentRequest request) {
+        String userId = request.getUserId();
+        boolean useNewProcessor = featureFlag.isEnabled("new-payment-processor", userId);
+
+        try {
+            PaymentResponse response;
+            if (useNewProcessor) {
+                response = newPaymentProcessor.process(request);
+                metrics.increment("payment.new_processor.success");
+            } else {
+                response = oldPaymentProcessor.process(request);
+                metrics.increment("payment.old_processor.success");
+            }
+            return response;
+        } catch (Exception e) {
+            if (useNewProcessor) {
+                metrics.increment("payment.new_processor.error");
+                // Fallback to old processor
+                return oldPaymentProcessor.process(request);
+            } else {
+                metrics.increment("payment.old_processor.error");
+                throw e;
+            }
+        }
+    }
+}
+```
+
+**Monitoring metrics**:
+
+- Error rate: new vs old processor
+- Latency: p50, p95, p99
+- Success rate
+- User complaints
+
+**Rollout decision**:
+
+- If metrics look good → increase percentage
+- If metrics degrade → rollback (decrease percentage or disable)
+
+---
+
+## 6️⃣ Feature Flag Patterns
+
+### Pattern 1: Strangler Fig Pattern
+
+Gradually replace old system with new system:
+
+```java
+@Service
+public class OrderService {
+
+    @Autowired
+    private FeatureFlagService featureFlag;
+
+    public Order createOrder(OrderRequest request) {
+        String userId = request.getUserId();
+
+        // Gradually migrate users to new service
+        if (featureFlag.isEnabled("new-order-service", userId)) {
+            return newOrderService.create(request);
+        } else {
+            return oldOrderService.create(request);
+        }
+    }
+}
+```
+
+### Pattern 2: Dark Launch
+
+Deploy feature, keep it disabled, test infrastructure:
+
+```java
+@Service
+public class RecommendationService {
+
+    @Autowired
+    private FeatureFlagService featureFlag;
+
+    public List<Recommendation> getRecommendations(String userId) {
+        // Always call new service (dark launch)
+        List<Recommendation> newRecs = newRecommendationService.get(userId);
+
+        // But only return if flag enabled
+        if (featureFlag.isEnabled("new-recommendations", userId)) {
+            return newRecs;
+        } else {
+            return oldRecommendationService.get(userId);
+        }
+    }
+}
+```
+
+**Benefits**: Test new service under real load without affecting users.
+
+### Pattern 3: Canary Release
+
+```java
+@Service
+public class SearchService {
+
+    @Autowired
+    private FeatureFlagService featureFlag;
+
+    public SearchResults search(String query, String userId) {
+        // Canary: 5% get new algorithm
+        String variant = featureFlag.getVariant("search-algorithm", userId);
+
+        if ("new".equals(variant)) {
+            return newSearchAlgorithm.search(query);
+        } else {
+            return oldSearchAlgorithm.search(query);
+        }
+    }
+}
+```
+
+### Pattern 4: Kill Switch
+
+```java
+@Service
+public class PaymentService {
+
+    @Autowired
+    private FeatureFlagService featureFlag;
+
+    public PaymentResponse processPayment(PaymentRequest request) {
+        // Kill switch: instant disable if issues detected
+        if (!featureFlag.isEnabled("payment-processing")) {
+            throw new ServiceUnavailableException(
+                "Payment processing temporarily unavailable"
+            );
+        }
+
+        return processPaymentInternal(request);
+    }
+}
+```
+
+---
+
+## 7️⃣ Feature Flag Management
+
+### Flag Naming Conventions
+
+```
+Good names:
+- new-payment-processor
+- enable-caching
+- checkout-v2
+- dark-mode-ui
+
+Bad names:
+- flag1
+- test
+- feature
+- new-thing
+```
+
+**Convention**: `{feature-name}` or `{action}-{target}`
+
+### Flag Documentation
+
+```java
+/**
+ * Feature Flag: new-payment-processor
+ *
+ * Description: New payment processing service with improved fraud detection
+ *
+ * Lifecycle:
+ * - Created: 2024-01-15
+ * - Owner: Payment Team
+ * - Status: Gradual rollout (25%)
+ *
+ * Targeting:
+ * - Beta testers: Enabled
+ * - US users: 25% rollout
+ * - Other countries: Disabled
+ *
+ * Metrics to monitor:
+ * - payment.new_processor.error_rate
+ * - payment.new_processor.latency_p95
+ * - payment.new_processor.success_rate
+ *
+ * Rollback plan:
+ * - Disable flag if error rate > 1%
+ * - Disable flag if latency p95 > 500ms
+ *
+ * Cleanup date: 2024-03-01 (remove flag after full rollout)
+ */
+```
+
+### Flag Cleanup
+
+**When to remove flags**:
+
+- Feature is fully rolled out and stable (weeks/months)
+- Feature is deprecated and removed
+- Flag is no longer used
+
+**Cleanup process**:
+
+1. Verify flag is 100% enabled for all users
+2. Remove flag check from code
+3. Deploy code without flag
+4. Delete flag from feature flag service
+5. Update documentation
+
+```java
+// Before cleanup
+if (featureFlag.isEnabled("new-payment-processor", userId)) {
+    return newPaymentProcessor.process(request);
+} else {
+    return oldPaymentProcessor.process(request);
+}
+
+// After cleanup
+return newPaymentProcessor.process(request);
+```
+
+---
+
+## 8️⃣ Tradeoffs and Common Mistakes
+
+### Common Mistakes
+
+**1. Too Many Flags**
+
+```java
+// BAD: Flag explosion
+if (flag1 && flag2 && !flag3 || flag4) {
+    // What does this even do?
+}
+```
+
+**Solution**: Limit flags per feature. Remove flags after rollout.
+
+**2. Flags Never Cleaned Up**
+
+```
+Production code has 200 feature flags.
+50 of them are always enabled.
+50 of them are always disabled.
+Only 100 are actually used.
+```
+
+**Solution**: Regular flag audits. Remove unused flags.
+
+**3. Flags in Hot Paths**
+
+```java
+// BAD: Flag check in tight loop
+for (int i = 0; i < 1_000_000; i++) {
+    if (featureFlag.isEnabled("flag", userId)) {  // Network call!
+        process(i);
+    }
+}
+```
+
+**Solution**: Cache flag values, use local flags for hot paths.
+
+**4. Inconsistent Flag Evaluation**
+
+```java
+// BAD: Different evaluation in different places
+if (featureFlag.isEnabled("flag", userId)) { ... }
+if (featureFlag.isEnabled("flag", null)) { ... }  // Missing userId!
+```
+
+**Solution**: Always pass consistent context.
+
+**5. Flags for Configuration**
+
+```java
+// BAD: Using flags for config
+if (featureFlag.isEnabled("database-timeout-5000")) { ... }
+
+// GOOD: Use config for config
+int timeout = config.getInt("database.timeout", 5000);
+```
+
+**Solution**: Flags for features, config for parameters.
+
+### Feature Flag Service Comparison
+
+| Service      | Type             | Pros                    | Cons                 |
+| ------------ | ---------------- | ----------------------- | -------------------- |
+| LaunchDarkly | SaaS             | Full-featured, great UI | Expensive at scale   |
+| Unleash      | Open source      | Free, self-hosted       | Requires maintenance |
+| Flagsmith    | Open source/SaaS | Good balance            | Smaller ecosystem    |
+| Split.io     | SaaS             | Good performance        | Pricing complexity   |
+| Custom       | In-house         | Full control            | Development overhead |
+
+---
+
+## 9️⃣ Interview Follow-Up Questions
+
+### Q1: "When would you use feature flags vs environment variables?"
+
+**Answer**:
+**Feature flags** are for:
+
+- Runtime toggling (change without redeploy)
+- User-level targeting (enable for specific users)
+- Gradual rollouts (percentage-based)
+- A/B testing
+- Kill switches (instant disable)
+
+**Environment variables** are for:
+
+- Environment-specific config (dev vs prod)
+- Infrastructure settings (database URLs, API keys)
+- Static configuration that doesn't change at runtime
+- Settings that are the same for all users
+
+Example: Database connection string → environment variable. New payment processor → feature flag.
+
+### Q2: "How do you handle feature flags in a distributed system?"
+
+**Answer**:
+Key challenges:
+
+1. **Consistency**: Same user should get same flag value across services. Use consistent hashing based on user ID.
+
+2. **Performance**: Don't call feature flag service on every request. Cache flag values with TTL (30-60 seconds).
+
+3. **Propagation**: Flag changes should propagate quickly. Use webhooks or polling to update cache.
+
+4. **Fallback**: If feature flag service is down, default to safe state (usually disabled).
+
+5. **Context passing**: Pass user context (userId, attributes) through service calls so downstream services can evaluate flags correctly.
+
+Example architecture: Feature flag service → Cache layer (Redis) → Application services. Services check cache first, fallback to service if cache miss.
+
+### Q3: "How would you implement gradual rollout with feature flags?"
+
+**Answer**:
+Gradual rollout strategy:
+
+1. **Start small**: Enable for 1% of users. Monitor for 24-48 hours.
+
+2. **Monitor metrics**: Error rate, latency, business metrics (conversion, revenue).
+
+3. **Increase gradually**: If metrics look good, increase to 5%, then 10%, 25%, 50%, 75%, 100%. Wait at each stage.
+
+4. **Rollback criteria**: Define thresholds. If error rate > X% or latency > Y ms, automatically rollback.
+
+5. **Targeting**: Use consistent hashing so same user always gets same variant. This prevents flickering.
+
+6. **Canary users**: Start with internal users, then beta testers, then general population.
+
+Implementation: Feature flag service calculates hash(userId + flagKey) % 100. If result < rolloutPercentage, enable feature. This ensures consistent assignment.
+
+### Q4: "What's the difference between a feature flag and a configuration value?"
+
+**Answer**:
+**Feature flags** control whether code paths execute. Binary decision: enabled or disabled. Examples: "new-payment-processor", "dark-mode".
+
+**Configuration values** are parameters that code uses. Can be strings, numbers, objects. Examples: database timeout (5000ms), API endpoint URL, retry count.
+
+Sometimes the line blurs. Rule of thumb: If it's about "should this code run?", it's a feature flag. If it's about "how should this code run?", it's configuration.
+
+Example: "enable-caching" → feature flag. "cache-ttl-seconds" → configuration.
+
+### Q5: "How do you test code with feature flags?"
+
+**Answer**:
+Testing strategies:
+
+1. **Unit tests**: Mock feature flag service. Test both enabled and disabled paths.
+
+2. **Integration tests**: Use test feature flag service or override flags in test configuration.
+
+3. **E2E tests**: Enable flags for test users or test environment.
+
+4. **Flag combinations**: Test all combinations of related flags to ensure no conflicts.
+
+5. **Flag removal tests**: Test that code works when flag is removed (cleanup scenario).
+
+Example:
+
+```java
+@Test
+void testWithFeatureEnabled() {
+    when(featureFlag.isEnabled("new-feature", any())).thenReturn(true);
+    // Test new code path
+}
+
+@Test
+void testWithFeatureDisabled() {
+    when(featureFlag.isEnabled("new-feature", any())).thenReturn(false);
+    // Test old code path
+}
+```
+
+---
+
+## 🔟 One Clean Mental Summary
+
+Feature flags are runtime toggles that control which code paths execute. They enable gradual rollouts (1% → 100%), instant rollbacks (toggle off), A/B testing, and trunk-based development. The same code is deployed to everyone; flags control behavior.
+
+Feature flags have a lifecycle: development → testing → internal → beta → gradual rollout → fully enabled → cleanup. Monitor metrics at each stage. Use consistent hashing for percentage rollouts so users get consistent experiences.
+
+The key insight: Feature flags separate deployment from release. You can deploy code without exposing features, test in production safely, and roll back instantly without code changes.

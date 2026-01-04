@@ -1,15 +1,116 @@
-# 📚 Library Management System - Complete Solution
+# 📚 Library Management System - Problem Solution
 
-## Problem Statement
+## STEP 0: REQUIREMENTS QUICKPASS
 
-Design a library management system that can:
-- Manage books with multiple copies
-- Handle member registration and management
-- Support book lending and returns
-- Implement search functionality (by title, author, ISBN)
-- Handle reservations for unavailable books
+### Core Functional Requirements
+- Manage books with multiple physical copies (BookItem per copy)
+- Handle member registration, library cards, and membership status
+- Support book lending (checkout) and returns
+- Implement search functionality (by title, author, ISBN, subject)
+- Handle reservations for unavailable books with queue management
 - Calculate and manage fines for late returns
-- Send notifications (due date reminders, availability alerts)
+- Send notifications (checkout confirmation, due date reminders, reservation ready)
+- Track lending history and overdue items
+
+### Explicit Out-of-Scope Items
+- Inter-library loan system
+- E-book/digital content management
+- Online catalog web interface
+- Payment gateway integration for fines
+- Book acquisition and procurement workflow
+- Detailed reporting and analytics dashboard
+- Barcode/RFID scanning hardware integration
+- Self-checkout kiosk functionality
+- Mobile app integration
+
+### Assumptions and Constraints
+- **Single Library Branch**: System manages one physical library location
+- **In-Memory Storage**: All data stored in memory (no database)
+- **Fixed Loan Period**: Default 14-day loan period for all books
+- **Fixed Fine Rate**: $0.50 per day for overdue books
+- **Member Limits**: Max 5 books borrowed, max 3 reservations per member
+- **Reservation Expiry**: 3 days to pick up after book becomes available
+- **Library Card Validity**: 2 years from issue date
+- **No Authentication**: System assumes valid member identification
+
+### Scale Assumptions
+- **Single Process**: Runs within a single JVM
+- **Moderate Scale**: Up to ~10,000 books, ~5,000 members, ~1,000 active loans
+- **Concurrent Access**: Multiple librarians processing checkouts simultaneously
+
+### Concurrency Model Expectations
+- **Thread-Safe Catalog**: `ConcurrentHashMap` for book and item lookups
+- **Synchronized Checkout**: Prevent double-checkout of same item
+- **Atomic Reservation Queue**: `ConcurrentLinkedQueue` for reservation ordering
+- **Fine-Grained Locking**: Lock per BookItem rather than global lock
+
+### Public APIs (Main methods exposed for interaction)
+- `Library.getInstance(name, address)`: Get singleton library instance
+- `Library.addBook(Book)`: Add a book title to catalog
+- `Library.addBookCopy(isbn, barcode, price, location)`: Add physical copy
+- `Library.registerMember(name, email, phone, address)`: Register new member
+- `Library.searchBooks(query)`: Full-text search across all fields
+- `Library.searchByTitle(title)`: Search by title
+- `Library.searchByAuthor(author)`: Search by author
+- `Library.checkoutBook(member, barcode)`: Checkout a book item
+- `Library.returnBook(barcode)`: Return a book item
+- `Library.renewBook(barcode)`: Extend loan period
+- `Library.reserveBook(member, isbn)`: Reserve unavailable book
+- `Library.cancelReservation(reservationId)`: Cancel a reservation
+- `Library.payFine(member, fine)`: Process fine payment
+
+### Public API Usage Examples
+```java
+// Example 1: Basic usage
+Library library = Library.getInstance("City Library", "123 Main St");
+Book book = new Book("978-0-13-468599-1", "Effective Java", 
+                    "Joshua Bloch", "Addison-Wesley", 2018,
+                    BookFormat.PAPERBACK, "Programming", 416);
+library.addBook(book);
+library.addBookCopy("978-0-13-468599-1", "EJ-001", 45.00, "A1-01");
+
+Member member = library.registerMember("Alice", "alice@email.com", 
+                                      "555-1234", "100 Oak St");
+Lending lending = library.checkoutBook(member, "EJ-001");
+
+// Example 2: Typical workflow
+// Search for books
+List<Book> results = library.searchBooks("Java");
+List<Book> byTitle = library.searchByTitle("Effective Java");
+
+// Checkout multiple books
+library.checkoutBook(member, "EJ-001");
+library.checkoutBook(member, "DP-001");
+
+// Reserve unavailable book
+Reservation reservation = library.reserveBook(member, "978-0-13-468599-1");
+
+// Return book
+Fine fine = library.returnBook("EJ-001");
+
+// Example 3: Edge case - Member at loan limit
+// Member already has 5 books checked out
+Lending result = library.checkoutBook(member, "NEW-001");
+// Returns null, checkout fails: "Member has reached maximum loan limit"
+
+// Example 4: Fine payment
+if (fine != null) {
+    library.payFine(member, fine);
+    // Member can now borrow again
+}
+
+// Example 5: Reservation cancellation
+library.cancelReservation(reservation.getReservationId());
+```
+
+### Invariants the System Must Always Maintain
+- **One Borrower Per Item**: A BookItem can only be borrowed by one member at a time
+- **Status Consistency**: BookItem status must match actual state (borrowed → has borrower)
+- **Loan Limit Enforcement**: Member cannot exceed MAX_BOOKS_ALLOWED
+- **Fine Blocking**: Members with unpaid fines cannot borrow
+- **Reservation Queue Order**: FIFO ordering for reservations per book
+- **Card Validity**: Expired library cards prevent borrowing
+- **Unique Identifiers**: ISBN, barcode, memberId are unique within their domains
 
 ---
 
@@ -81,7 +182,28 @@ Design a library management system that can:
 
 ---
 
-## STEP 2: Complete Java Implementation
+### Responsibilities Table
+
+| Class | Owns | Why |
+|-------|------|-----|
+| `Library` | Overall library system coordination and singleton instance | Central orchestrator - coordinates all subsystems, ensures single library instance |
+| `Book` | Book title metadata (ISBN, title, author, subject) | Represents book TITLE shared across all copies - separation from physical copies enables efficient metadata management |
+| `BookItem` | Physical book copy state (barcode, status, location, borrower) | Represents individual PHYSICAL COPY - separate from Book to avoid metadata duplication and track copy-specific state |
+| `Member` | Member information, active loans, reservations, and borrowing eligibility | Encapsulates member state and borrowing rules - centralizes member-level constraints (loan limits, fines) |
+| `LibraryCard` | Card validity, issue date, and expiration | Separates card lifecycle from member - enables card expiration rules and renewal logic |
+| `Lending` | Single borrowing transaction (due date, return date, associated fine) | Tracks one checkout-to-return cycle - encapsulates transaction state and fine association |
+| `Fine` | Fine amount calculation and payment status for one lending | Separates fine calculation from lending transaction - enables independent fine management and payment tracking |
+| `Reservation` | Single reservation request and fulfillment status | Tracks one reservation from request to fulfillment - encapsulates reservation lifecycle |
+| `BookCatalog` | Book indexing, search functionality, and book lookup | Centralizes search operations - separates search logic from book storage, enables efficient indexing |
+| `BookLendingService` | Checkout, return, and renewal operations | Coordinates lending workflow - separates business logic from domain objects, handles validation and state transitions |
+| `ReservationService` | Reservation creation, queue management, and fulfillment | Manages reservation workflow and queue ordering - separates reservation logic from domain objects |
+| `NotificationService` | Notification sending through multiple channels | Centralizes notification logic - separates communication concerns from business logic, enables multiple channels |
+
+---
+
+## STEP 2: Complete Final Implementation
+
+> **Verified:** This code compiles successfully with Java 11+.
 
 ### 2.1 Enums
 
@@ -1715,66 +1837,196 @@ public class LibraryDemo {
 
 ---
 
-## STEP 5: Simulation / Dry Run
+## STEP 4: Code Walkthrough - Building From Scratch
 
-### Scenario: Complete Lending Cycle
+### Phase 1: Define the Domain Model (Enums First)
 
+```java
+// Step 1: BookItemStatus enum
+package com.library.enums;
+
+public enum BookItemStatus {
+    AVAILABLE,      // Ready to be borrowed
+    BORROWED,       // Currently checked out
+    RESERVED,       // Held for a member
+    LOST,           // Reported missing
+    DAMAGED,        // Not available due to damage
+    BEING_REPAIRED  // Under maintenance
+}
 ```
-Initial State:
-- Book: "Effective Java" (ISBN: 978-0-13-468599-1)
-- Copies: EJ-001 (AVAILABLE), EJ-002 (AVAILABLE), EJ-003 (AVAILABLE)
-- Members: Alice (0 loans), Bob (0 loans)
 
-Step 1: Alice checks out EJ-001
-- Validate: alice.canBorrow() → true (active, no fines, 0 < 5 loans)
-- Find item: catalog.findByBarcode("EJ-001") → BookItem
-- Check: bookItem.isAvailable() → true
-- Checkout: bookItem.checkout(alice, 14)
-  - status = BORROWED
-  - borrowedBy = alice
-  - dueDate = today + 14 days
-- Create Lending record
-- alice.addLoan(lending)
-- Send notification
+**Why these statuses?**
+- `AVAILABLE`: The happy path, book can be borrowed
+- `BORROWED`: Most common non-available state
+- `RESERVED`: Prevents checkout by others when someone has reservation
+- `LOST/DAMAGED/BEING_REPAIRED`: Operational states for inventory management
 
-State after Step 1:
-- EJ-001: BORROWED by Alice, due in 14 days
-- Alice: 1 loan
+---
 
-Step 2: Bob checks out EJ-002 and EJ-003
-- Similar process
-- EJ-002: BORROWED by Bob
-- EJ-003: BORROWED by Bob
-- Bob: 2 loans
+### Phase 2: Build Core Entities (Book and BookItem)
 
-Step 3: Alice tries to checkout EJ-003 (already borrowed)
-- bookItem.isAvailable() → false (status = BORROWED)
-- Return null, checkout fails
+```java
+// Book class (metadata) - represents a TITLE
+public class Book {
+    private final String isbn;          // Unique identifier
+    private final String title;         // Won't change
+    private final String author;
+    private final List<BookItem> bookItems;  // Physical copies
+    
+    public BookItem addBookItem(String barcode, double price, String rackLocation) {
+        BookItem item = new BookItem(barcode, this, price, rackLocation);
+        bookItems.add(item);
+        return item;
+    }
+    
+    public boolean hasAvailableCopy() {
+        return bookItems.stream().anyMatch(BookItem::isAvailable);
+    }
+}
+```
 
-Step 4: Alice reserves "Effective Java"
-- book.hasAvailableCopy() → false (all borrowed)
-- Create Reservation(alice, book)
-- Add to reservationsByBook queue
-- alice.addReservation(reservation)
+**Why separate Book and BookItem?**
+- A library may have 10 copies of "Effective Java"
+- All share the same title, author, ISBN
+- Each has different barcode, status, location
 
-Step 5: Bob returns EJ-002
-- lending.processReturn()
-  - returnDate = today
-  - Not overdue → no fine
-- bookItem.returnItem()
-  - status = AVAILABLE
-- bob.removeLoan(lending)
-- reservationService.processBookReturn(book)
-  - Find Alice's reservation
-  - reservation.fulfill()
-  - Send notification to Alice
+```java
+// BookItem class (physical copy)
+public class BookItem {
+    private final String barcode;
+    private final Book book;
+    private BookItemStatus status;
+    private Member borrowedBy;
+    private LocalDate dueDate;
+    
+    public boolean checkout(Member member, int loanPeriodDays) {
+        if (status != BookItemStatus.AVAILABLE) {
+            return false;
+        }
+        this.status = BookItemStatus.BORROWED;
+        this.borrowedBy = member;
+        this.dueDate = LocalDate.now().plusDays(loanPeriodDays);
+        return true;
+    }
+}
+```
 
-Final State:
-- EJ-001: BORROWED by Alice
-- EJ-002: AVAILABLE (reserved for Alice)
-- EJ-003: BORROWED by Bob
-- Alice: 1 loan, 1 fulfilled reservation
-- Bob: 1 loan
+**State transition:**
+```
+AVAILABLE ──checkout()──► BORROWED
+    ▲                        │
+    └────returnItem()────────┘
+```
+
+---
+
+### Phase 3: Build Member System
+
+```java
+public class Member {
+    private final String memberId;
+    private final List<Lending> activeLoans;
+    private final List<Fine> unpaidFines;
+    
+    private static final int MAX_BOOKS_ALLOWED = 5;
+    
+    public boolean canBorrow() {
+        if (status != MemberStatus.ACTIVE) return false;
+        if (hasUnpaidFines()) return false;
+        return activeLoans.size() < MAX_BOOKS_ALLOWED;
+    }
+}
+```
+
+**Business rule validation order matters for error messages.**
+
+---
+
+### Phase 4: Build Lending System
+
+```java
+public class Lending {
+    private final BookItem bookItem;
+    private final Member member;
+    private final LocalDate borrowDate;
+    private final LocalDate dueDate;
+    private LocalDate returnDate;
+    private Fine fine;
+    
+    public Fine processReturn() {
+        this.returnDate = LocalDate.now();
+        if (isOverdue()) {
+            long daysOverdue = ChronoUnit.DAYS.between(dueDate, returnDate);
+            this.fine = new Fine(this, daysOverdue * 0.50);
+            return this.fine;
+        }
+        return null;
+    }
+}
+```
+
+---
+
+### Phase 5: Build Search Catalog
+
+```java
+public class BookCatalog {
+    private final Map<String, Book> booksByIsbn;
+    private final Map<String, Set<Book>> booksByTitle;  // Inverted index
+    
+    private void indexByWords(String text, Book book, Map<String, Set<Book>> index) {
+        String[] words = text.toLowerCase().split("\\s+");
+        for (String word : words) {
+            index.computeIfAbsent(word, k -> ConcurrentHashMap.newKeySet())
+                 .add(book);
+        }
+    }
+    
+    public List<Book> searchByTitle(String query) {
+        // AND search: book must match ALL query words
+        String[] words = query.toLowerCase().split("\\s+");
+        Set<Book> results = null;
+        for (String word : words) {
+            Set<Book> matches = booksByTitle.getOrDefault(word, Collections.emptySet());
+            if (results == null) results = new HashSet<>(matches);
+            else results.retainAll(matches);  // Intersection
+        }
+        return new ArrayList<>(results);
+    }
+}
+```
+
+---
+
+### Phase 6: Build Services
+
+```java
+public class BookLendingService {
+    
+    public Lending checkoutBook(Member member, String barcode) {
+        // Step 1: Validate member
+        if (!member.canBorrow()) return null;
+        
+        // Step 2: Find book item
+        BookItem bookItem = catalog.findByBarcode(barcode);
+        if (bookItem == null) return null;
+        
+        // Step 3: Check availability
+        if (!bookItem.isAvailable()) return null;
+        
+        // Step 4: Perform checkout
+        bookItem.checkout(member, DEFAULT_LOAN_PERIOD);
+        
+        // Step 5: Create lending record
+        Lending lending = new Lending(bookItem, member);
+        member.addLoan(lending);
+        
+        // Step 6: Send notification
+        notificationService.sendCheckoutConfirmation(member, lending);
+        
+        return lending;
+    }
+}
 ```
 
 ---

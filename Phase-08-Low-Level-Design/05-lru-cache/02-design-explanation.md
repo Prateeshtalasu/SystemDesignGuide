@@ -1,6 +1,12 @@
 # 🗃️ LRU Cache - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the LRU Cache.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -224,6 +230,18 @@ Cache<String, Integer> lfuCache = new LFUCache<>(100);
 Cache<String, Integer> concurrentLRU = new ConcurrentCache<>(lruCache);
 Cache<String, Integer> concurrentLFU = new ConcurrentCache<>(lfuCache);
 ```
+
+---
+
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. LRUCache manages cache operations, Node represents list node, EvictionListener handles callbacks. Clear separation of concerns. | N/A | - |
+| **OCP** | PASS | System is open for extension (new eviction listeners, cache decorators like MeteredLRUCache) without modifying existing code. Template method pattern in Transaction base class enables this. | N/A | - |
+| **LSP** | PASS | All cache implementations (LRUCache, ConcurrentLRUCache) properly implement the cache contract. Subclasses are substitutable. | N/A | - |
+| **ISP** | PASS | EvictionListener interface is minimal and focused. Clients only implement what they need. No unused methods forced on clients. | N/A | - |
+| **DIP** | PASS | Cache operations depend on EvictionListener interface (abstraction), not concrete implementations. DIP is well applied. | N/A | - |
 
 ---
 
@@ -474,7 +492,312 @@ public V get(K key) {
 
 ---
 
-## Complexity Analysis
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: What happens if eviction listener throws exception?
+
+**Answer:**
+
+```java
+public class LRUCache<K, V> {
+    private void evictLRU() {
+        Node<K, V> lru = tail.prev;
+        removeNode(lru);
+        cache.remove(lru.key);
+        
+        // Safe eviction listener invocation
+        for (EvictionListener<K, V> listener : evictionListeners) {
+            try {
+                listener.onEviction(lru.key, lru.value);
+            } catch (Exception e) {
+                // Log error but don't fail eviction
+                System.err.println("Eviction listener error: " + e.getMessage());
+            }
+        }
+    }
+}
+```
+
+**Design decision:** Eviction should succeed even if listeners fail. Failures in listeners should not break cache operations.
+
+---
+
+### Q2: How would you implement getOrCompute()?
+
+**Answer:**
+
+```java
+public class LRUCache<K, V> {
+    
+    public V getOrCompute(K key, Function<K, V> computeFunction) {
+        V value = get(key);
+        if (value != null) {
+            return value;
+        }
+        
+        // Compute value (may be expensive)
+        V computedValue = computeFunction.apply(key);
+        
+        // Put in cache
+        put(key, computedValue);
+        
+        return computedValue;
+    }
+}
+
+// Usage:
+String value = cache.getOrCompute("key", k -> expensiveComputation(k));
+```
+
+**Extension - with locking for concurrent access:**
+```java
+public V getOrCompute(K key, Function<K, V> computeFunction) {
+    V value = get(key);
+    if (value != null) {
+        return value;
+    }
+    
+    // Double-check locking pattern
+    writeLock.lock();
+    try {
+        value = get(key);  // Check again
+        if (value != null) {
+            return value;
+        }
+        
+        V computedValue = computeFunction.apply(key);
+        put(key, computedValue);
+        return computedValue;
+    } finally {
+        writeLock.unlock();
+    }
+}
+```
+
+---
+
+### Q3: How would you add statistics/metrics?
+
+**Answer:**
+
+```java
+public class MeteredLRUCache<K, V> extends LRUCache<K, V> {
+    private final AtomicLong hits = new AtomicLong();
+    private final AtomicLong misses = new AtomicLong();
+    private final AtomicLong evictions = new AtomicLong();
+    
+    @Override
+    public V get(K key) {
+        V value = super.get(key);
+        if (value != null) {
+            hits.incrementAndGet();
+        } else {
+            misses.incrementAndGet();
+        }
+        return value;
+    }
+    
+    @Override
+    protected void evictLRU() {
+        evictions.incrementAndGet();
+        super.evictLRU();
+    }
+    
+    public double getHitRate() {
+        long total = hits.get() + misses.get();
+        return total == 0 ? 0 : (double) hits.get() / total;
+    }
+    
+    public CacheStats getStats() {
+        return new CacheStats(hits.get(), misses.get(), evictions.get());
+    }
+}
+```
+
+---
+
+### Q4: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add bulk operations** - putAll(), removeAll() for batch updates
+2. **Add iteration** - forEach(), stream() for cache traversal
+3. **Add soft/weak references** - For memory-sensitive caching scenarios
+4. **Add size-based eviction** - Evict by memory size, not just entry count
+5. **Add async eviction** - Non-blocking eviction callbacks
+6. **Add persistence** - Write-through/write-behind to disk for durability
+7. **Add TTL support** - Time-to-live expiration for cache entries
+8. **Add cache warming** - Pre-populate cache with frequently accessed items
+
+---
+
+### Q5: How would you optimize for very large capacities (millions of entries)?
+
+**Answer:**
+
+```java
+// Option 1: Shard the cache
+public class ShardedLRUCache<K, V> {
+    private final LRUCache<K, V>[] shards;
+    
+    public ShardedLRUCache(int capacity, int numShards) {
+        this.shards = new LRUCache[numShards];
+        int shardCapacity = capacity / numShards;
+        for (int i = 0; i < numShards; i++) {
+            shards[i] = new LRUCache<>(shardCapacity);
+        }
+    }
+    
+    private LRUCache<K, V> getShard(K key) {
+        int shardIndex = Math.abs(key.hashCode() % shards.length);
+        return shards[shardIndex];
+    }
+    
+    public V get(K key) {
+        return getShard(key).get(key);
+    }
+    
+    public void put(K key, V value) {
+        getShard(key).put(key, value);
+    }
+}
+```
+
+**Benefits:**
+- Reduces lock contention (each shard has own lock)
+- Better parallel access
+- Smaller individual cache structures
+
+---
+
+### Q6: How would you implement cache expiration (TTL)?
+
+**Answer:**
+
+```java
+public class ExpiringLRUCache<K, V> extends LRUCache<K, V> {
+    private final Map<K, Long> expirationTimes;
+    private final long defaultTTL;
+    
+    public ExpiringLRUCache(int capacity, long defaultTTLMs) {
+        super(capacity);
+        this.defaultTTL = defaultTTLMs;
+        this.expirationTimes = new ConcurrentHashMap<>();
+        
+        // Background thread to clean expired entries
+        startExpirationCleaner();
+    }
+    
+    @Override
+    public V get(K key) {
+        if (isExpired(key)) {
+            remove(key);
+            return null;
+        }
+        return super.get(key);
+    }
+    
+    @Override
+    public void put(K key, V value) {
+        expirationTimes.put(key, System.currentTimeMillis() + defaultTTL);
+        super.put(key, value);
+    }
+    
+    private boolean isExpired(K key) {
+        Long expiration = expirationTimes.get(key);
+        return expiration != null && System.currentTimeMillis() > expiration;
+    }
+    
+    private void startExpirationCleaner() {
+        scheduler.scheduleAtFixedRate(() -> {
+            expirationTimes.entrySet().removeIf(e -> 
+                System.currentTimeMillis() > e.getValue());
+        }, 1, 1, TimeUnit.SECONDS);
+    }
+}
+```
+
+---
+
+### Q7: How would you handle cache persistence (survive restarts)?
+
+**Answer:**
+
+```java
+public class PersistentLRUCache<K, V> extends LRUCache<K, V> {
+    private final String persistenceFile;
+    
+    public PersistentLRUCache(int capacity, String persistenceFile) {
+        super(capacity);
+        this.persistenceFile = persistenceFile;
+        loadFromDisk();
+        
+        // Shutdown hook to save on exit
+        Runtime.getRuntime().addShutdownHook(new Thread(this::saveToDisk));
+    }
+    
+    private void loadFromDisk() {
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new FileInputStream(persistenceFile))) {
+            Map<K, V> data = (Map<K, V>) ois.readObject();
+            data.forEach((k, v) -> super.put(k, v));
+        } catch (IOException | ClassNotFoundException e) {
+            // File doesn't exist or error - start fresh
+        }
+    }
+    
+    private void saveToDisk() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(
+                new FileOutputStream(persistenceFile))) {
+            Map<K, V> snapshot = new HashMap<>();
+            // Serialize cache contents
+            oos.writeObject(snapshot);
+        } catch (IOException e) {
+            System.err.println("Failed to persist cache: " + e.getMessage());
+        }
+    }
+}
+```
+
+---
+
+### Q8: How would you implement a cache with size-based eviction (by memory usage)?
+
+**Answer:**
+
+```java
+public class SizeBasedLRUCache<K, V> {
+    private final long maxMemoryBytes;
+    private final Map<K, Node<K, V>> cache;
+    private long currentMemoryBytes;
+    
+    public void put(K key, V value) {
+        long entrySize = estimateSize(key, value);
+        
+        // Evict until we have space
+        while (currentMemoryBytes + entrySize > maxMemoryBytes && !cache.isEmpty()) {
+            evictLRU();
+        }
+        
+        // Add new entry
+        Node<K, V> node = new Node<>(key, value);
+        cache.put(key, node);
+        currentMemoryBytes += entrySize;
+        moveToHead(node);
+    }
+    
+    private long estimateSize(K key, V value) {
+        // Rough estimation
+        long keySize = key instanceof String ? ((String) key).length() * 2 : 8;
+        long valueSize = value instanceof String ? ((String) value).length() * 2 : 8;
+        return keySize + valueSize + 40;  // Node overhead
+    }
+}
+```
+
+---
+
+## STEP 7: Complexity Analysis
 
 ### Time Complexity
 
@@ -497,6 +820,18 @@ public V get(K key) {
 
 Where n = capacity of cache
 
+### Bottlenecks at Scale
+
+**10x Usage (1K → 10K entries):**
+- Problem: HashMap resizing becomes expensive (O(n) rehashing), memory overhead grows noticeably
+- Solution: Pre-size HashMap with capacity/load factor, use object pooling for nodes
+- Tradeoff: Slightly more memory upfront, faster operations
+
+**100x Usage (1K → 100K entries):**
+- Problem: Single read-write lock becomes contention bottleneck, memory usage may exceed single machine capacity
+- Solution: Shard cache by key hash, distribute across multiple cache instances with consistent hashing
+- Tradeoff: More complex architecture, need coordination between shards
+
 ### Memory Overhead
 
 ```java
@@ -510,9 +845,6 @@ Where n = capacity of cache
 // Total: ~1.28 MB
 ```
 
----
-
-## Interview Follow-ups
 
 ### Q1: How would you implement LFU (Least Frequently Used)?
 

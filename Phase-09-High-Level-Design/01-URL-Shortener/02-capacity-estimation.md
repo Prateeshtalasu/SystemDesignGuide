@@ -65,6 +65,12 @@ Round up for safety:
 ≈ 12,000 redirects/second (peak)
 ```
 
+**Math Verification:**
+- Assumptions: 10B redirects/month, 30 days/month, 86,400 seconds/day, 3x peak multiplier
+- Average QPS: 10B / 30 / 86,400 = 3,858.02 QPS ≈ 3,858 QPS
+- Peak QPS: 3,858 × 3 = 11,574 QPS ≈ 12,000 QPS (rounded)
+- **DOC MATCHES:** Traffic summary table shows 12,000 peak redirect QPS ✅
+
 ### Traffic Summary
 
 | Operation | Average QPS | Peak QPS (3x) |
@@ -123,10 +129,21 @@ Total URLs = 1.2B × 5 = 6 billion URLs
 Total storage = 6B × 500 bytes = 3 TB
 ```
 
+**Math Verification:**
+- Assumptions: 100M URLs/month, 500 bytes per URL, 5-year retention
+- Calculation: 100M/month × 12 months/year × 5 years = 6B URLs
+- Storage: 6B URLs × 500 bytes = 3,000,000,000,000 bytes = 3 TB
+- **DOC MATCHES:** Summary table shows 3 TB for 5 years ✅
+
 **With Replication (3x):**
 ```
 Replicated storage = 3 TB × 3 = 9 TB
 ```
+
+**Math Verification:**
+- Assumptions: 3 TB base storage, 3x replication factor
+- Calculation: 3 TB × 3 = 9 TB
+- **DOC MATCHES:** Summary table shows 9 TB replicated storage ✅
 
 ### Analytics Data Storage
 
@@ -151,6 +168,13 @@ Storage per year = 120B × 300 bytes = 36 TB
 
 5-year analytics = 36 TB × 5 = 180 TB
 ```
+
+**Math Verification:**
+- Assumptions: 10B redirects/month, 300 bytes per click event, 5-year retention
+- Calculation: 10B/month × 12 months/year = 120B clicks/year
+- Storage per year: 120B × 300 bytes = 36,000,000,000,000 bytes = 36 TB
+- 5-year storage: 36 TB × 5 = 180 TB
+- **DOC MATCHES:** Summary table shows 180 TB for raw analytics, 5 TB for aggregated ✅
 
 This is significant! We'll need to:
 - Aggregate old data (keep daily summaries, discard raw events)

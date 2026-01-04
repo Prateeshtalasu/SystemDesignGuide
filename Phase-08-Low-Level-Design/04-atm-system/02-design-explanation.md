@@ -1,6 +1,12 @@
 # 🏧 ATM System - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the ATM System.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -316,6 +322,18 @@ public class CashDispenser implements CashOutputDevice { }
 - Easy to test with mock devices
 - Can swap hardware implementations
 - Supports different ATM configurations
+
+---
+
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. Card handles authentication, Account manages balance, Transaction executes operations, CashDispenser handles cash, ATMController coordinates. Transaction class separation by type is excellent SRP. | N/A | - |
+| **OCP** | PASS | System is open for extension (new transaction types, account types) without modifying existing code. Template method pattern in Transaction and inheritance enable this. | N/A | - |
+| **LSP** | PASS | All Transaction subclasses properly implement the template method contract. All Account subclasses are substitutable. No violations. | N/A | - |
+| **ISP** | WEAK | Could benefit from interface segregation for Account (Readable, Withdrawable, Depositable) and hardware (CashHandler, CashAcceptor). Currently using concrete classes or abstract classes. | Extract interfaces: Account interfaces, Hardware interfaces | More files/interfaces, but increases flexibility and testability |
+| **DIP** | WEAK | ATMController depends on concrete ATM. Should depend on abstractions (DisplayDevice, InputDevice, CashOutputDevice interfaces). Hardware abstractions mentioned but not fully implemented. | Extract hardware interfaces, use constructor injection in controller | More setup/configuration, but improves testability and hardware vendor flexibility |
 
 ---
 
@@ -825,3 +843,290 @@ public class CurrencyExchangeService {
 }
 ```
 
+---
+
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you handle network failures?
+
+**Answer:**
+
+```java
+public class ResilientTransaction {
+    private static final int MAX_RETRIES = 3;
+    
+    public boolean executeWithRetry(Transaction transaction) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return transaction.execute();
+            } catch (NetworkException e) {
+                if (attempt == MAX_RETRIES) {
+                    // Store for later processing
+                    pendingTransactions.add(transaction);
+                    return false;
+                }
+                Thread.sleep(1000 * attempt);  // Exponential backoff
+            }
+        }
+        return false;
+    }
+}
+```
+
+---
+
+### Q2: How would you implement transaction limits?
+
+**Answer:**
+
+```java
+public class TransactionLimitService {
+    private final Map<String, DailyLimits> accountLimits;
+    
+    public boolean checkLimit(Account account, TransactionType type, double amount) {
+        DailyLimits limits = accountLimits.get(account.getAccountNumber());
+        
+        switch (type) {
+            case WITHDRAWAL:
+                return limits.getRemainingWithdrawal() >= amount;
+            case TRANSFER:
+                return limits.getRemainingTransfer() >= amount;
+            default:
+                return true;
+        }
+    }
+    
+    public void recordTransaction(Account account, TransactionType type, double amount) {
+        DailyLimits limits = accountLimits.get(account.getAccountNumber());
+        limits.record(type, amount);
+    }
+}
+```
+
+---
+
+### Q3: How would you add fraud detection?
+
+**Answer:**
+
+```java
+public class FraudDetectionService {
+    
+    public boolean isSuspicious(Transaction transaction) {
+        // Check 1: Unusual amount
+        if (transaction.getAmount() > getAverageAmount(transaction.getAccount()) * 5) {
+            return true;
+        }
+        
+        // Check 2: Unusual location
+        if (!isNearUsualLocations(transaction)) {
+            return true;
+        }
+        
+        // Check 3: Rapid transactions
+        if (getRecentTransactionCount(transaction.getAccount()) > 5) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    public void handleSuspiciousTransaction(Transaction transaction) {
+        // Send alert
+        notificationService.sendFraudAlert(transaction.getAccount().getOwner());
+        
+        // Require additional verification
+        requireOTP(transaction);
+    }
+}
+```
+
+---
+
+### Q4: How would you handle ATM maintenance?
+
+**Answer:**
+
+```java
+public class MaintenanceService {
+    
+    public void scheduleMaintenanceMode(ATM atm, LocalDateTime startTime, 
+                                        Duration duration) {
+        // Set maintenance window
+        atm.setMaintenanceWindow(startTime, duration);
+        
+        // If maintenance starts now, set to out of service
+        if (LocalDateTime.now().isAfter(startTime)) {
+            atm.setState(ATMState.OUT_OF_SERVICE);
+        }
+        
+        // Schedule end of maintenance
+        scheduler.schedule(() -> {
+            atm.setState(ATMState.IDLE);
+            performSelfTest(atm);
+        }, duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+    
+    private void performSelfTest(ATM atm) {
+        // Test cash dispenser
+        // Test card reader
+        // Test network connectivity
+        // If all pass, set to IDLE, else OUT_OF_SERVICE
+    }
+}
+```
+
+---
+
+### Q5: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add audit logging** - Track all operations for compliance
+2. **Add encryption** - Encrypt PINs and sensitive data
+3. **Add monitoring** - Real-time ATM health monitoring
+4. **Add analytics** - Usage patterns, peak times
+5. **Add mobile integration** - Cardless transactions via app
+6. **Add receipt printing** - Physical and digital receipts
+7. **Add multi-language support** - Internationalization
+8. **Add contactless card support** - NFC/RFID card reading
+
+---
+
+### Q6: How would you handle concurrent card insertions?
+
+**Answer:**
+
+```java
+public class CardReader {
+    private final Object cardLock = new Object();
+    private Card insertedCard;
+    
+    public boolean insertCard(Card card) {
+        synchronized (cardLock) {
+            if (insertedCard != null) {
+                return false;  // Card already inserted
+            }
+            insertedCard = card;
+            return true;
+        }
+    }
+    
+    public Card ejectCard() {
+        synchronized (cardLock) {
+            Card card = insertedCard;
+            insertedCard = null;
+            return card;
+        }
+    }
+}
+```
+
+---
+
+### Q7: How would you implement multi-account access (checking + savings)?
+
+**Answer:**
+
+```java
+public class Card {
+    private final List<Account> linkedAccounts;  // Multiple accounts
+    
+    public List<Account> getLinkedAccounts() {
+        return Collections.unmodifiableList(linkedAccounts);
+    }
+}
+
+public class ATMController {
+    private Account selectedAccount;
+    
+    public void selectAccount(AccountType type) {
+        selectedAccount = currentCard.getLinkedAccounts().stream()
+            .filter(a -> a.getType() == type)
+            .findFirst()
+            .orElse(null);
+    }
+    
+    public boolean transferBetweenAccounts(AccountType fromType, 
+                                           AccountType toType, 
+                                           double amount) {
+        Account from = findAccount(fromType);
+        Account to = findAccount(toType);
+        
+        if (from == null || to == null || from == to) {
+            return false;
+        }
+        
+        return from.transferTo(to, amount);
+    }
+}
+```
+
+---
+
+### Q8: How would you add support for foreign currency transactions?
+
+**Answer:**
+
+```java
+public enum Currency {
+    USD, EUR, GBP, JPY
+}
+
+public class ForeignExchangeService {
+    private final Map<Currency, Double> exchangeRates;
+    
+    public double convert(double amount, Currency from, Currency to) {
+        double rate = exchangeRates.get(to) / exchangeRates.get(from);
+        return amount * rate;
+    }
+}
+
+public class ForeignCurrencyTransaction extends Transaction {
+    private final Currency currency;
+    private final ForeignExchangeService exchangeService;
+    
+    @Override
+    protected boolean performTransaction() {
+        double amountInBaseCurrency = exchangeService.convert(
+            amount, currency, Currency.USD
+        );
+        return account.withdraw(amountInBaseCurrency);
+    }
+}
+```
+
+---
+
+## STEP 7: Complexity Analysis
+
+### Time Complexity
+
+| Operation | Complexity | Explanation |
+|-----------|------------|-------------|
+| `validatePin()` | O(1) | String comparison |
+| `withdraw()` | O(1) | Balance check and update |
+| `deposit()` | O(1) | Balance update |
+| `calculateBills()` | O(D) | D = number of denominations |
+| `dispenseCash()` | O(D) | Update inventory |
+| `findAccount()` | O(1) | HashMap lookup |
+
+### Space Complexity
+
+| Data Structure | Space | Purpose |
+|----------------|-------|---------|
+| `cashInventory` | O(D) | D = denominations |
+| `linkedAccounts` | O(A) | A = accounts per card |
+| `transactions` | O(T) | T = transaction history |
+
+### Bottlenecks at Scale
+
+**High transaction volume:**
+- Account lock contention
+- Solution: Partition accounts, use optimistic locking
+
+**Multiple ATMs:**
+- Cash inventory synchronization
+- Solution: Each ATM has local inventory, periodic sync
+
+---

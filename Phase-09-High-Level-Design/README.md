@@ -12,14 +12,15 @@
 
 ---
 
-## HLD Systems (6 files each):
+## HLD Systems (7 files each):
 Each system gets:
-- `01-problem-requirements.md`
-- `02-capacity-estimation.md`
-- `03-api-schema-design.md`
-- `04-architecture-diagrams.md`
-- `05-tech-deep-dives.md` (Redis, Kafka, DB specifics)
-- `06-interview-grilling.md` (Q&A)
+- `01-problem-requirements.md` (STEP 1: Requirements & Scope)
+- `02-capacity-estimation.md` (STEP 2: Back-of-Envelope Calculations)
+- `03-api-schema-design.md` (STEP 3: API Design)
+- `04-data-model-architecture.md` (STEP 4-5: Data Model, Storage & Architecture)
+- `05A-production-deep-dives-core.md` (STEP 6-8: Async/Messaging, Caching, Search)
+- `05B-production-deep-dives-ops.md` (STEP 9-13: Scaling, Monitoring, Security, Simulation, Cost)
+- `06-interview-grilling.md` (STEP 14-15: Tradeoffs, Interview Q&A, Failure Scenarios)
 
 ---
 

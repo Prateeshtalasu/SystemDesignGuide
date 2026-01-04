@@ -65,6 +65,85 @@ X-RateLimit-Reset: 1640000000
 
 ---
 
+## Error Model
+
+All error responses follow this standard envelope structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "field_name",  // Optional
+      "reason": "Specific reason"  // Optional
+    },
+    "request_id": "req_123456"  // For tracing
+  }
+}
+```
+
+**Error Codes Reference:**
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | INVALID_INPUT | Request validation failed |
+| 400 | INVALID_URL | URL format is invalid |
+| 400 | URL_TOO_LONG | URL exceeds maximum length |
+| 401 | UNAUTHORIZED | Authentication required |
+| 403 | FORBIDDEN | Insufficient permissions |
+| 404 | NOT_FOUND | Resource not found |
+| 409 | CONFLICT | Resource conflict (e.g., alias already exists) |
+| 429 | RATE_LIMITED | Rate limit exceeded |
+| 500 | INTERNAL_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+**Error Response Examples:**
+
+```json
+// 400 Bad Request - Invalid URL
+{
+  "error": {
+    "code": "INVALID_URL",
+    "message": "The provided URL is not valid",
+    "details": {
+      "field": "original_url",
+      "reason": "URL must start with http:// or https://"
+    },
+    "request_id": "req_abc123"
+  }
+}
+
+// 409 Conflict - Alias already exists
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Custom alias already exists",
+    "details": {
+      "field": "custom_alias",
+      "reason": "The alias 'my-link' is already in use"
+    },
+    "request_id": "req_xyz789"
+  }
+}
+
+// 429 Rate Limited
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded. Please try again later.",
+    "details": {
+      "limit": 100,
+      "remaining": 0,
+      "reset_at": "2024-01-15T11:00:00Z"
+    },
+    "request_id": "req_def456"
+  }
+}
+```
+
+---
+
 ## Core API Endpoints
 
 ### 1. Create Short URL
@@ -423,221 +502,6 @@ Authorization: Bearer api_key_xxxxx
 
 ---
 
-## Database Schema Design
-
-### Database Choice: PostgreSQL
-
-**Why PostgreSQL?**
-
-1. **ACID compliance**: URL mappings need strong consistency
-2. **Mature and reliable**: Battle-tested at scale
-3. **Rich indexing**: B-tree, hash indexes for fast lookups
-4. **JSON support**: Flexible metadata storage
-5. **Replication**: Built-in streaming replication for HA
-
-**Why not other options?**
-
-| Database   | Reason Against                        |
-| ---------- | ------------------------------------- |
-| MongoDB    | Overkill for simple key-value lookups |
-| DynamoDB   | Vendor lock-in, complex for analytics |
-| Cassandra  | Write-optimized, we're read-heavy     |
-| Redis only | Need durability, not just caching     |
-
-### Core Tables
-
-#### 1. urls Table
-
-```sql
-CREATE TABLE urls (
-    -- Primary identifier
-    short_code VARCHAR(8) PRIMARY KEY,
-
-    -- Core data
-    original_url VARCHAR(2048) NOT NULL,
-
-    -- Ownership
-    user_id BIGINT REFERENCES users(id),
-    api_key_id BIGINT REFERENCES api_keys(id),
-
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE,
-    deleted_at TIMESTAMP WITH TIME ZONE,  -- Soft delete
-
-    -- Flags
-    is_custom BOOLEAN DEFAULT FALSE,
-    redirect_type SMALLINT DEFAULT 301,  -- 301 or 302
-
-    -- Analytics (denormalized for fast reads)
-    click_count BIGINT DEFAULT 0,
-    last_clicked_at TIMESTAMP WITH TIME ZONE,
-
-    -- Flexible metadata
-    metadata JSONB DEFAULT '{}',
-
-    -- Constraints
-    CONSTRAINT valid_redirect_type CHECK (redirect_type IN (301, 302, 307))
-);
-
--- Index for redirect lookups (most critical)
-CREATE INDEX idx_urls_short_code_active
-ON urls(short_code)
-WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > NOW());
-
--- Index for user's URLs listing
-CREATE INDEX idx_urls_user_id_created
-ON urls(user_id, created_at DESC)
-WHERE deleted_at IS NULL;
-
--- Index for expiration cleanup job
-CREATE INDEX idx_urls_expires_at
-ON urls(expires_at)
-WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
-
--- Index for original URL lookup (to return existing short URL)
-CREATE INDEX idx_urls_original_url_hash
-ON urls(MD5(original_url))
-WHERE deleted_at IS NULL;
-```
-
-**Why these indexes?**
-
-| Index                    | Purpose                 | Query Pattern                                |
-| ------------------------ | ----------------------- | -------------------------------------------- |
-| Primary key (short_code) | Fast redirect lookup    | `WHERE short_code = ?`                       |
-| user_id + created_at     | List user's URLs sorted | `WHERE user_id = ? ORDER BY created_at DESC` |
-| expires_at               | Cleanup expired URLs    | `WHERE expires_at < NOW()`                   |
-| original_url hash        | Deduplicate URLs        | `WHERE MD5(original_url) = ?`                |
-
-#### 2. clicks Table (Analytics)
-
-```sql
-CREATE TABLE clicks (
-    id BIGSERIAL PRIMARY KEY,
-    short_code VARCHAR(8) NOT NULL,
-
-    -- Timestamp
-    clicked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-
-    -- Client info
-    ip_hash VARCHAR(64),  -- Hashed for privacy
-    user_agent TEXT,
-    referrer VARCHAR(2048),
-
-    -- Geo data (populated asynchronously)
-    country_code CHAR(2),
-    city VARCHAR(100),
-
-    -- Device info (parsed from user agent)
-    device_type VARCHAR(20),  -- mobile, desktop, tablet
-    browser VARCHAR(50),
-    os VARCHAR(50)
-) PARTITION BY RANGE (clicked_at);
-
--- Create monthly partitions
-CREATE TABLE clicks_2024_01 PARTITION OF clicks
-    FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
-
-CREATE TABLE clicks_2024_02 PARTITION OF clicks
-    FOR VALUES FROM ('2024-02-01') TO ('2024-03-01');
-
--- Index for analytics queries
-CREATE INDEX idx_clicks_short_code_time
-ON clicks(short_code, clicked_at DESC);
-
--- Index for time-based aggregations
-CREATE INDEX idx_clicks_time
-ON clicks(clicked_at);
-```
-
-**Why partitioning?**
-
-With 10 billion clicks/month, the clicks table grows massive. Partitioning by month allows:
-
-- Fast deletion of old data (drop partition)
-- Query optimization (partition pruning)
-- Independent maintenance per partition
-
-#### 3. users Table
-
-```sql
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-
-    -- Account status
-    status VARCHAR(20) DEFAULT 'active',
-    tier VARCHAR(20) DEFAULT 'free',
-
-    -- Settings
-    default_expiry_days INTEGER DEFAULT 1825,  -- 5 years
-
-    CONSTRAINT valid_status CHECK (status IN ('active', 'suspended', 'deleted')),
-    CONSTRAINT valid_tier CHECK (tier IN ('free', 'pro', 'enterprise'))
-);
-
-CREATE INDEX idx_users_email ON users(email);
-```
-
-#### 4. api_keys Table
-
-```sql
-CREATE TABLE api_keys (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) NOT NULL,
-
-    key_hash VARCHAR(64) NOT NULL,  -- SHA-256 of actual key
-    key_prefix VARCHAR(8) NOT NULL,  -- First 8 chars for identification
-
-    name VARCHAR(100),
-
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_used_at TIMESTAMP WITH TIME ZONE,
-    expires_at TIMESTAMP WITH TIME ZONE,
-    revoked_at TIMESTAMP WITH TIME ZONE,
-
-    -- Permissions
-    permissions JSONB DEFAULT '{"create": true, "read": true, "delete": true}'
-);
-
-CREATE INDEX idx_api_keys_hash ON api_keys(key_hash) WHERE revoked_at IS NULL;
-CREATE INDEX idx_api_keys_user ON api_keys(user_id);
-```
-
-#### 5. daily_stats Table (Aggregated Analytics)
-
-```sql
-CREATE TABLE daily_stats (
-    short_code VARCHAR(8) NOT NULL,
-    date DATE NOT NULL,
-
-    -- Aggregated metrics
-    click_count INTEGER DEFAULT 0,
-    unique_visitors INTEGER DEFAULT 0,
-
-    -- Top referrers (JSONB for flexibility)
-    top_referrers JSONB DEFAULT '[]',
-
-    -- Geographic breakdown
-    country_breakdown JSONB DEFAULT '{}',
-
-    -- Device breakdown
-    device_breakdown JSONB DEFAULT '{}',
-
-    PRIMARY KEY (short_code, date)
-);
-
-CREATE INDEX idx_daily_stats_date ON daily_stats(date);
-```
-
----
-
 ## Entity Relationship Diagram
 
 ```
@@ -785,6 +649,130 @@ public String generateFromHash(String url) {
 1. Use counter-based for guaranteed uniqueness
 2. Shuffle bits to prevent guessing
 3. For custom aliases, validate and store directly
+
+---
+
+## Idempotency Model
+
+### What is Idempotency?
+
+An operation is **idempotent** if performing it multiple times has the same effect as performing it once. This is critical for handling retries, network failures, and duplicate requests.
+
+### Idempotent Operations in URL Shortener
+
+| Operation | Idempotent? | Mechanism |
+|-----------|-------------|-----------|
+| **Create URL** | ✅ Yes | Idempotency key or custom alias uniqueness |
+| **Get URL** | ✅ Yes | Read-only, no side effects |
+| **Delete URL** | ✅ Yes | DELETE is idempotent (safe to retry) |
+| **Update URL** | ✅ Yes | Idempotency key or version-based |
+| **Record click** | ⚠️ At-least-once | Deduplication by (short_code, timestamp, ip_hash) |
+
+### Idempotency Implementation
+
+**1. URL Creation with Idempotency Key:**
+
+```java
+@PostMapping("/v1/urls")
+public ResponseEntity<UrlResponse> createUrl(
+        @RequestBody CreateUrlRequest request,
+        @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    
+    // Check if request already processed
+    String cachedResponse = redisTemplate.opsForValue()
+        .get("idempotency:" + idempotencyKey);
+    if (cachedResponse != null) {
+        return ResponseEntity.ok(parseResponse(cachedResponse));
+    }
+    
+    // Process request
+    UrlResponse response = urlService.createUrl(request);
+    
+    // Cache response for 24 hours
+    redisTemplate.opsForValue().set(
+        "idempotency:" + idempotencyKey,
+        serialize(response),
+        Duration.ofHours(24)
+    );
+    
+    return ResponseEntity.status(201).body(response);
+}
+```
+
+**2. Custom Alias Idempotency:**
+
+```java
+// If same original_url + custom_alias → return existing URL
+public UrlResponse createUrlWithAlias(String originalUrl, String customAlias) {
+    // Check if alias already exists
+    Url existing = urlRepository.findByCustomAlias(customAlias);
+    if (existing != null) {
+        // If same original_url → idempotent (return existing)
+        if (existing.getOriginalUrl().equals(originalUrl)) {
+            return UrlResponse.from(existing);
+        }
+        // If different original_url → conflict
+        throw new AliasConflictException("Alias already taken");
+    }
+    
+    // Create new URL
+    return urlService.createUrl(originalUrl, customAlias);
+}
+```
+
+**3. Click Event Deduplication:**
+
+```java
+// Deduplicate by (short_code, timestamp, ip_hash)
+public void recordClick(ClickEvent event) {
+    String dedupKey = String.format("click:%s:%d:%s",
+        event.getShortCode(),
+        event.getTimestamp() / 1000, // Round to second
+        event.getIpHash()
+    );
+    
+    // Set if absent (idempotent)
+    Boolean isNew = redisTemplate.opsForValue()
+        .setIfAbsent(dedupKey, "1", Duration.ofMinutes(5));
+    
+    if (Boolean.TRUE.equals(isNew)) {
+        // New click, process it
+        kafkaTemplate.send("click-events", event);
+    }
+    // Duplicate click, ignore
+}
+```
+
+### Idempotency Key Generation
+
+**Client-Side (Recommended):**
+```javascript
+// Generate UUID v4 for each request
+const idempotencyKey = crypto.randomUUID();
+fetch('/v1/urls', {
+    headers: {
+        'Idempotency-Key': idempotencyKey
+    }
+});
+```
+
+**Server-Side (Fallback):**
+```java
+// If client doesn't provide key, generate from request hash
+String idempotencyKey = DigestUtils.sha256Hex(
+    request.getOriginalUrl() + 
+    request.getCustomAlias() + 
+    request.getUserId()
+);
+```
+
+### Duplicate Detection Window
+
+| Operation | Deduplication Window | Storage |
+|-----------|---------------------|---------|
+| URL Creation | 24 hours | Redis |
+| Click Events | 5 minutes | Redis |
+| Analytics Updates | 1 hour | ClickHouse (UPSERT) |
 
 ---
 

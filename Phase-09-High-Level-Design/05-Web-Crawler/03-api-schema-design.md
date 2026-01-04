@@ -11,6 +11,203 @@ A web crawler is primarily an internal system, so APIs focus on:
 
 ---
 
+## Base URL Structure
+
+```
+Internal API: https://crawler.internal/api/v1
+```
+
+---
+
+## API Versioning Strategy
+
+We use URL path versioning (`/v1/`, `/v2/`) because:
+- Easy to understand and implement
+- Clear in logs and documentation
+- Allows running multiple versions simultaneously
+
+**Backward Compatibility Rules:**
+
+Non-breaking changes (no version bump):
+- Adding new optional fields
+- Adding new endpoints
+- Adding new error codes
+
+Breaking changes (require new version):
+- Removing fields
+- Changing field types
+- Changing endpoint paths
+
+**Deprecation Policy:**
+1. Announce deprecation 6 months in advance
+2. Return Deprecation header
+3. Maintain old version for 12 months after new version release
+
+---
+
+## Rate Limiting Headers
+
+Every response includes rate limit information:
+
+```http
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1640000000
+```
+
+**Rate Limits:**
+
+| Endpoint Type | Requests/minute |
+|---------------|-----------------|
+| Job Management | 100 |
+| Data Access | 1000 |
+| Monitoring | 500 |
+
+---
+
+## Error Model
+
+All error responses follow this standard envelope structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "field_name",  // Optional
+      "reason": "Specific reason"  // Optional
+    },
+    "request_id": "req_123456"  // For tracing
+  }
+}
+```
+
+**Error Codes Reference:**
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | INVALID_INPUT | Request validation failed |
+| 400 | INVALID_CONFIG | Crawl configuration is invalid |
+| 400 | INVALID_URL | URL format is invalid |
+| 404 | NOT_FOUND | Resource not found |
+| 409 | CONFLICT | Job already exists |
+| 429 | RATE_LIMITED | Rate limit exceeded |
+| 500 | INTERNAL_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+**Error Response Examples:**
+
+```json
+// 400 Bad Request - Invalid config
+{
+  "error": {
+    "code": "INVALID_CONFIG",
+    "message": "Crawl configuration is invalid",
+    "details": {
+      "field": "max_depth",
+      "reason": "max_depth must be between 1 and 10"
+    },
+    "request_id": "req_abc123"
+  }
+}
+
+// 409 Conflict - Job exists
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Crawl job with this name already exists",
+    "details": {
+      "field": "name",
+      "reason": "Job 'daily-news-crawl' already exists"
+    },
+    "request_id": "req_xyz789"
+  }
+}
+```
+
+---
+
+## Idempotency Implementation
+
+**Idempotency-Key Header:**
+
+Clients must include `Idempotency-Key` header for all write operations:
+```http
+Idempotency-Key: <uuid-v4>
+```
+
+**Deduplication Storage:**
+
+Idempotency keys are stored in Redis with 24-hour TTL:
+```
+Key: idempotency:{key}
+Value: Serialized response
+TTL: 24 hours
+```
+
+**Retry Semantics:**
+
+1. Client sends request with Idempotency-Key
+2. Server checks Redis for existing key
+3. If found: Return cached response (same status code + body)
+4. If not found: Process request, cache response, return result
+5. Retries with same key within 24 hours return cached response
+
+**Per-Endpoint Idempotency:**
+
+| Endpoint | Idempotent? | Mechanism |
+|----------|-------------|-----------|
+| POST /api/v1/jobs | Yes | Idempotency-Key header |
+| PUT /api/v1/jobs/{id} | Yes | Idempotency-Key or version-based |
+| DELETE /api/v1/jobs/{id} | Yes | Safe to retry (idempotent by design) |
+| POST /api/v1/jobs/{id}/pause | Yes | Idempotency-Key header |
+| POST /api/v1/jobs/{id}/resume | Yes | Idempotency-Key header |
+
+**Implementation Example:**
+
+```java
+@PostMapping("/api/v1/jobs")
+public ResponseEntity<JobResponse> createJob(
+        @RequestBody CreateJobRequest request,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    
+    // Check for existing idempotency key
+    if (idempotencyKey != null) {
+        String cacheKey = "idempotency:" + idempotencyKey;
+        String cachedResponse = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            // Return cached response
+            JobResponse response = objectMapper.readValue(cachedResponse, JobResponse.class);
+            return ResponseEntity.status(response.getStatus()).body(response);
+        }
+    }
+    
+    // Check for duplicate job name
+    if (jobRepository.existsByName(request.getName())) {
+        throw new ConflictException("Job with name already exists");
+    }
+    
+    // Create job
+    Job job = jobService.createJob(request, idempotencyKey);
+    JobResponse response = JobResponse.from(job);
+    
+    // Cache response if idempotency key provided
+    if (idempotencyKey != null) {
+        String cacheKey = "idempotency:" + idempotencyKey;
+        redisTemplate.opsForValue().set(
+            cacheKey, 
+            objectMapper.writeValueAsString(response),
+            Duration.ofHours(24)
+        );
+    }
+    
+    return ResponseEntity.status(201).body(response);
+}
+```
+
+---
+
 ## Internal API Endpoints
 
 ### 1. Crawl Job Management

@@ -1,6 +1,12 @@
 # 📁 File System - Design Explanation
 
-## SOLID Principles Analysis
+## STEP 2: Detailed Design Explanation
+
+This document covers the design decisions, SOLID principles application, design patterns used, and complexity analysis for the File System.
+
+---
+
+## STEP 3: SOLID Principles Analysis
 
 ### 1. Single Responsibility Principle (SRP)
 
@@ -206,6 +212,18 @@ public class FileSystem {
 
 ---
 
+## SOLID Principles Check
+
+| Principle | Rating | Explanation | Fix if WEAK/FAIL | Tradeoff |
+|-----------|--------|-------------|------------------|----------|
+| **SRP** | PASS | Each class has a single, well-defined responsibility. Entry is base class, File handles file operations, Directory handles directory operations, FileSystem coordinates, Permissions manages permissions. Clear separation. | N/A | - |
+| **OCP** | PASS | System is open for extension (new entry types like SymbolicLink) without modifying existing code. Composite pattern enables this. | N/A | - |
+| **LSP** | PASS | All Entry subclasses (File, Directory) properly implement the Entry contract. They are substitutable in composite operations. | N/A | - |
+| **ISP** | WEAK | Entry interface contains methods used by both File and Directory. Could benefit from Readable, Writable, Container interfaces. Currently acceptable but could be improved. | Extract interfaces: Readable, Writable, Container | More interfaces/files, but increases flexibility for mixed-type objects |
+| **DIP** | WEAK | FileSystem depends on concrete Directory. Could depend on DirectoryOperations interface. Currently acceptable but could be improved. | Extract DirectoryOperations interface | More abstraction layers, but improves testability and flexibility |
+
+---
+
 ## Design Patterns Used
 
 ### 1. Composite Pattern
@@ -402,7 +420,195 @@ public class FileSystem {
 
 ---
 
-## Complexity Analysis
+## STEP 8: Interviewer Follow-ups with Answers
+
+### Q1: How would you handle concurrent access?
+
+**Answer:**
+
+```java
+public class ThreadSafeFileSystem extends FileSystem {
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    
+    @Override
+    public File touch(String path) {
+        lock.writeLock().lock();
+        try {
+            return super.touch(path);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
+    @Override
+    public byte[] readFile(String path) {
+        lock.readLock().lock();
+        try {
+            return super.readFile(path);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
+    @Override
+    public List<Entry> ls(String path) {
+        lock.readLock().lock();
+        try {
+            return super.ls(path);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+}
+```
+
+**Design decision:** Use ReadWriteLock to allow concurrent reads but exclusive writes. This maximizes throughput for read-heavy workloads.
+
+---
+
+### Q2: How would you implement undo/redo?
+
+**Answer:**
+
+```java
+public class UndoableFileSystem extends FileSystem {
+    private final Stack<Command> undoStack = new Stack<>();
+    private final Stack<Command> redoStack = new Stack<>();
+    
+    @Override
+    public File touch(String path) {
+        File file = super.touch(path);
+        Command command = new CreateFileCommand(this, path);
+        undoStack.push(command);
+        redoStack.clear();  // Clear redo on new action
+        return file;
+    }
+    
+    public void undo() {
+        if (undoStack.isEmpty()) return;
+        
+        Command command = undoStack.pop();
+        command.undo();
+        redoStack.push(command);
+    }
+    
+    public void redo() {
+        if (redoStack.isEmpty()) return;
+        
+        Command command = redoStack.pop();
+        command.execute();
+        undoStack.push(command);
+    }
+}
+
+interface Command {
+    void execute();
+    void undo();
+}
+
+class CreateFileCommand implements Command {
+    private final FileSystem fs;
+    private final String path;
+    private File createdFile;
+    
+    public CreateFileCommand(FileSystem fs, String path) {
+        this.fs = fs;
+        this.path = path;
+    }
+    
+    @Override
+    public void execute() {
+        createdFile = fs.touch(path);
+    }
+    
+    @Override
+    public void undo() {
+        fs.rm(path);
+    }
+}
+```
+
+---
+
+### Q3: How would you implement watch/notify?
+
+**Answer:**
+
+```java
+public class WatchableFileSystem extends FileSystem {
+    private final Map<String, List<FileWatcher>> watchers = new ConcurrentHashMap<>();
+    
+    public void watch(String path, FileWatcher watcher) {
+        watchers.computeIfAbsent(path, k -> new ArrayList<>()).add(watcher);
+    }
+    
+    public void unwatch(String path, FileWatcher watcher) {
+        List<FileWatcher> list = watchers.get(path);
+        if (list != null) {
+            list.remove(watcher);
+        }
+    }
+    
+    @Override
+    public File touch(String path) {
+        File file = super.touch(path);
+        notifyWatchers(path, FileEvent.CREATED);
+        notifyParentWatchers(path, FileEvent.CREATED);
+        return file;
+    }
+    
+    private void notifyWatchers(String path, FileEvent event) {
+        List<FileWatcher> pathWatchers = watchers.get(path);
+        if (pathWatchers != null) {
+            for (FileWatcher watcher : pathWatchers) {
+                watcher.onEvent(path, event);
+            }
+        }
+    }
+    
+    private void notifyParentWatchers(String path, FileEvent event) {
+        // Notify watchers on parent directories
+        String current = path;
+        while (current != null && !current.isEmpty()) {
+            List<FileWatcher> pathWatchers = watchers.get(current);
+            if (pathWatchers != null) {
+                for (FileWatcher watcher : pathWatchers) {
+                    watcher.onEvent(path, event);
+                }
+            }
+            int lastSlash = current.lastIndexOf('/');
+            current = lastSlash > 0 ? current.substring(0, lastSlash) : null;
+        }
+    }
+}
+
+public interface FileWatcher {
+    void onEvent(String path, FileEvent event);
+}
+
+public enum FileEvent {
+    CREATED, MODIFIED, DELETED, MOVED
+}
+```
+
+---
+
+### Q4: What would you do differently with more time?
+
+**Answer:**
+
+1. **Add hard/soft links** - Link entries pointing to other entries
+2. **Add file attributes** - Custom metadata key-value pairs
+3. **Add journaling** - Transaction log for crash recovery
+4. **Add compression** - Transparent file compression
+5. **Add encryption** - File-level encryption
+6. **Add access control lists** - Fine-grained permissions per user
+7. **Add file versioning** - Track file history and revisions
+8. **Add disk quota management** - Limit storage per user/directory
+
+---
+
+## STEP 7: Complexity Analysis
 
 ### Time Complexity
 
@@ -426,9 +632,18 @@ public class FileSystem {
 | Path resolution | O(d) | d = path depth |
 | Find results | O(m) | m = matching entries |
 
----
+### Bottlenecks at Scale
 
-## Interview Follow-ups
+**10x Usage (10K → 100K files):**
+- Problem: Linear search (find operation) becomes slow (O(n)), directory listing becomes expensive, path resolution overhead grows
+- Solution: Add indexing (B-tree or hash index) for file names, cache frequently accessed directories
+- Tradeoff: Additional memory for indexes, more complex code
+
+**100x Usage (10K → 1M files):**
+- Problem: In-memory structure doesn't fit in single machine, single-threaded operations become bottleneck, find operations too slow
+- Solution: Partition file system by path prefix, distribute across multiple nodes, use distributed search indexes (Elasticsearch)
+- Tradeoff: Distributed system complexity, need partition management and cross-partition queries
+
 
 ### Q1: How would you implement file versioning?
 

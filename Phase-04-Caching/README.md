@@ -14,7 +14,7 @@
 
 ## Topics:
 
-1. **Caching Patterns**
+1. **[Caching Patterns](01-caching-patterns.md)** ✅
    - Cache-Aside (lazy loading)
    - Write-Through
    - Write-Behind (write-back)
@@ -22,14 +22,14 @@
    - Read-Through
    - When to use each pattern
 
-2. **Cache Invalidation**
+2. **[Cache Invalidation](02-cache-invalidation.md)** ✅
    - TTL strategies (fixed, sliding, adaptive)
    - Event-based invalidation
    - Version-based invalidation
    - "Two hardest things" problem
    - Cache invalidation patterns
 
-3. **Redis Deep Dive**
+3. **[Redis Deep Dive](03-redis-deep-dive.md)** ✅
    - Data structures (String, Hash, List, Set, Sorted Set)
    - Use cases for each structure
    - Persistence (RDB, AOF, hybrid)
@@ -38,7 +38,7 @@
    - Redis Streams
    - Lua scripting
 
-4. **Cache Eviction Policies**
+4. **[Cache Eviction Policies](04-cache-eviction-policies.md)** ✅
    - LRU (Least Recently Used)
    - LFU (Least Frequently Used)
    - FIFO (First In First Out)
@@ -47,55 +47,55 @@
    - ARC (Adaptive Replacement Cache)
    - Redis eviction policies
 
-5. **Advanced Caching**
+5. **[Cache Stampede & Thundering Herd](05-cache-stampede-thundering-herd.md)** ✅
    - Cache stampede (thundering herd)
    - Distributed cache coordination
    - Multi-level caching (L1 local + L2 Redis)
    - Cache warming strategies
    - Cache preloading
 
-6. **Local vs Distributed Cache**
+6. **[Local vs Distributed Cache](06-local-vs-distributed-cache.md)** ✅
    - When to use each
    - Caffeine (local) - configuration and tuning
    - Redis/Memcached (distributed)
    - Hybrid approaches
    - Cache synchronization
 
-7. **Cache Coherency**
+7. **[Cache Coherency](07-cache-coherency.md)** ✅
    - Cache invalidation strategies
    - Write-through vs write-behind trade-offs
    - Cache versioning
    - Eventual consistency in caching
 
-8. **Cache Optimization**
+8. **[Cache Optimization](08-cache-optimization.md)** ✅
    - Cache hit ratio optimization
    - Cache partitioning strategies
    - Hot key problem (solutions)
    - Cache warming techniques
    - Cache sizing strategies
 
-9. **Memcached vs Redis**
+9. **[Memcached vs Redis](09-memcached-vs-redis.md)** ✅
    - When to use each
    - Performance characteristics
    - Feature comparison
    - Memory management differences
    - Clustering differences
 
-10. **HTTP Caching**
+10. **[HTTP Caching](10-http-caching.md)** ✅
     - Cache-Control headers
     - ETags and conditional requests
     - Vary header
     - Browser caching
     - Proxy caching
 
-11. **CDN Caching**
+11. **[CDN Caching](11-cdn-caching.md)** ✅
     - Edge caching strategies
     - Cache invalidation at CDN
     - Stale-while-revalidate
     - Cache key design
     - *Reference*: See Phase 2 for CDN basics
 
-12. **Caching Anti-Patterns**
+12. **[Caching Anti-Patterns](12-caching-anti-patterns.md)** ✅
     - Caching mutable data without invalidation
     - Over-caching (everything in cache)
     - Under-caching (no cache strategy)
