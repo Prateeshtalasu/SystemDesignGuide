@@ -60,7 +60,33 @@ There was no systematic way to measure or compare performance.
 
 Think of your system as a highway:
 
+```mermaid
+graph TD
+    subgraph "THE HIGHWAY ANALOGY"
+        Latency[LATENCY = How long it takes ONE car to travel from A to B<br>(Time for a single request)]
+        Throughput[THROUGHPUT = How many cars pass a point per hour<br>(Requests per second the system handles)]
+        Bandwidth[BANDWIDTH = How many lanes the highway has<br>(Maximum data transfer capacity)]
+        
+        Highway1["Highway Lane 1 →"]
+        Highway2["Highway Lane 2 →"]
+        Highway3["Highway Lane 3 →"]
+        
+        HighBW["A 6-lane highway (high bandwidth) can have:<br>- Fast cars (low latency)<br>- Many cars passing (high throughput)"]
+        Congestion["But if there's a traffic jam (congestion):<br>- Each car is slow (high latency)<br>- Few cars pass (low throughput)<br>- Even though the highway is wide (bandwidth unchanged)"]
+        
+        Latency --> Highway1
+        Throughput --> Highway2
+        Bandwidth --> Highway3
+        Highway1 --> HighBW
+        Highway2 --> HighBW
+        Highway3 --> Congestion
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        THE HIGHWAY ANALOGY                               │
 │                                                                          │
@@ -90,6 +116,7 @@ Think of your system as a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Bandwidth is capacity, throughput is actual usage, latency is individual experience.
 
@@ -101,7 +128,22 @@ Think of your system as a highway:
 
 **Definition**: The time between sending a request and receiving a response.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: Network Latency (request)
+    Note over Server: Processing Time<br>(Server thinks)
+    Server-->>Client: Network Latency (response)
+    
+    Note over Client,Server: Total Latency = Request Network + Processing + Response Network<br><br>Example:<br>- Request travel: 20ms<br>- Server processing: 50ms<br>- Response travel: 20ms<br>- Total latency: 90ms
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         LATENCY BREAKDOWN                                │
 │                                                                          │
@@ -125,6 +167,7 @@ Think of your system as a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Components of Latency**:
 
@@ -139,7 +182,22 @@ Think of your system as a highway:
 
 **Types of Latency**:
 
+```mermaid
+graph TD
+    subgraph "TYPES OF LATENCY"
+        Type1[1. Network Latency (Round-Trip Time / RTT)<br>Time for a packet to go from A to B and back<br>Measured with: ping]
+        Type2[2. Application Latency<br>Time for the application to process a request<br>Measured with: APM tools (New Relic, Datadog)]
+        Type3[3. Database Latency<br>Time for a database query to execute<br>Measured with: slow query logs]
+        Type4[4. End-to-End Latency<br>Total time from user action to visible result<br>Measured with: Real User Monitoring (RUM)]
+        
+        Type1 --> Type2 --> Type3 --> Type4
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        TYPES OF LATENCY                                  │
 │                                                                          │
@@ -161,12 +219,27 @@ Think of your system as a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Throughput
 
 **Definition**: The number of operations completed per unit of time.
 
+```mermaid
+graph TD
+    subgraph "THROUGHPUT"
+        Units["Common Units:<br>- RPS (Requests Per Second)<br>- QPS (Queries Per Second)<br>- TPS (Transactions Per Second)"]
+        Calculation["Example Calculation:<br><br>If your server:<br>- Has 100 worker threads<br>- Each request takes 100ms on average<br>- Each thread handles 10 requests/second (1000ms / 100ms)<br><br>Maximum Throughput = 100 threads × 10 req/sec = 1000 RPS"]
+        Timeline["Time →<br>Thread 1: [req1][req2][req3][req4][req5]...<br>Thread 2: [req1][req2][req3][req4][req5]...<br>Thread 3: [req1][req2][req3][req4][req5]...<br>...<br>Thread 100: [req1][req2][req3][req4][req5]...<br><br>1 second = 1000 requests completed"]
+        
+        Units --> Calculation --> Timeline
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           THROUGHPUT                                     │
 │                                                                          │
@@ -198,6 +271,7 @@ Think of your system as a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Throughput vs Latency Relationship**:
 
@@ -219,7 +293,21 @@ Example:
 
 **Definition**: The maximum rate of data transfer across a network path.
 
+```mermaid
+graph TD
+    subgraph "BANDWIDTH"
+        Measured["Measured in: bits per second (bps, Mbps, Gbps)"]
+        Table["Common Bandwidths:<br>3G Mobile: 1-5 Mbps<br>4G LTE: 10-50 Mbps<br>5G: 100-1000 Mbps<br>Home WiFi: 50-500 Mbps<br>Ethernet (office): 1 Gbps<br>Data center internal: 10-100 Gbps<br>AWS region to region: 5-25 Gbps"]
+        Important["Important: Bandwidth ≠ Speed<br>- Bandwidth is capacity (how wide the pipe is)<br>- Latency is speed (how fast water flows through)<br><br>A 1 Gbps connection with 100ms latency is SLOWER for small<br>requests than a 100 Mbps connection with 10ms latency!"]
+        
+        Measured --> Table --> Important
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           BANDWIDTH                                      │
 │                                                                          │
@@ -247,6 +335,7 @@ Example:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Bandwidth vs Throughput**:
 
@@ -264,7 +353,23 @@ Example:
 
 **Definition**: A way to understand the distribution of values, not just the average.
 
+```mermaid
+graph TD
+    subgraph "WHY PERCENTILES MATTER"
+        Scenario["Scenario: 1000 requests with these latencies:<br>- 990 requests: 50ms<br>- 10 requests: 5000ms (5 seconds!)"]
+        Average["Average = (990 × 50 + 10 × 5000) / 1000 = 99.5ms"]
+        Insight["The average looks fine! But 1% of users waited 5 seconds.<br>If you have 1 million users, that's 10,000 frustrated people."]
+        Percentiles["Percentiles reveal the truth:<br>- p50 (median): 50ms ← Half of requests faster than this<br>- p90: 50ms ← 90% of requests faster than this<br>- p95: 50ms ← 95% of requests faster than this<br>- p99: 5000ms ← 99% of requests faster than this<br>- p99.9: 5000ms ← 99.9% of requests faster than this"]
+        Conclusion["The p99 shows the problem the average hid!"]
+        
+        Scenario --> Average --> Insight --> Percentiles --> Conclusion
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         WHY PERCENTILES MATTER                           │
 │                                                                          │
@@ -288,6 +393,7 @@ Example:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Visual Representation**:
 
@@ -330,7 +436,27 @@ Latency Distribution (1000 requests):
 
 ### Measuring Latency: A Single Request
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant Server
+
+    User->>Browser: Clicks "Buy" button at T=0ms
+    Browser->>Browser: Prepare request (1ms)
+    Browser->>Browser: DNS lookup (cached, 1ms)
+    Browser->>Browser: TCP connection (already established, 2ms)
+    Browser->>Server: HTTP POST /api/orders (Network 20ms)
+    Note over Server: T=22ms: Receive request<br>T=23ms: Parse JSON body<br>T=25ms: Validate session (Redis: 2ms)<br>T=30ms: Check inventory (DB: 5ms)<br>T=45ms: Process payment (API: 15ms)<br>T=50ms: Save order (DB: 5ms)<br>T=52ms: Build response
+    Server-->>Browser: Response (Network 20ms)
+    Browser->>Browser: Update UI (3ms)
+    Note over User,Browser: Total Latency: 75ms<br>- Network: 40ms (53%)<br>- Server Processing: 30ms (40%)<br>- Client Processing: 5ms (7%)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TRACING A SINGLE REQUEST                              │
 │                                                                          │
@@ -363,10 +489,30 @@ Latency Distribution (1000 requests):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Measuring Throughput: Many Requests
 
+```mermaid
+graph LR
+    subgraph "THROUGHPUT MEASUREMENT"
+        LoadTest["Load Test: 60 seconds, as many requests as possible"]
+        S1["Second 1: 850 requests"]
+        S2["Second 2: 920 requests"]
+        S3["Second 3: 950 requests"]
+        S4["Second 4: 980 requests"]
+        S5["Second 5: 1000 requests"]
+        S60["Second 60: 1000 requests"]
+        Results["Results:<br>- Total requests: 58,500<br>- Duration: 60 seconds<br>- Average throughput: 975 RPS<br>- Peak throughput: 1000 RPS<br>- Ramp-up time: 5 seconds to reach peak"]
+        
+        LoadTest --> S1 --> S2 --> S3 --> S4 --> S5 --> S60 --> Results
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THROUGHPUT MEASUREMENT                                │
 │                                                                          │
@@ -389,6 +535,7 @@ Latency Distribution (1000 requests):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Calculating Percentiles: Step by Step
 
@@ -450,7 +597,26 @@ Insight: Average (52.55ms) hides the outlier (250ms) that p99 reveals!
 
 **Metrics Collection Pipeline**:
 
+```mermaid
+graph TD
+    subgraph "METRICS PIPELINE"
+        App[Application]
+        Agent[Metrics Agent<br>(in-process)<br>Micrometer, StatsD, Prometheus client]
+        Store[Metrics Store<br>(time-series DB)<br>Prometheus, InfluxDB, Datadog]
+        Dashboard[Dashboard<br>(visualization)<br>Grafana, Datadog, CloudWatch]
+        Alerting[Alerting<br>(notification)<br>PagerDuty, OpsGenie, Slack]
+        
+        App -->|Emit metrics (latency, throughput, errors)| Agent
+        Agent -->|Push/Pull metrics| Store
+        Store -->|Query for visualization| Dashboard
+        Dashboard -->|Alert when thresholds breached| Alerting
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    METRICS PIPELINE                                      │
 │                                                                          │
@@ -486,6 +652,7 @@ Insight: Average (52.55ms) hides the outlier (250ms) that p99 reveals!
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What is Automated vs Manual
 
@@ -922,7 +1089,33 @@ Or use histogram-based metrics (like Prometheus histograms)
 
 ### Synthetic vs Real User Monitoring
 
+```mermaid
+graph TD
+    subgraph "SYNTHETIC MONITORING"
+        SynWhat[What: Automated tests from known locations]
+        SynHow[How: Bots make requests every minute from AWS regions]
+        SynPros[Pros: Consistent baseline, catches outages fast]
+        SynCons[Cons: Doesn't reflect real user experience]
+        SynTools[Tools: Pingdom, Datadog Synthetics, AWS CloudWatch Synthetics]
+        
+        SynWhat --> SynHow --> SynPros --> SynCons --> SynTools
+    end
+    
+    subgraph "REAL USER MONITORING (RUM)"
+        RUMWhat[What: Measure actual user experiences]
+        RUMHow[How: JavaScript in browser reports timing data]
+        RUMPros[Pros: True user experience, geographic distribution]
+        RUMCons[Cons: Privacy concerns, sampling needed at scale]
+        RUMTools[Tools: Google Analytics, New Relic Browser, Datadog RUM]
+        
+        RUMWhat --> RUMHow --> RUMPros --> RUMCons --> RUMTools
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │              SYNTHETIC MONITORING                                        │
 │                                                                          │
@@ -945,6 +1138,7 @@ Or use histogram-based metrics (like Prometheus histograms)
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Server-Side vs Client-Side Metrics
 

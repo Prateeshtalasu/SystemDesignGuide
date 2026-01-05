@@ -109,7 +109,33 @@ public class SeatLockService {
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web Browser, Mobile App"]
+    Clients --> APIGateway
+    APIGateway["API GATEWAY<br/>Load Balancer, Rate Limiting"]
+    APIGateway --> SeatService
+    APIGateway --> BookingService
+    APIGateway --> PaymentService
+    SeatService["Seat Service<br/>- Get seat map<br/>- Lock seats<br/>- Release seats"]
+    BookingService["Booking Service<br/>- Create booking<br/>- Get booking<br/>- Cancel booking"]
+    PaymentService["Payment Service<br/>- Process payment<br/>- Handle failures<br/>- Refund"]
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis<br/>(Seat Locks)"]
+        PostgreSQL["PostgreSQL<br/>(Bookings/Events)"]
+        Kafka["Kafka<br/>(Events)"]
+        PaymentGateway["Payment Gateway"]
+    end
+    SeatService --> Redis
+    BookingService --> PostgreSQL
+    BookingService --> Kafka
+    PaymentService --> PaymentGateway
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Web Browser, Mobile App)                                        │
@@ -144,6 +170,9 @@ public class SeatLockService {
 │  │              │  │   Events)     │  │              │  │              │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘          │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

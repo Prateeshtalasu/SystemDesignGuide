@@ -65,7 +65,28 @@ Before load testing was common:
 
 Think of load testing like stress-testing a highway:
 
+```mermaid
+graph TD
+    subgraph "HIGHWAY STRESS TEST"
+        LoadTest["LOAD TEST: How does the highway perform with increasing traffic?"]
+        TenCars["10 cars/hour: Smooth flow, no issues"]
+        HundredCars["100 cars/hour: Still good, slight slowdown at exits"]
+        FiveHundredCars["500 cars/hour: Traffic building up, some delays"]
+        ThousandCars["1000 cars/hour: Congestion forming, significant delays"]
+        TwoThousandCars["2000 cars/hour: GRIDLOCK! Highway capacity exceeded"]
+        
+        StressTest["STRESS TEST: What happens if we push beyond normal limits?<br>5000 cars/hour: 💥 Accidents, breakdowns, emergency response needed<br>System completely fails"]
+        
+        SpikeTest["SPIKE TEST: Sudden rush hour traffic<br>Normal → 3000 cars in 5 minutes → Back to normal<br>How quickly does the system recover?"]
+        
+        LoadTest --> TenCars --> HundredCars --> FiveHundredCars --> ThousandCars --> TwoThousandCars --> StressTest --> SpikeTest
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HIGHWAY STRESS TEST                                   │
 │                                                                          │
@@ -102,6 +123,7 @@ Think of load testing like stress-testing a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Load testing finds the point where performance degrades and where the system breaks.
 
@@ -111,7 +133,22 @@ Think of load testing like stress-testing a highway:
 
 ### Types of Performance Tests
 
+```mermaid
+graph TD
+    subgraph "TYPES OF PERFORMANCE TESTS"
+        LoadTest2["1. LOAD TEST<br>Purpose: Verify system handles expected load<br>Pattern: Gradual increase to target load, sustain, measure"]
+        StressTest2["2. STRESS TEST<br>Purpose: Find breaking point<br>Pattern: Increase load until system fails"]
+        SpikeTest2["3. SPIKE TEST<br>Purpose: Test sudden traffic bursts<br>Pattern: Normal → Sudden spike → Normal"]
+        SoakTest["4. SOAK/ENDURANCE TEST<br>Purpose: Find memory leaks, resource exhaustion over time<br>Pattern: Sustained moderate load for extended period<br>(Hours or days of sustained load)"]
+        
+        LoadTest2 --> StressTest2 --> SpikeTest2 --> SoakTest
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TYPES OF PERFORMANCE TESTS                            │
 │                                                                          │
@@ -179,10 +216,26 @@ Think of load testing like stress-testing a highway:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Key Metrics to Measure
 
+```mermaid
+graph TD
+    subgraph "PERFORMANCE METRICS"
+        Latency["LATENCY METRICS<br>• Response Time: Total time from request to response<br>• p50 (median): 50% of requests faster than this<br>• p95: 95% of requests faster than this<br>• p99: 99% of requests faster than this (tail latency)<br>• Max: Slowest request (often an outlier)"]
+        Throughput["THROUGHPUT METRICS<br>• RPS/QPS: Requests/Queries per second<br>• TPS: Transactions per second<br>• Bandwidth: Data transferred per second"]
+        Error["ERROR METRICS<br>• Error Rate: Percentage of failed requests<br>• Error Types: 4xx (client), 5xx (server), timeouts"]
+        Resource["RESOURCE METRICS<br>• CPU Utilization: Percentage of CPU used<br>• Memory Usage: RAM consumption<br>• Disk I/O: Read/write operations<br>• Network I/O: Bandwidth usage<br>• Thread Pool: Active vs available threads"]
+        
+        Latency --> Throughput --> Error --> Resource
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PERFORMANCE METRICS                                   │
 │                                                                          │
@@ -207,6 +260,12 @@ Think of load testing like stress-testing a highway:
 │                                                                          │
 │  RESOURCE METRICS                                                        │
 │  ────────────────                                                        │
+│  • CPU Utilization: Percentage of CPU used                              │
+│  • Memory Usage: RAM consumption                                        │
+│  • Disk I/O: Read/write operations                                      │
+│  • Network I/O: Bandwidth usage                                         │
+│  • Thread Pool: Active vs available threads                             │
+```
 │  • CPU Utilization: Percentage of CPU used                              │
 │  • Memory Usage: RAM consumption                                        │
 │  • Disk I/O: Read/write operations                                      │

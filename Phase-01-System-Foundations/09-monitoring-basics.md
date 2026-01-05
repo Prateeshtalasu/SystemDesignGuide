@@ -61,7 +61,21 @@ Before modern monitoring:
 
 Think of monitoring like a car dashboard:
 
+```mermaid
+graph TD
+    subgraph "CAR DASHBOARD ANALOGY"
+        Dashboard["CAR DASHBOARD<br>Fuel: 75% | Speed: 65 mph | RPM: 3000 | Temp: OK<br>🔴 Check Engine | ⚠️ Low Tire Pressure"]
+        Mapping["METRICS = Gauges (speed, fuel, RPM, temperature)<br>ALERTS = Warning lights (check engine, low tire)<br>LOGS = Trip computer history (last 10 trips, fuel economy)<br>TRACES = GPS route tracking (how you got from A to B)"]
+        Without["Without a dashboard:<br>- You'd run out of fuel unexpectedly<br>- You'd overheat the engine<br>- You'd get speeding tickets<br>- You'd miss warning signs of problems<br><br>Same with software: without monitoring, you're driving blind"]
+        
+        Dashboard --> Mapping --> Without
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CAR DASHBOARD ANALOGY                                 │
 │                                                                          │
@@ -95,6 +109,7 @@ Think of monitoring like a car dashboard:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Monitoring gives you visibility into what's happening inside your system.
 
@@ -104,7 +119,24 @@ Think of monitoring like a car dashboard:
 
 ### The Three Pillars of Observability
 
+```mermaid
+graph LR
+    subgraph "THREE PILLARS OF OBSERVABILITY"
+        Metrics["METRICS<br>Numerical measurements over time<br>'How much?' 'How fast?'<br>Examples: CPU 75%, Latency 50ms, Requests 1K<br>Tools: Prometheus, Datadog, CloudWatch"]
+        Logs["LOGS<br>Textual records of events<br>'What happened?'<br>Examples: Error msg, User login, Stack trace<br>Tools: ELK Stack, Splunk, Loki"]
+        Traces["TRACES<br>Request flow across services<br>'What path?' 'Where slow?'<br>Examples: Request ID, Service hops, Timing spans<br>Tools: Jaeger, Zipkin, Datadog APM"]
+        
+        Metrics --- Logs
+        Logs --- Traces
+        
+        Answer["Together they answer:<br>- Metrics: 'Is there a problem?' (high-level)<br>- Logs: 'What exactly happened?' (detailed)<br>- Traces: 'Where in the system?' (distributed)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THREE PILLARS OF OBSERVABILITY                        │
 │                                                                          │
@@ -136,10 +168,26 @@ Think of monitoring like a car dashboard:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Metrics: What to Monitor
 
+```mermaid
+graph TD
+    subgraph "THE FOUR GOLDEN SIGNALS (Google SRE's Framework)"
+        Latency["1. LATENCY<br>The time it takes to service a request<br>Measure: Successful request latency, Failed request latency, Percentiles (p50, p90, p95, p99)<br>Alert when: p99 > 500ms"]
+        Traffic["2. TRAFFIC<br>How much demand is being placed on your system<br>Measure: Requests per second (RPS), Transactions per second, Concurrent users<br>Alert when: Traffic drops suddenly (might indicate problem)"]
+        Errors["3. ERRORS<br>The rate of requests that fail<br>Measure: HTTP 5xx rate, HTTP 4xx rate, Application exceptions, Failed health checks<br>Alert when: Error rate > 1%"]
+        Saturation["4. SATURATION<br>How 'full' your service is<br>Measure: CPU utilization, Memory utilization, Disk I/O utilization, Thread pool usage, Connection pool usage<br>Alert when: CPU > 80% for 5 minutes"]
+        
+        Latency --> Traffic --> Errors --> Saturation
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE FOUR GOLDEN SIGNALS                               │
 │                    (Google SRE's Framework)                              │
@@ -193,6 +241,7 @@ Think of monitoring like a car dashboard:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### USE Method (For Resources)
 

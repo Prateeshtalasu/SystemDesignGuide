@@ -484,7 +484,42 @@ T+5min:  All queued uploads completed
 
 **Architecture Overview:**
 
+```mermaid
+flowchart TB
+    subgraph Primary["PRIMARY REGION: us-east-1"]
+        PhotoService["Photo Service<br/>(30 pods)"]
+        FeedService["Feed Service<br/>(50 pods)"]
+        APIService["API Service<br/>(40 pods)"]
+        PhotoService --> S3Primary
+        FeedService --> S3Primary
+        APIService --> S3Primary
+        S3Primary["S3 Bucket (photo storage) - Primary<br/>──CRR──> S3 Bucket (DR region)"]
+        PhotoService --> PostgreSQLPrimary
+        FeedService --> PostgreSQLPrimary
+        APIService --> PostgreSQLPrimary
+        PostgreSQLPrimary["PostgreSQL (photo metadata, feeds) - Sharded<br/>──async repl──> PostgreSQL Replica (DR)"]
+        FeedService --> RedisPrimary
+        RedisPrimary["Redis Cluster (feed cache) - 50 nodes<br/>──async repl──> Redis Replica (DR)"]
+        CDN["CDN (CloudFront) - Global edge network<br/>Origin: us-east-1 S3 (primary)<br/>Failover: us-west-2 S3 (DR)"]
+        S3Primary --> CDN
+    end
+    
+    Primary -.->|"async replication"| DR
+    
+    subgraph DR["DR REGION: us-west-2"]
+        DRStorage["S3 Bucket (CRR destination, read-only until failover)"]
+        DRPostgreSQL["PostgreSQL Replica (async replication from us-east-1)"]
+        DRRedis["Redis Replica (async replication + snapshots)"]
+        DRPhotoService["Photo Service (5 pods, minimal for DR readiness)"]
+        DRFeedService["Feed Service (10 pods, minimal for DR readiness)"]
+        DRAPIService["API Service (5 pods, minimal for DR readiness)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    PRIMARY REGION: us-east-1                         │
 │  ┌───────────────────────────────────────────────────────────────┐  │
@@ -532,6 +567,10 @@ T+5min:  All queued uploads completed
 │  │  API Service (5 pods, minimal for DR readiness)                    │ │
 │  └─────────────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
+```
 ```
 
 **Replication Strategy:**

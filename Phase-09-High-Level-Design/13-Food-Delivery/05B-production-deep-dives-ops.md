@@ -12,7 +12,24 @@ This document covers operational concerns: scaling and reliability, monitoring a
 
 **Multi-Layer Load Balancing:**
 
+```mermaid
+flowchart TB
+    Internet["Internet"]
+    Internet --> GlobalAccelerator
+    GlobalAccelerator["AWS Global Accelerator<br/>(Geographic routing)"]
+    GlobalAccelerator --> USWest["US-West Region"]
+    USWest --> ALBREST
+    USWest --> ALBWS
+    ALBREST["ALB (REST API)<br/>Path routing"]
+    ALBWS["ALB (WebSocket)<br/>Sticky sessions"]
+    ALBREST --> AppServers["App Servers"]
+    ALBWS --> WSServers["WebSocket Servers"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Internet
     │
     ▼
@@ -30,6 +47,9 @@ Internet
          │                            │
          ▼                            ▼
     App Servers               WebSocket Servers
+```
+
+</details>
 ```
 
 **Path-Based Routing:**

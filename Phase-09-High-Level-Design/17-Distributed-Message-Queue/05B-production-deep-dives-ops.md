@@ -465,6 +465,33 @@ producerProps.put("max.in.flight.requests.per.connection", 5);
 
 ### High Availability Configuration
 
+```mermaid
+flowchart TB
+    subgraph HA["High Availability Setup"]
+        subgraph DC["Multi-Datacenter Deployment"]
+            subgraph Option1["Option 1: Stretched Cluster"]
+                DC1["DC1<br/>Broker 1<br/>Broker 4"]
+                DC2["DC2<br/>Broker 2<br/>Broker 5"]
+                DC3["DC3<br/>Broker 3<br/>Broker 6"]
+                DC1 <--> DC2
+                DC2 <--> DC3
+                DC3 <--> DC1
+            end
+            subgraph Option2["Option 2: MirrorMaker (Replication)"]
+                ClusterA["Cluster A<br/>(Primary)"]
+                MirrorMaker["MirrorMaker"]
+                ClusterB["Cluster B<br/>(DR)"]
+                ClusterA --> MirrorMaker
+                MirrorMaker --> ClusterB
+            end
+        end
+        Rack["Rack Awareness:<br/>broker.rack=rack1<br/>Replicas spread across racks<br/>Survives rack failure"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                      High Availability Setup                                  │
@@ -505,6 +532,8 @@ producerProps.put("max.in.flight.requests.per.connection", 5);
 │                                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Circuit Breaker Pattern
 
@@ -1090,7 +1119,23 @@ T60000ms: Broker 3 recovers
 
 ### High-Load / Contention Scenario: Traffic Spike and Hot Partition
 
+```mermaid
+flowchart TD
+    Start["T+0s: Flash sale starts, 100K producers send messages<br/>Topic: orders (100 partitions)<br/>All messages keyed by sale-item-123 (same key!)<br/>Result: All messages route to partition 42 (hot partition)<br/>Expected: ~1K messages/second normal traffic<br/>50,000x traffic spike to single partition"]
+    Start --> Overload
+    Overload["T+0-60s: Hot Partition Overload<br/>Partition 42: 100K messages/second (overwhelmed)<br/>Other partitions: 0 messages/second (underutilized)<br/>Partition 42 leader: Broker 3 (single broker)<br/>Replication: All followers replicating at max rate"]
+    Overload --> LoadHandling
+    LoadHandling["Load Handling:<br/>1. Partition Leader Overload:<br/>   - Single broker handles 100K messages/second<br/>   - Broker capacity: 10K messages/second (exceeded)<br/>   - Result: Producer backpressure, increased latency<br/>   - P99 latency: 5 seconds (unacceptable)<br/><br/>2. Replication Bottleneck:<br/>   - Followers: Replicating at max rate (10K/sec)<br/>   - Lag: Messages accumulate on leader<br/>   - High Watermark: Advances slowly<br/>   - Consumers: Stuck waiting for HW to advance<br/><br/>3. Consumer Lag:<br/>   - Partition 42: 100K messages/second produced<br/>   - Consumers: Can process 10K messages/second<br/>   - Lag: 90K messages/second (grows rapidly)<br/>   - Other partitions: No lag (no messages)"]
+    LoadHandling --> Solution
+    Solution["Solution: Hot Partition Mitigation<br/>1. Better Key Distribution:<br/>   - Instead of: hash(sale-item-123) → partition 42<br/>   - Use: hash(sale-item-123 + random_suffix)<br/>   - Result: Messages distributed across all partitions<br/>   - Each partition: 1K messages/second (balanced)<br/><br/>2. Partition Scaling (Long-term):<br/>   - Increase partition count: 100 → 1000 partitions<br/>   - Re-partition topic (requires downtime)<br/>   - Better distribution: 100 messages/second per partition<br/><br/>3. Producer Batching:<br/>   - Batch messages: linger.ms=10ms, batch.size=32KB<br/>   - Reduce request count by 10x<br/>   - Lower CPU overhead on broker<br/><br/>4. Consumer Scaling:<br/>   - Increase consumer instances in group<br/>   - Scale to 100 consumers (one per partition)<br/>   - Processing rate: 100K messages/second (matches)<br/>   - Lag: Eliminated"]
+    Solution --> Result
+    Result["Result:<br/>- Messages distributed across all partitions<br/>- No single hot partition<br/>- P99 latency: 50ms (within target)<br/>- Consumer lag: Zero (consumers keep up)<br/>- System handles traffic spike gracefully"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Scenario: Sudden traffic spike to single partition (hot partition problem)
 Time: Flash sale event (peak traffic)
 
@@ -1173,9 +1218,32 @@ Time: Flash sale event (peak traffic)
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### Edge Case Scenario: Message Ordering Across Partitions
 
+```mermaid
+flowchart TD
+    Start["T+0ms: Producer sends message with key user-123<br/>Key: user-123<br/>Partition: hash(user-123) % 100 = partition 42<br/>Message: OrderCreated{order_id: order-1}<br/>Offset: 1,000,000"]
+    Start --> Second
+    Second["T+100ms: Producer sends another message with key user-123<br/>Key: user-123 (same key)<br/>Partition: hash(user-123) % 100 = partition 42<br/>Message: OrderUpdated{order_id: order-1, status: paid}<br/>Offset: 1,000,001"]
+    Second --> Reassignment
+    Reassignment["T+200ms: Partition reassignment occurs<br/>Broker 3 (leader of partition 42) fails<br/>Controller: Reassigns partition 42 to Broker 1<br/>Metadata: Updated across all brokers<br/>Producers: Refresh metadata (metadata.max.age.ms)"]
+    Reassignment --> SendAfter
+    SendAfter["T+300ms: Producer sends message (after metadata refresh)<br/>Key: user-123<br/>Metadata: Still shows partition 42 (cached)<br/>But: Producer hasn't refreshed metadata yet<br/>Message: Routed to old leader (Broker 3, now dead)<br/>Result: Send fails, producer retries"]
+    SendAfter --> EdgeCase
+    EdgeCase["Edge Case: Message Routing After Partition Reassignment<br/><br/>Problem: Producer metadata cache stale<br/>- Producer thinks partition 42 is on Broker 3<br/>- Broker 3 is dead (partition moved to Broker 1)<br/>- Messages fail to send, ordering potentially lost"]
+    EdgeCase --> Solution
+    Solution["Solution: Producer Metadata Refresh and Idempotence<br/><br/>1. Automatic Metadata Refresh:<br/>   - Producer: Refreshes metadata on error<br/>   - On send failure: Refresh metadata immediately<br/>   - Discover new partition leader (Broker 1)<br/>   - Retry message to new leader<br/><br/>2. Idempotence Keys:<br/>   - Producer: idempotence.enabled=true<br/>   - Sequence numbers: Prevent duplicates<br/>   - Even if message retried: No duplicate at broker<br/><br/>3. In-Flight Request Handling:<br/>   - Producer: max.in.flight.requests.per.connection=5<br/>   - On metadata refresh: Cancel in-flight requests<br/>   - Retry with new metadata<br/>   - Sequence numbers: Maintain ordering<br/><br/>4. Partition Leader Stickyness:<br/>   - Producer: Sticky partitioner<br/>   - Same key → Same partition (unless partition count changes)<br/>   - Partition count change: Requires producer restart<br/>   - Normal operations: Key routing stable"]
+    Solution --> Result
+    Result["Result:<br/>- Producer refreshes metadata on failure<br/>- Messages retried to correct partition leader<br/>- Ordering maintained (same key → same partition)<br/>- No duplicates (idempotence)<br/>- System handles partition reassignment gracefully"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Scenario: Messages with same key sent to different partitions
 Edge Case: Partition reassignment breaks ordering guarantee
 
@@ -1262,5 +1330,8 @@ Edge Case: Partition reassignment breaks ordering guarantee
 │ - No duplicates (idempotence)                          │
 │ - System handles partition reassignment gracefully      │
 └─────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 

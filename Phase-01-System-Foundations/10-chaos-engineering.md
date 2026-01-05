@@ -63,7 +63,29 @@ Before chaos engineering:
 
 Think of chaos engineering like fire drills:
 
+```mermaid
+graph TD
+    subgraph "THE FIRE DRILL ANALOGY"
+        subgraph "WITHOUT FIRE DRILLS"
+            WithoutSetup["• Fire alarms installed ✓<br>• Sprinklers installed ✓<br>• Exit signs posted ✓<br>• Fire extinguishers placed ✓"]
+            RealFire1["Real fire happens:<br>• Alarm doesn't work (battery dead)<br>• Exit blocked by furniture<br>• No one knows where to go<br>• Fire extinguisher expired<br>• CHAOS AND PANIC"]
+            WithoutSetup --> RealFire1
+        end
+        
+        subgraph "WITH FIRE DRILLS"
+            Drills["Regular drills reveal:<br>• Alarm battery needs replacing<br>• Exit path needs clearing<br>• People need training on evacuation<br>• Extinguishers need inspection"]
+            RealFire2["Real fire happens:<br>• Everyone knows what to do<br>• Equipment works as expected<br>• Calm, orderly evacuation"]
+            Drills --> RealFire2
+        end
+        
+        Insight["CHAOS ENGINEERING = FIRE DRILLS FOR YOUR SOFTWARE<br>Intentionally inject failures in controlled conditions<br>to discover weaknesses before real incidents expose them."]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE FIRE DRILL ANALOGY                                │
 │                                                                          │
@@ -105,6 +127,7 @@ Think of chaos engineering like fire drills:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: The best time to discover your system's weaknesses is when you're prepared, not during a real crisis.
 
@@ -114,7 +137,23 @@ Think of chaos engineering like fire drills:
 
 ### Chaos Engineering Principles
 
+```mermaid
+graph TD
+    subgraph "CHAOS ENGINEERING PRINCIPLES (From Netflix's Chaos Engineering Book)"
+        P1["1. BUILD A HYPOTHESIS AROUND STEADY STATE BEHAVIOR<br>Define what 'normal' looks like:<br>• Request success rate > 99.9%<br>• p99 latency < 200ms<br>• Orders processed per minute: 1000 ± 100<br>Hypothesis: 'When X fails, the system will remain in steady state'"]
+        P2["2. VARY REAL-WORLD EVENTS<br>Inject failures that could really happen:<br>• Server crashes<br>• Network latency spikes<br>• Disk fills up<br>• Third-party API becomes slow<br>• Region becomes unavailable"]
+        P3["3. RUN EXPERIMENTS IN PRODUCTION<br>Test environments don't have:<br>• Real traffic patterns<br>• Real data volumes<br>• Real infrastructure complexity<br>Production is the only true test"]
+        P4["4. AUTOMATE EXPERIMENTS TO RUN CONTINUOUSLY<br>• Don't just run once and forget<br>• Systems change, new weaknesses appear<br>• Continuous chaos builds continuous confidence"]
+        P5["5. MINIMIZE BLAST RADIUS<br>• Start small (one instance, one region)<br>• Have kill switches to stop experiments<br>• Monitor closely during experiments<br>• Be ready to roll back"]
+        
+        P1 --> P2 --> P3 --> P4 --> P5
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CHAOS ENGINEERING PRINCIPLES                          │
 │                    (From Netflix's Chaos Engineering Book)               │
@@ -160,10 +199,27 @@ Think of chaos engineering like fire drills:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Types of Chaos Experiments
 
+```mermaid
+graph TD
+    subgraph "CHAOS EXPERIMENT TYPES"
+        Infrastructure["INFRASTRUCTURE CHAOS<br>• Kill instances/containers<br>• Terminate entire availability zones<br>• Fill up disk space<br>• Exhaust memory<br>• CPU stress"]
+        Network["NETWORK CHAOS<br>• Add latency to network calls<br>• Drop packets (packet loss)<br>• Partition network (split brain)<br>• DNS failures<br>• Bandwidth throttling"]
+        Application["APPLICATION CHAOS<br>• Inject exceptions<br>• Slow down responses<br>• Return error codes<br>• Corrupt data<br>• Kill processes"]
+        Dependency["DEPENDENCY CHAOS<br>• Make database slow<br>• Make cache unavailable<br>• Third-party API errors<br>• Message queue delays"]
+        Human["HUMAN CHAOS (GameDay)<br>• Simulate on-call scenarios<br>• Test incident response<br>• Verify runbooks work<br>• Practice communication"]
+        
+        Infrastructure --> Network --> Application --> Dependency --> Human
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CHAOS EXPERIMENT TYPES                                │
 │                                                                          │
@@ -207,6 +263,7 @@ Think of chaos engineering like fire drills:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Chaos Experiment Lifecycle
 

@@ -28,7 +28,25 @@ This document covers operational aspects of the Recommendation System: scaling &
 
 #### Regional Deployment
 
+```mermaid
+flowchart TB
+    GlobalDNS["Global DNS<br/>(GeoDNS routing)"]
+    GlobalDNS --> USEast
+    GlobalDNS --> EUWest
+    GlobalDNS --> APAC
+    USEast["US-EAST<br/>- Candidate Gen<br/>- Ranking<br/>- Feature Store<br/>- FAISS Index<br/><br/>Users: 150M"]
+    EUWest["EU-WEST<br/>- Candidate Gen<br/>- Ranking<br/>- Feature Store<br/>- FAISS Index<br/><br/>Users: 100M"]
+    APAC["APAC<br/>- Candidate Gen<br/>- Ranking<br/>- Feature Store<br/>- FAISS Index<br/><br/>Users: 250M"]
+    USEast --> CrossRegionSync
+    EUWest --> CrossRegionSync
+    APAC --> CrossRegionSync
+    CrossRegionSync["Cross-Region Sync<br/>(Model updates,<br/>item catalog)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              GLOBAL ARCHITECTURE                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -58,6 +76,10 @@ This document covers operational aspects of the Recommendation System: scaling &
                          │   (Model updates,     │
                          │    item catalog)      │
                          └───────────────────────┘
+```
+
+</details>
+```
 ```
 
 ### Reliability Patterns

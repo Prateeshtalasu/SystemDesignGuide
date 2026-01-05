@@ -65,7 +65,38 @@ This led to brittle systems that worked in ideal conditions but collapsed under 
 
 Think of your system as a chain of dominoes:
 
+```mermaid
+graph LR
+    subgraph "THE DOMINO EFFECT"
+        subgraph "BRITTLE SYSTEM (No failure handling)"
+            User1[User] --> Web1[Web]
+            Web1 --> API1[API]
+            API1 --> Service1[Service]
+            Service1 --> DB1[Database]
+            Slow["Database slows down"]
+            DB1 --> Slow
+            Slow -->|ALL FALL DOWN| Service1
+            Service1 -->|ALL FALL DOWN| API1
+            API1 -->|ALL FALL DOWN| Web1
+        end
+        
+        subgraph "RESILIENT SYSTEM (With failure handling)"
+            User2[User] --> Web2[Web]
+            Web2 --> API2[API]
+            API2 --> Service2[Service]
+            Service2 --> DB2[Database]
+            Fail["Database fails ╳"]
+            DB2 --> Fail
+            Service2 -->|Circuit breaker OPENS| CB[Returns cached/fallback data]
+            CB -->|System stays UP<br>(degraded but functional)| Service2
+        end
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE DOMINO EFFECT                                     │
 │                                                                          │
@@ -106,6 +137,7 @@ Think of your system as a chain of dominoes:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Design systems to fail gracefully, not catastrophically.
 
@@ -115,7 +147,23 @@ Think of your system as a chain of dominoes:
 
 ### Types of Failures
 
+```mermaid
+graph TD
+    subgraph "FAILURE TAXONOMY"
+        Network["1. NETWORK FAILURES<br>├── Connection refused<br>├── Connection timeout<br>├── Read timeout<br>├── Network partition<br>└── DNS failure"]
+        Service["2. SERVICE FAILURES<br>├── Crash<br>├── Hang<br>├── Slow response<br>├── Error response<br>└── Incorrect response"]
+        Resource["3. RESOURCE FAILURES<br>├── Memory exhaustion (OOM)<br>├── CPU saturation<br>├── Disk full<br>├── File descriptor exhaustion<br>└── Thread pool exhaustion"]
+        Dependency["4. DEPENDENCY FAILURES<br>├── Database down<br>├── Cache unavailable<br>├── Third-party API failure<br>├── Message queue full<br>└── Authentication service down"]
+        Data["5. DATA FAILURES<br>├── Corruption<br>├── Inconsistency<br>├── Schema mismatch<br>└── Invalid input"]
+        
+        Network --> Service --> Resource --> Dependency --> Data
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FAILURE TAXONOMY                                      │
 │                                                                          │
@@ -155,12 +203,60 @@ Think of your system as a chain of dominoes:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Partial Failures
 
 In distributed systems, failures are often partial:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as Server (saves)
+    
+    Note over Client,Server: Scenario 1: Request succeeds, response lost
+    Client->>Server: Request
+    Server->>Server: Data saved
+    Server-xClient: Response lost!
+    Note over Client: Client thinks: Failed
+    Note over Server: Server thinks: Succeeded
+    Note over Client,Server: Reality: Data WAS saved, but client doesn't know
 ```
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as Server (slow process)
+    
+    Note over Client,Server: Scenario 2: Timeout - Unknown state
+    Client->>Server: Request (waits 5 sec)
+    Note over Client: TIMEOUT
+    Note over Client: Client gave up after 5 seconds
+    Note over Server: Server might still be processing
+    Note over Client,Server: Client doesn't know if operation succeeded or failed
+```
+
+```mermaid
+graph LR
+    subgraph "Scenario 3: Cascading failure"
+        ServiceA[Service A]
+        ServiceB[Service B]
+        ServiceC[Service C]
+        DB[Database<br>(slow: 10s)]
+        
+        ServiceA --> ServiceB
+        ServiceB --> ServiceC
+        ServiceC --> DB
+        
+        Note1["Service C: Threads waiting for DB<br>Service B: Threads waiting for C<br>Service A: Threads waiting for B<br><br>All thread pools exhausted!<br>Entire system becomes unresponsive"]
+        DB --> Note1
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PARTIAL FAILURE SCENARIOS                             │
 │                                                                          │
@@ -206,12 +302,29 @@ In distributed systems, failures are often partial:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Timeouts and Retries
 
 **Timeouts** prevent indefinite waiting:
 
+```mermaid
+graph TD
+    subgraph "TIMEOUT CONFIGURATION"
+        T1["1. Connection Timeout<br>How long to wait to establish a connection<br>Typical: 1-5 seconds<br>If exceeded: Server is probably down or unreachable"]
+        T2["2. Read/Response Timeout<br>How long to wait for data after connection established<br>Typical: 5-30 seconds (depends on operation)<br>If exceeded: Server is processing slowly or hung"]
+        T3["3. Write Timeout<br>How long to wait for server to accept data<br>Typical: 5-30 seconds"]
+        T4["4. Idle Timeout<br>How long to keep unused connection open<br>Typical: 30-300 seconds"]
+        Rule["Rule of thumb:<br>- Connection timeout < Read timeout<br>- Downstream timeout < Upstream timeout<br>(If A calls B calls C: timeout_A > timeout_B > timeout_C)"]
+        
+        T1 --> T2 --> T3 --> T4 --> Rule
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TIMEOUT CONFIGURATION                                 │
 │                                                                          │
@@ -242,10 +355,26 @@ In distributed systems, failures are often partial:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Retries** handle transient failures:
 
+```mermaid
+graph TD
+    subgraph "RETRY STRATEGIES"
+        R1["1. Immediate Retry (BAD)<br>Attempt 1: Fail → Attempt 2: Fail (0ms later) → Attempt 3: Fail (0ms later)<br>Problem: Hammers the already-struggling server"]
+        R2["2. Fixed Delay Retry<br>Attempt 1: Fail → Wait 1s → Attempt 2: Fail → Wait 1s → Attempt 3: Success<br>Better, but all clients retry at same time (thundering herd)"]
+        R3["3. Exponential Backoff (GOOD)<br>Attempt 1: Fail → Wait 1s → Attempt 2: Fail → Wait 2s → Attempt 3: Fail → Wait 4s → Attempt 4: Success<br>Gives server time to recover"]
+        R4["4. Exponential Backoff with Jitter (BEST)<br>Attempt 1: Fail → Wait 1s + random(0-500ms) → Attempt 2: Fail → Wait 2s + random(0-500ms) → Attempt 3: Success<br>Prevents thundering herd by spreading out retries"]
+        
+        R1 --> R2 --> R3 --> R4
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    RETRY STRATEGIES                                      │
 │                                                                          │
@@ -283,10 +412,28 @@ In distributed systems, failures are often partial:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cascading Failures
 
+```mermaid
+graph LR
+    subgraph "CASCADING FAILURE ANATOMY - Timeline"
+        T0["T+0: Database becomes slow (10s response time)"]
+        T10["T+10s: Service C threads blocked waiting for DB<br>Thread pool: 10/100 available"]
+        T30["T+30s: Service C thread pool exhausted<br>Thread pool: 0/100 available<br>New requests queue up, then timeout"]
+        T45["T+45s: Service B threads blocked waiting for C<br>Thread pool: 20/100 available"]
+        T60["T+60s: Service B thread pool exhausted<br>Thread pool: 0/100 available"]
+        T75["T+75s: Service A threads blocked waiting for B<br>Thread pool: 30/100 available"]
+        
+        T0 --> T10 --> T30 --> T45 --> T60 --> T75
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CASCADING FAILURE ANATOMY                             │
 │                                                                          │
@@ -313,20 +460,17 @@ In distributed systems, failures are often partial:
 │  T+90s:  Service A thread pool exhausted                                │
 │          ENTIRE SYSTEM DOWN                                              │
 │                                                                          │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  Health over time:                                                │   │
-│  │                                                                   │   │
-│  │  100% ████████████████████                                       │   │
-│  │       ████████████████████████                                   │   │
-│  │       ████████████████████████████                               │   │
-│  │   50% ████████████████████████████████                           │   │
-│  │       ████████████████████████████████████                       │   │
-│  │       ████████████████████████████████████████                   │   │
-│  │    0% ████████████████████████████████████████████████████       │   │
-│  │       T+0   T+30s  T+60s  T+90s  T+120s                         │   │
-│  │                                                                   │   │
-│  │  One slow database → Total system failure in 90 seconds          │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
+│  Health over time:                                                       │
+│  100% ████████████████████                                              │
+│       ████████████████████████                                          │
+│       ████████████████████████████                                      │
+│   50% ████████████████████████████████                                  │
+│       ████████████████████████████████████                              │
+│       ████████████████████████████████████████                          │
+│    0% ████████████████████████████████████████████████████              │
+│       T+0   T+30s  T+60s  T+90s  T+120s                                │
+│                                                                          │
+│  One slow database → Total system failure in 90 seconds                │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -335,7 +479,38 @@ In distributed systems, failures are often partial:
 
 A circuit breaker prevents cascading failures by "breaking" the circuit to a failing service:
 
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED: Initial state
+    CLOSED --> OPEN: Failure threshold exceeded
+    OPEN --> HALF_OPEN: Timeout expires
+    HALF_OPEN --> CLOSED: Success
+    HALF_OPEN --> OPEN: Failure
+    
+    note right of CLOSED
+        Normal operation, requests flow through
+        Track failure rate
+        If failures exceed threshold → OPEN
+    end note
+    
+    note right of OPEN
+        Circuit is broken
+        Immediately reject all requests (fail fast)
+        After timeout → HALF-OPEN
+    end note
+    
+    note right of HALF_OPEN
+        Testing if service recovered
+        Allow limited requests through
+        If successful → CLOSED
+        If failed → OPEN
+    end note
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CIRCUIT BREAKER PATTERN                               │
 │                                                                          │
@@ -381,6 +556,7 @@ A circuit breaker prevents cascading failures by "breaking" the circuit to a fai
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -390,7 +566,35 @@ A circuit breaker prevents cascading failures by "breaking" the circuit to a fai
 
 Let's trace a failure scenario in an e-commerce checkout flow:
 
+```mermaid
+graph TD
+    subgraph "CHECKOUT FLOW"
+        User["User clicks 'Place Order'"]
+        OrderService["Order Service"]
+        Validate["Validate cart"]
+        Inventory["Check inventory"]
+        InventoryService["Inventory Service"]
+        Payment["Process payment"]
+        PaymentService["Payment Service"]
+        BankAPI["Bank API"]
+        CreateOrder["Create order"]
+        Database["Database"]
+        Confirmation["Send confirmation"]
+        EmailService["Email Service"]
+        
+        User --> OrderService
+        OrderService --> Validate
+        OrderService --> Inventory --> InventoryService
+        OrderService --> Payment --> PaymentService --> BankAPI
+        OrderService --> CreateOrder --> Database
+        OrderService --> Confirmation --> EmailService
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CHECKOUT FLOW                                         │
 │                                                                          │
@@ -407,6 +611,7 @@ Let's trace a failure scenario in an e-commerce checkout flow:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Failure Scenario: Payment Service Timeout**
 

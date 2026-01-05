@@ -341,7 +341,44 @@ T+5min:  New node fully synced, rejoins cluster
 
 **Architecture Overview:**
 
+```mermaid
+flowchart TB
+    subgraph Primary["PRIMARY REGION: us-east-1"]
+        SearchService["Search Service<br/>(20 pods)"]
+        RoutingService["Routing Service<br/>(30 pods)"]
+        APIService["API Service<br/>(40 pods)"]
+        SearchService --> PostgreSQLPrimary
+        RoutingService --> PostgreSQLPrimary
+        APIService --> PostgreSQLPrimary
+        PostgreSQLPrimary["PostgreSQL (POI data, routes) - Sharded<br/>──async repl──> PostgreSQL Replica (DR)"]
+        SearchService --> RedisPrimary
+        RoutingService --> RedisPrimary
+        APIService --> RedisPrimary
+        RedisPrimary["Redis Cluster (cache) - 20 nodes<br/>──async repl──> Redis Replica (DR)"]
+        SearchService --> S3Primary
+        RoutingService --> S3Primary
+        APIService --> S3Primary
+        S3Primary["S3 Bucket (map tiles)<br/>──CRR──> S3 Bucket (DR region)"]
+        CDN["CDN (CloudFront) - Global edge network<br/>Origin: us-east-1 S3 (primary)<br/>Failover: us-west-2 S3 (DR)"]
+        S3Primary --> CDN
+    end
+    
+    Primary -.->|"async replication"| DR
+    
+    subgraph DR["DR REGION: us-west-2"]
+        DRPostgreSQL["PostgreSQL Replica (async replication from us-east-1)"]
+        DRRedis["Redis Replica (async replication + snapshots)"]
+        DRStorage["S3 Bucket (CRR destination, read-only until failover)"]
+        DRSearchService["Search Service (5 pods, minimal for DR readiness)"]
+        DRRoutingService["Routing Service (5 pods, minimal for DR readiness)"]
+        DRAPIService["API Service (5 pods, minimal for DR readiness)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    PRIMARY REGION: us-east-1                         │
 │  ┌───────────────────────────────────────────────────────────────┐  │
@@ -389,6 +426,10 @@ T+5min:  New node fully synced, rejoins cluster
 │  │  API Service (5 pods, minimal for DR readiness)                  │ │
 │  └─────────────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
+```
 ```
 
 **Replication Strategy:**

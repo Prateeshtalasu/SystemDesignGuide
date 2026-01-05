@@ -55,7 +55,33 @@ In the mainframe era (1960s-1980s), scaling meant buying a bigger, more expensiv
 
 Remember our restaurant analogy from distributed systems? Let's extend it for scaling:
 
+```mermaid
+graph LR
+    subgraph "VERTICAL SCALING (Scale Up)"
+        Before[Small Kitchen<br>1 stove<br>1 chef<br>10 seats]
+        After[HUGE Kitchen<br>4 stoves<br>1 SUPER chef<br>40 seats]
+        Before -->|"──►"| After
+        Note1["Same restaurant, but BIGGER and more POWERFUL<br>Problem: There's a limit to how big one kitchen can be"]
+    end
+    
+    subgraph "HORIZONTAL SCALING (Scale Out)"
+        Before2[Restaurant<br>1 location]
+        After2A[Branch 1]
+        After2B[Branch 2]
+        After2C[Branch 3]
+        After2D[Branch 4]
+        Before2 -->|"──►"| After2A
+        Before2 -->|"──►"| After2B
+        Before2 -->|"──►"| After2C
+        Before2 -->|"──►"| After2D
+        Note2["Same size restaurants, but MORE of them<br>Problem: Need to coordinate between locations"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VERTICAL SCALING                                      │
 │                    (Scale Up)                                            │
@@ -90,6 +116,7 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Vertical = make it bigger. Horizontal = make more of them.
 
@@ -101,7 +128,24 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 
 **Definition**: Increasing the capacity of a single server by adding more resources.
 
+```mermaid
+graph LR
+    subgraph "VERTICAL SCALING COMPONENTS"
+        subgraph "SINGLE SERVER"
+            CPU1[2 cores] --> CPU2[8 cores] --> CPU3[32 cores] --> CPU4[64 cores]
+            RAM1[8 GB] --> RAM2[32 GB] --> RAM3[128 GB] --> RAM4[512 GB]
+            Storage1[100 GB<br>HDD] --> Storage2[1 TB<br>SSD] --> Storage3[10 TB<br>NVMe] --> Storage4[100 TB<br>NVMe RAID]
+            Network1[1 Gbps] --> Network2[10 Gbps] --> Network3[25 Gbps] --> Network4[100 Gbps]
+        end
+        
+        Cloud1[t3.micro<br>(1 vCPU, 1 GB RAM)] --> Cloud2[m5.large<br>(2 vCPU, 8 GB RAM)] --> Cloud3[m5.4xlarge<br>(16 vCPU, 64 GB RAM)] --> Cloud4[x1e.32xlarge<br>(128 vCPU, 3904 GB RAM)]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VERTICAL SCALING COMPONENTS                           │
 │                                                                          │
@@ -126,6 +170,7 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **How it works**:
 
@@ -158,7 +203,30 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 
 **Definition**: Increasing capacity by adding more servers that work together.
 
+```mermaid
+graph TD
+    subgraph "HORIZONTAL SCALING ARCHITECTURE"
+        LB[Load Balancer<br>(distributes requests)]
+        S1[Server 1<br>(App)]
+        S2[Server 2<br>(App)]
+        S3[Server 3<br>(App)]
+        DB[Database Cluster]
+        
+        LB --> S1
+        LB --> S2
+        LB --> S3
+        S1 --> DB
+        S2 --> DB
+        S3 --> DB
+        
+        Note["Adding capacity: Just add Server 4, Server 5, ..."]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HORIZONTAL SCALING ARCHITECTURE                       │
 │                                                                          │
@@ -187,6 +255,7 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **How it works**:
 
@@ -219,7 +288,29 @@ Remember our restaurant analogy from distributed systems? Let's extend it for sc
 
 For horizontal scaling to work, your application must be **stateless**:
 
+```mermaid
+graph LR
+    subgraph "STATEFUL (Cannot scale horizontally easily)"
+        Req1A[Request 1] --> ServerA[Server A stores session in memory]
+        Req2A[Request 2] --> ServerB[Server B (different server!)]
+        ServerB --> Error[Session not found! ❌]
+    end
+    
+    subgraph "STATELESS (Can scale horizontally)"
+        Req1B[Request 1] --> ServerA2[Server A]
+        ServerA2 --> Redis1[Stores session in Redis (external)]
+        Req2B[Request 2] --> ServerB2[Server B]
+        ServerB2 --> Redis2[Reads session from Redis]
+        Redis2 --> Success[Works! ✓]
+    end
+    
+    Note["The state is externalized to a shared store (Redis, database)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STATEFUL vs STATELESS                                 │
 │                                                                          │
@@ -239,6 +330,7 @@ For horizontal scaling to work, your application must be **stateless**:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -250,7 +342,23 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 
 **Stage 1: Single Server (100 users)**
 
+```mermaid
+graph TD
+    subgraph "STAGE 1: SINGLE SERVER - Users: 100 | RPS: 10"
+        subgraph "Single Server"
+            App1[App<br>(Java)]
+            DB1[Database<br>(MySQL)]
+            Files1[Files<br>(images)]
+            Resources1["Resources: 2 CPU, 4GB RAM, 100GB disk<br>Cost: $50/month"]
+        end
+        Note1["Works fine. Simple to manage."]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 1: SINGLE SERVER                                │
 │                    Users: 100 | RPS: 10                                  │
@@ -272,10 +380,30 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Stage 2: Vertical Scaling (1,000 users)**
 
+```mermaid
+graph TD
+    subgraph "STAGE 2: VERTICAL SCALING - Users: 1,000 | RPS: 100"
+        Problem2["Problem: Site getting slow during peak hours"]
+        Solution2["Solution: Upgrade to bigger server"]
+        subgraph "Bigger Server"
+            App2[App<br>(Java)]
+            DB2[Database<br>(MySQL)]
+            Files2[Files<br>(images)]
+            Resources2["Resources: 8 CPU, 32GB RAM, 500GB SSD<br>Cost: $400/month"]
+        end
+        Note2["Still simple. Just changed instance size."]
+        Problem2 --> Solution2 --> Resources2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 2: VERTICAL SCALING                             │
 │                    Users: 1,000 | RPS: 100                               │
@@ -300,10 +428,31 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Stage 3: Separate Database (10,000 users)**
 
+```mermaid
+graph LR
+    subgraph "STAGE 3: SEPARATE DATABASE - Users: 10,000 | RPS: 500"
+        Problem3["Problem: Database and app competing for resources"]
+        Solution3["Solution: Separate database to its own server"]
+        subgraph "App Server"
+            App3[App<br>(Java)<br>8 CPU, 16GB RAM<br>$300/month]
+        end
+        subgraph "Database Server"
+            DB3[Database<br>(MySQL)<br>8 CPU, 64GB RAM<br>$500/month]
+        end
+        App3 <-->|Network| DB3
+        Note3["First step toward distribution. App and DB can scale independently."]
+        Problem3 --> Solution3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 3: SEPARATE DATABASE                            │
 │                    Users: 10,000 | RPS: 500                              │
@@ -327,10 +476,36 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Stage 4: Horizontal App Scaling (100,000 users)**
 
+```mermaid
+graph TD
+    subgraph "STAGE 4: HORIZONTAL SCALING - Users: 100,000 | RPS: 2,000"
+        Problem4["Problem: Single app server can't handle load"]
+        Solution4["Solution: Multiple app servers behind load balancer"]
+        LB4[Load Balancer]
+        App1_4[App 1<br>$300]
+        App2_4[App 2<br>$300]
+        App3_4[App 3<br>$300]
+        DB4[Database<br>(Master)<br>$800/month]
+        Note4["Added: Load balancer ($100), Redis for sessions ($100)<br>Total: ~$1,700/month<br><br>Can now add/remove app servers based on traffic."]
+        
+        LB4 --> App1_4
+        LB4 --> App2_4
+        LB4 --> App3_4
+        App1_4 --> DB4
+        App2_4 --> DB4
+        App3_4 --> DB4
+        Problem4 --> Solution4
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 4: HORIZONTAL SCALING                           │
 │                    Users: 100,000 | RPS: 2,000                           │
@@ -362,10 +537,50 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Stage 5: Database Scaling (1,000,000 users)**
 
+```mermaid
+graph TD
+    subgraph "STAGE 5: DATABASE SCALING - Users: 1,000,000 | RPS: 10,000"
+        Problem5["Problem: Database is now the bottleneck"]
+        Solution5["Solution: Read replicas + caching"]
+        LB5[Load Balancer]
+        App1_5[App 1]
+        App2_5[App 2]
+        App3_5[App 3]
+        App4_5[App 4]
+        App5_5[App 5]
+        Redis5[Redis Cache<br>(reduces DB load 80%)]
+        Master5[Master<br>(Write)]
+        Replica1_5[Replica<br>(Read)]
+        Replica2_5[Replica<br>(Read)]
+        Note5["Writes go to Master, reads distributed across replicas<br>Total: ~$5,000/month"]
+        
+        LB5 --> App1_5
+        LB5 --> App2_5
+        LB5 --> App3_5
+        LB5 --> App4_5
+        LB5 --> App5_5
+        App1_5 --> Redis5
+        App2_5 --> Redis5
+        App3_5 --> Redis5
+        App4_5 --> Redis5
+        App5_5 --> Redis5
+        Redis5 --> Master5
+        Redis5 --> Replica1_5
+        Redis5 --> Replica2_5
+        Master5 <-->|Repl.| Replica1_5
+        Master5 <-->|Repl.| Replica2_5
+        Problem5 --> Solution5
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 5: DATABASE SCALING                             │
 │                    Users: 1,000,000 | RPS: 10,000                        │
@@ -401,10 +616,52 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Stage 6: Full Distribution (10,000,000 users)**
 
+```mermaid
+graph TD
+    subgraph "STAGE 6: FULL DISTRIBUTION - Users: 10,000,000 | RPS: 100,000"
+        Problem6["Problem: Single database can't handle writes"]
+        Solution6["Solution: Sharding + microservices + CDN"]
+        CDN6[CDN<br>(static files, images)]
+        Gateway6[API Gateway]
+        UserSvc6[User<br>Svc]
+        OrderSvc6[Order<br>Svc]
+        PaySvc6[Pay<br>Svc]
+        SearchSvc6[Search<br>Svc]
+        CartSvc6[Cart<br>Svc]
+        RecommSvc6[Recomm<br>Svc]
+        UserDB6[UserDB<br>Shard]
+        OrderDB6[OrderDB<br>Shard]
+        PayDB6[PayDB]
+        Elastic6[Elastic<br>Search]
+        Redis6[Redis]
+        GraphDB6[GraphDB]
+        Note6["Each service scales independently<br>Total: ~$50,000+/month"]
+        
+        CDN6 --> Gateway6
+        Gateway6 --> UserSvc6
+        Gateway6 --> OrderSvc6
+        Gateway6 --> PaySvc6
+        Gateway6 --> SearchSvc6
+        Gateway6 --> CartSvc6
+        Gateway6 --> RecommSvc6
+        UserSvc6 --> UserDB6
+        OrderSvc6 --> OrderDB6
+        PaySvc6 --> PayDB6
+        SearchSvc6 --> Elastic6
+        CartSvc6 --> Redis6
+        RecommSvc6 --> GraphDB6
+        Problem6 --> Solution6
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STAGE 6: FULL DISTRIBUTION                            │
 │                    Users: 10,000,000 | RPS: 100,000                      │
@@ -438,6 +695,7 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

@@ -57,7 +57,27 @@ Before CAP was formalized (2000), engineers would:
 
 Imagine a bank with two branches (like two database nodes):
 
+```mermaid
+graph LR
+    subgraph "THE BANK BRANCH ANALOGY"
+        Account["You have $1000 in your account"]
+        BranchA[Branch A<br>Balance: $1000]
+        BranchB[Branch B<br>Balance: $1000]
+        Phone[Phone Line<br>(the network)]
+        Scenario["SCENARIO: The phone line goes down (network partition!)<br>You walk into Branch A to withdraw $800<br>Branch A has THREE options:"]
+        
+        BranchA <-->|Phone Line| BranchB
+        Account --> BranchA
+        Account --> BranchB
+        Phone -.->|down| BranchA
+        Phone -.->|down| BranchB
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE BANK BRANCH ANALOGY                               │
 │                                                                          │
@@ -79,10 +99,25 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Option 1: Choose CONSISTENCY**
 
+```mermaid
+graph TD
+    subgraph "CONSISTENCY CHOICE (Refuse the transaction)"
+        BranchA_CP["Branch A: 'Sorry, I can't verify your balance with Branch B.<br>The phone line is down. Please come back later.'"]
+        ResultCP["Result:<br>✓ Data stays consistent (no risk of overdraft)<br>✗ Customer can't access their money (not available)<br>✓ Handles partition correctly"]
+        TypeCP["This is CP (Consistent + Partition Tolerant)"]
+        
+        BranchA_CP --> ResultCP --> TypeCP
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CONSISTENCY CHOICE (Refuse the transaction)                            │
 │                                                                          │
@@ -98,10 +133,26 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Option 2: Choose AVAILABILITY**
 
+```mermaid
+graph TD
+    subgraph "AVAILABILITY CHOICE (Allow the transaction)"
+        BranchA_AP["Branch A: 'Sure, here's your $800. Your new balance is $200.'"]
+        Meanwhile["Meanwhile, you also go to Branch B and withdraw $800 there!"]
+        ResultAP["Result:<br>✗ Data is inconsistent (you withdrew $1600 from $1000 account!)<br>✓ Customer got their money (available)<br>✓ Handles partition (kept working)"]
+        TypeAP["This is AP (Available + Partition Tolerant)"]
+        
+        BranchA_AP --> Meanwhile --> ResultAP --> TypeAP
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  AVAILABILITY CHOICE (Allow the transaction)                            │
 │                                                                          │
@@ -118,10 +169,25 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Option 3: Pretend Partitions Don't Happen (CA)**
 
+```mermaid
+graph TD
+    subgraph "CA CHOICE (Ignore partitions)"
+        CA1["This only works if the phone line NEVER goes down.<br>In real distributed systems, network partitions WILL happen."]
+        CA2["CA systems are essentially single-node systems or systems<br>where you accept that partitions cause undefined behavior."]
+        CA3["In practice: CA doesn't exist in distributed systems"]
+        
+        CA1 --> CA2 --> CA3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CA CHOICE (Ignore partitions)                                          │
 │                                                                          │
@@ -135,6 +201,7 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: When a partition happens, you MUST choose between C and A. You can't have both.
 
@@ -144,7 +211,25 @@ Imagine a bank with two branches (like two database nodes):
 
 ### The CAP Theorem Defined
 
+```mermaid
+graph TD
+    subgraph "CAP THEOREM"
+        C[C = Consistency]
+        A[A = Availability]
+        P[P = Partition Tolerance]
+        
+        C ---|Triangle| A
+        A ---|Triangle| P
+        P ---|Triangle| C
+        
+        Note["In a distributed data store, you can only guarantee TWO of:<br>You can pick: CP, AP, or CA<br>But CA is not practical for distributed systems<br>So really: CP or AP"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CAP THEOREM                                           │
 │                                                                          │
@@ -171,12 +256,35 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Defining Each Property
 
 **C - Consistency**
 
+```mermaid
+graph LR
+    subgraph "CONSISTENCY"
+        Def["Definition: Every read receives the most recent write or an error."]
+        NodeA[Node A<br>X = 5]
+        NodeB[Node B<br>X = 5]
+        NodeC[Node C<br>X = 5]
+        Write["After write X = 10 to Node A:"]
+        Consistent["CONSISTENT:<br>- Read from ANY node returns X = 10<br>- Or returns an error (if can't guarantee latest)"]
+        NotConsistent["NOT CONSISTENT:<br>- Node A returns X = 10<br>- Node B returns X = 5 (stale!)"]
+        Note["Note: This is 'linearizability' or 'strong consistency'<br>Not to be confused with ACID consistency"]
+        
+        Def --> NodeA
+        NodeA --> NodeB --> NodeC
+        NodeA --> Write --> Consistent
+        Write --> NotConsistent --> Note
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CONSISTENCY                                           │
 │                                                                          │
@@ -202,10 +310,32 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **A - Availability**
 
+```mermaid
+graph LR
+    subgraph "AVAILABILITY"
+        DefA["Definition: Every request receives a non-error response,<br>without guarantee that it's the most recent write."]
+        NodeA_2[Node A<br>(up)]
+        NodeB_2[Node B<br>(up)]
+        NodeC_2[Node C<br>(down)]
+        Available["AVAILABLE:<br>- Request to Node A → Response (maybe stale, but responds)<br>- Request to Node B → Response<br>- Request to Node C → This node is down, but A and B respond"]
+        NotAvailable["NOT AVAILABLE:<br>- Request to Node A → 'Error: Cannot reach other nodes'<br>- Request to Node A → Timeout (no response)"]
+        KeyA["Key: A response must be returned, even if the data might be stale"]
+        
+        DefA --> NodeA_2
+        NodeA_2 --> NodeB_2 --> NodeC_2
+        NodeA_2 --> Available
+        NodeA_2 --> NotAvailable --> KeyA
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AVAILABILITY                                          │
 │                                                                          │
@@ -230,10 +360,30 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **P - Partition Tolerance**
 
+```mermaid
+graph LR
+    subgraph "PARTITION TOLERANCE"
+        DefP["Definition: The system continues to operate despite network<br>partitions (messages being lost or delayed)."]
+        Normal["Normal operation:<br>Node A ◄── Network OK ──► Node B"]
+        Partition["Network partition:<br>Node A ╳ Network BROKEN ╳ Node B"]
+        Tolerant["PARTITION TOLERANT:<br>- System keeps running (maybe with reduced guarantees)<br>- Doesn't require all nodes to communicate"]
+        NotTolerant["NOT PARTITION TOLERANT:<br>- System stops completely when partition occurs<br>- Requires all nodes to be reachable"]
+        Reality["Reality: Network partitions WILL happen in distributed systems<br>So P is not optional - you must handle partitions"]
+        
+        DefP --> Normal --> Partition
+        Partition --> Tolerant
+        Partition --> NotTolerant --> Reality
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PARTITION TOLERANCE                                   │
 │                                                                          │
@@ -263,10 +413,30 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Why You Can't Have All Three
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NodeA as Node A<br>X = 10
+    participant NodeB as Node B<br>X = 5
+    
+    Note over NodeA,NodeB: PARTITION (A and B can't communicate)
+    Client->>NodeA: Write X = 10
+    Client->>NodeB: Read X = ?
+    
+    Note over NodeB: Node B has two choices:
+    Note over NodeB: Choice 1: Return X = 5<br>(Available but NOT Consistent)<br>- Client gets a response ✓<br>- But it's stale data ✗
+    Note over NodeB: Choice 2: Return error/timeout<br>(Consistent but NOT Available)<br>- Data integrity preserved ✓<br>- But client gets no usable response ✗
+    Note over Client,NodeB: There is NO third option during a partition.<br>You MUST sacrifice either C or A.
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE PROOF (INTUITIVE)                                 │
 │                                                                          │
@@ -299,6 +469,7 @@ Imagine a bank with two branches (like two database nodes):
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### CP vs AP Systems
 

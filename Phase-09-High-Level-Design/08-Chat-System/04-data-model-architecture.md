@@ -347,7 +347,61 @@ LREM pending:{user_id} 1 "{message_json}"
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    subgraph Clients["CLIENTS"]
+        ClientApps["Mobile Apps, Web Browsers, Desktop Apps"]
+    end
+    
+    ClientApps --> CDN
+    ClientApps --> WSGateway
+    ClientApps --> APIGateway
+    
+    CDN["CDN<br/>(Media)"]
+    WSGateway["WebSocket<br/>Gateway"]
+    APIGateway["API Gateway<br/>(REST)"]
+    
+    subgraph AppLayer["APPLICATION LAYER"]
+        subgraph ChatServers["CHAT SERVERS (Stateful)"]
+            CS1["Chat Server 1<br/>Users: A,B,C<br/>Connections: 100K"]
+            CS2["Chat Server 2<br/>Users: D,E,F<br/>Connections: 100K"]
+            CS3["Chat Server 3<br/>Users: G,H,I<br/>Connections: 100K"]
+            CSN["Chat Server N<br/>Users: ...<br/>Connections: 100K"]
+        end
+    end
+    
+    WSGateway --> ChatServers
+    APIGateway --> ChatServers
+    
+    ChatServers --> MessageService
+    ChatServers --> PresenceService
+    ChatServers --> NotificationService
+    
+    MessageService["Message Service<br/>- Store messages<br/>- Retrieve history<br/>- Delivery status"]
+    PresenceService["Presence Service<br/>- Track online users<br/>- Last seen<br/>- Typing indicators"]
+    NotificationService["Notification Service<br/>- Push notifications<br/>- APNs/FCM<br/>- SMS fallback"]
+    
+    subgraph DataLayer["DATA LAYER"]
+        Cassandra["Cassandra<br/>(Messages)"]
+        Redis["Redis<br/>(Sessions/Cache)"]
+        Kafka["Kafka<br/>(Event Queue)"]
+        PostgreSQL["PostgreSQL<br/>(Users/Convs)"]
+        S3["S3<br/>(Media)"]
+        Zookeeper["Zookeeper<br/>(Coordination)"]
+    end
+    
+    MessageService --> Cassandra
+    PresenceService --> Redis
+    NotificationService --> Kafka
+    MessageService --> PostgreSQL
+    MessageService --> S3
+    ChatServers --> Zookeeper
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Mobile Apps, Web Browsers, Desktop Apps)                        │
@@ -407,11 +461,39 @@ LREM pending:{user_id} 1 "{message_json}"
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Message Flow (One-on-One)
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (Sender)
+    participant CS1 as Chat Server 1
+    participant MS as Message Service
+    participant CS2 as Chat Server 2
+    participant Bob as Bob (Recipient)
+    
+    Alice->>CS1: 1. Send message
+    CS1->>MS: 2. Store message
+    MS->>MS: 3. Write to Cassandra
+    MS-->>CS1: 4. ACK stored
+    CS1-->>Alice: 5. ACK sent ✓
+    CS1->>CS2: 6. Lookup Bob's connection
+    CS2-->>CS1: 7. Bob on Server 2
+    CS1->>CS2: 8. Route message to Server 2
+    CS2->>Bob: 9. Push to Bob
+    Bob-->>CS2: 10. ACK received
+    CS2-->>CS1: 11. Delivery status
+    CS1-->>Alice: 12. Delivered ✓✓
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          ONE-ON-ONE MESSAGE FLOW                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -457,11 +539,40 @@ Alice (Sender)          Chat Server 1        Message Service       Chat Server 2
      │ <─────────────────────│                     │                     │                    │
 ```
 
+</details>
+```
+
 ---
 
 ## Group Message Fan-out
 
+```mermaid
+flowchart TD
+    Start["Alice sends message to Family group (50 members)"]
+    Start --> ChatServer
+    ChatServer["CHAT SERVER (Alice's connection)<br/>1. Receive message<br/>2. Validate sender is group member<br/>3. Generate message_id and sequence_number<br/>4. Store message (single write)<br/>5. ACK to Alice"]
+    ChatServer --> FanOut
+    FanOut["FAN-OUT SERVICE<br/>1. Get group members (50 users)<br/>2. Lookup connection info for each member<br/><br/>Member Status:<br/>├── 30 ONLINE (on various chat servers)<br/>└── 20 OFFLINE"]
+    FanOut --> OnlineDelivery
+    FanOut --> OfflineHandling
+    OnlineDelivery["ONLINE DELIVERY<br/>For each online:<br/>1. Find server<br/>2. Route message<br/>3. Get ACK"]
+    OfflineHandling["OFFLINE HANDLING<br/>For each offline:<br/>1. Queue message<br/>2. Send push notification"]
+    OnlineDelivery --> CS1
+    OnlineDelivery --> CS2
+    OnlineDelivery --> CS3
+    CS1["Chat Server 1<br/>→ 10 users"]
+    CS2["Chat Server 2<br/>→ 8 users"]
+    CS3["Chat Server 3<br/>→ 12 users"]
+    OfflineHandling --> Kafka
+    Kafka["Kafka<br/>(Queue)"]
+    Kafka --> PushService
+    PushService["Push Service<br/>APNs/FCM"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          GROUP MESSAGE FAN-OUT                                       │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -516,6 +627,9 @@ Alice sends message to "Family" group (50 members)
 │  │ → 12 users  │  │   │                   │
 │  └─────────────┘  │   │                   │
 └───────────────────┘   └───────────────────┘
+```
+
+</details>
 ```
 
 ---

@@ -668,7 +668,52 @@ ZADD spell:bigrams <frequency> "pizza:restaurant"
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    documents {
+        int doc_id PK
+        string url_hash UK
+        string url
+        string title
+        float page_rank
+        timestamp indexed_at
+    }
+    url_frontier {
+        int url_id PK
+        string url_hash UK
+        string domain
+        int priority
+        timestamp scheduled_at
+        int discovered_from FK
+    }
+    link_graph {
+        int id PK
+        int source_doc_id FK
+        string target_url_hash
+        string anchor_text
+    }
+    inverted_index {
+        string term
+        int doc_frequency
+        string posting_list_ptr
+        string doc_id_tf_pos
+    }
+    query_logs {
+        int query_id PK
+        string query_text
+        timestamp timestamp
+        int search_time_ms
+    }
+    
+    documents ||--o{ url_frontier : "1:N (discovered_from)"
+    documents ||--o{ link_graph : "source"
+    documents }o--o{ inverted_index : "indexed_in"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐
 │     documents       │
 ├─────────────────────┤
@@ -716,6 +761,10 @@ ZADD spell:bigrams <frequency> "pizza:restaurant"
 │ posting_list_ptr    │       │ timestamp           │
 │ [doc_id, tf, pos]   │       │ search_time_ms      │
 └─────────────────────┘       └─────────────────────┘
+```
+
+</details>
+```
 ```
 
 ---

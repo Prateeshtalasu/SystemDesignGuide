@@ -65,7 +65,23 @@ Before formal availability metrics:
 
 Think of system availability like electricity in your home:
 
+```mermaid
+graph TD
+    subgraph "THE ELECTRICITY ANALOGY"
+        Promise["Your electricity provider promises 99.9% availability"]
+        Meaning["What this means:<br>- In a year (525,600 minutes), power can be out for 526 minutes<br>- That's about 8.7 hours per year"]
+        Chart["Jan  Feb  Mar  Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec<br>██████████████████████████████████████████████████████████████<br>██████████████████████████████████████████████████████  ░░░<br>                                                          ▲<br>                                               8.7 hours outage"]
+        Acceptable["Is this acceptable?<br>- For home lighting: Yes<br>- For hospital life support: NO! Need 99.999%<br>- For your laptop charger: Probably yes"]
+        Insight["Different use cases need different reliability levels"]
+        
+        Promise --> Meaning --> Chart --> Acceptable --> Insight
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE ELECTRICITY ANALOGY                               │
 │                                                                          │
@@ -92,6 +108,7 @@ Think of system availability like electricity in your home:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: The right availability level depends on the cost of downtime vs the cost of preventing it.
 
@@ -101,7 +118,22 @@ Think of system availability like electricity in your home:
 
 ### The Three Key Terms: SLA, SLO, SLI
 
+```mermaid
+graph TD
+    subgraph "SLA vs SLO vs SLI"
+        SLI["SLI (Service Level INDICATOR)<br>─────────────────────────────<br>WHAT: The actual measurement<br>WHO: Engineers measure this<br>Example: 'Our API responded successfully 99.92% of the time'"]
+        SLO["SLO (Service Level OBJECTIVE)<br>─────────────────────────────<br>WHAT: The internal target<br>WHO: Engineering team sets this<br>Example: 'We aim for 99.9% successful responses'"]
+        SLA["SLA (Service Level AGREEMENT)<br>─────────────────────────────<br>WHAT: The contractual promise<br>WHO: Business/Legal commits to customers<br>Example: 'We guarantee 99.5% uptime or you get credits'"]
+        Comparison["SLI (99.92%) > SLO (99.9%) > SLA (99.5%)<br>(Measured)   (Target)   (Promise)<br><br>We measure better than our target,<br>which is stricter than our promise.<br>This gives us a safety buffer."]
+        
+        SLI --> SLO --> SLA --> Comparison
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SLA vs SLO vs SLI                                     │
 │                                                                          │
@@ -142,10 +174,29 @@ Think of system availability like electricity in your home:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The "Nines" of Availability
 
+```mermaid
+graph TD
+    subgraph "THE NINES EXPLAINED"
+        Table90["90% (one nine)<br>Downtime/Year: 36.5 days<br>Downtime/Month: 3 days<br>Downtime/Week: 16.8 hours"]
+        Table99["99% (two nines)<br>Downtime/Year: 3.65 days<br>Downtime/Month: 7.2 hours<br>Downtime/Week: 1.68 hours"]
+        Table999["99.9% (three nines)<br>Downtime/Year: 8.76 hours<br>Downtime/Month: 43.8 minutes<br>Downtime/Week: 10.1 minutes"]
+        Table9995["99.95%<br>Downtime/Year: 4.38 hours<br>Downtime/Month: 21.9 minutes<br>Downtime/Week: 5 minutes"]
+        Table9999["99.99% (four nines)<br>Downtime/Year: 52.6 minutes<br>Downtime/Month: 4.38 minutes<br>Downtime/Week: 1 minute"]
+        Table99999["99.999% (five nines)<br>Downtime/Year: 5.26 minutes<br>Downtime/Month: 26.3 seconds<br>Downtime/Week: 6 seconds"]
+        Table999999["99.9999% (six nines)<br>Downtime/Year: 31.5 seconds<br>Downtime/Month: 2.63 seconds<br>Downtime/Week: 0.6 seconds"]
+        
+        Table90 --> Table99 --> Table999 --> Table9995 --> Table9999 --> Table99999 --> Table999999
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE NINES EXPLAINED                                   │
 │                                                                          │
@@ -173,6 +224,7 @@ Think of system availability like electricity in your home:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Calculating Downtime
 
@@ -195,7 +247,21 @@ Per day: 1.44 minutes (525.6 / 365)
 
 ### Availability vs Reliability
 
+```mermaid
+graph TD
+    subgraph "AVAILABILITY vs RELIABILITY"
+        Availability["AVAILABILITY<br>────────────────<br>Definition: The percentage of time a system is operational<br>Formula: Uptime / (Uptime + Downtime)<br>Focus: Is the system UP right now?<br><br>Example: System was up 364 days, down 1 day<br>Availability = 364 / 365 = 99.73%"]
+        Reliability["RELIABILITY<br>────────────────<br>Definition: The probability a system performs correctly over time<br>Metrics: MTBF (Mean Time Between Failures), MTTR (Mean Time To Repair)<br>Focus: How OFTEN does the system fail?<br><br>Example A: 1 outage of 24 hours = 99.73% availability<br>Example B: 365 outages of 4 minutes each = 99.73% availability<br><br>Same availability, but B is MORE RELIABLE (fails more predictably)<br>and LESS DISRUPTIVE (shorter outages)"]
+        Metrics["Key Metrics:<br><br>MTBF = Mean Time Between Failures<br>Total operating time / Number of failures<br>Higher is better (system fails less often)<br><br>MTTR = Mean Time To Repair/Recover<br>Total downtime / Number of failures<br>Lower is better (recover faster)<br><br>Availability = MTBF / (MTBF + MTTR)<br><br>Example:<br>MTBF = 720 hours (30 days between failures)<br>MTTR = 1 hour (takes 1 hour to fix)<br>Availability = 720 / (720 + 1) = 99.86%"]
+        
+        Availability --> Reliability --> Metrics
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AVAILABILITY vs RELIABILITY                           │
 │                                                                          │
@@ -243,10 +309,29 @@ Per day: 1.44 minutes (525.6 / 365)
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cost of Each Nine
 
+```mermaid
+graph LR
+    subgraph "COST OF AVAILABILITY"
+        Note1["Each additional 'nine' roughly 10x the cost!"]
+        Cost99["99%: Basic monitoring, manual recovery<br>Cost: $"]
+        Cost999["99.9%: Redundancy, automated failover, good monitoring<br>Cost: $$"]
+        Cost9999["99.99%: Multi-region, sophisticated automation, 24/7 on-call<br>Cost: $$$"]
+        Cost99999["99.999%: Active-active multi-region, chaos engineering, large team<br>Cost: $$$$"]
+        Cost999999["99.9999%: Custom hardware, dedicated teams, extreme redundancy<br>Cost: $$$$$ (Only critical systems like 911, nuclear)"]
+        
+        Cost99 -->|"10x"| Cost999 -->|"10x"| Cost9999 -->|"10x"| Cost99999 -->|"10x"| Cost999999
+        Note1 --> Cost99
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    COST OF AVAILABILITY                                  │
 │                                                                          │
@@ -292,6 +377,8 @@ Per day: 1.44 minutes (525.6 / 365)
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -301,7 +388,21 @@ Per day: 1.44 minutes (525.6 / 365)
 
 **Scenario**: Your e-commerce site had these incidents last month:
 
+```mermaid
+graph TD
+    subgraph "INCIDENT LOG - MARCH 2024"
+        Incident1["Mar 3: 15 min - Full outage<br>Database connection pool"]
+        Incident2["Mar 10: 45 min - Full outage<br>Deployment failure"]
+        Incident3["Mar 15: 5 min - Partial<br>Cache server restart"]
+        Incident4["Mar 22: 30 min - Full outage<br>Third-party payment API down"]
+        Incident5["Mar 28: 10 min - Partial<br>High latency (degraded)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    INCIDENT LOG - MARCH 2024                             │
 │                                                                          │
@@ -315,6 +416,7 @@ Per day: 1.44 minutes (525.6 / 365)
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Calculation**:
 
@@ -342,7 +444,21 @@ Result: SLO VIOLATED ❌
 
 **Serial (Chain)**: If ANY component fails, the system fails.
 
+```mermaid
+graph LR
+    subgraph "SERIAL AVAILABILITY"
+        User[User] --> LB[Load Balancer<br>99.99%]
+        LB --> App[App Server<br>99.9%]
+        App --> DB[Database<br>99.9%]
+        Calculation["Combined = 99.99% × 99.9% × 99.9%<br>= 0.9999 × 0.999 × 0.999<br>= 0.9979<br>= 99.79%<br><br>Even though each component is highly available,<br>the chain is only as strong as its weakest links combined!<br><br>With 10 components at 99.9% each:<br>Combined = 0.999^10 = 99.0% (much worse!)"]
+        DB --> Calculation
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SERIAL AVAILABILITY                                   │
 │                                                                          │
@@ -362,10 +478,27 @@ Result: SLO VIOLATED ❌
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Parallel (Redundant)**: ALL redundant components must fail for system to fail.
 
+```mermaid
+graph TD
+    subgraph "PARALLEL AVAILABILITY"
+        User2[User] --> LB2[LB]
+        LB2 --> App1[App Server 1<br>99.9%]
+        LB2 --> App2[App Server 2<br>99.9%]
+        App1 --> DB2[Database]
+        App2 --> DB2
+        Calculation2["Both must fail for this layer to fail:<br>P(both fail) = (1 - 0.999) × (1 - 0.999) = 0.001 × 0.001 = 0.000001<br>P(at least one works) = 1 - 0.000001 = 0.999999 = 99.9999%<br><br>Two 99.9% servers in parallel = 99.9999% for that layer!"]
+        DB2 --> Calculation2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PARALLEL AVAILABILITY                                 │
 │                                                                          │
@@ -386,10 +519,35 @@ Result: SLO VIOLATED ❌
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Combined Example**:
 
+```mermaid
+graph TD
+    subgraph "REAL ARCHITECTURE AVAILABILITY"
+        LB3[Load Balancer<br>99.99%]
+        App1_3[App Server 1<br>99.9%]
+        App2_3[App Server 2<br>99.9%]
+        DB3[Database<br>99.99%]
+        
+        LB3 --> App1_3
+        LB3 --> App2_3
+        App1_3 --> DB3
+        App2_3 --> DB3
+        
+        Step1["Step 1: App servers in parallel<br>P(app layer) = 1 - (0.001 × 0.001) = 99.9999%"]
+        Step2["Step 2: All layers in series<br>P(system) = 99.99% × 99.9999% × 99.99%<br>= 0.9999 × 0.999999 × 0.9999<br>= 0.9998<br>= 99.98%"]
+        Result["Result: ~99.98% availability (about 1.75 hours downtime/year)"]
+        
+        Step1 --> Step2 --> Result
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REAL ARCHITECTURE AVAILABILITY                        │
 │                                                                          │
@@ -416,6 +574,7 @@ Result: SLO VIOLATED ❌
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -446,7 +605,22 @@ Result: SLO VIOLATED ❌
 
 Google's SRE team invented the concept of "error budgets":
 
+```mermaid
+graph TD
+    subgraph "ERROR BUDGET CONCEPT"
+        SLO["SLO: 99.9% availability<br>Allowed downtime per month: 43.8 minutes"]
+        Budget["This 43.8 minutes is your 'ERROR BUDGET'"]
+        MarchBudget["MARCH ERROR BUDGET<br>Budget: 43.8 minutes<br>Used: 35 minutes (Week 1: 15 min, Week 2: 10 min, Week 4: 10 min)<br>Remaining: 8.8 minutes"]
+        Logic["If budget remaining > 0: Team can deploy new features, experiment<br>If budget exhausted: FREEZE! Focus only on reliability<br><br>This creates a balance between innovation and reliability"]
+        
+        SLO --> Budget --> MarchBudget --> Logic
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ERROR BUDGET CONCEPT                                  │
 │                                                                          │
@@ -476,6 +650,7 @@ Google's SRE team invented the concept of "error budgets":
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Workflows and Tooling
 

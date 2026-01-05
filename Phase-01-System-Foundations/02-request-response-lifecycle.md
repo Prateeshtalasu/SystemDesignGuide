@@ -59,7 +59,27 @@ In the early days of computing (1960s-1970s), there was no standardized way for 
 
 Think of the request-response lifecycle like sending a letter and receiving a reply:
 
+```mermaid
+graph TD
+    subgraph "SENDING A LETTER"
+        Step1[1. You write a letter<br>(Create HTTP Request)]
+        Step2[2. You look up the address<br>(DNS Lookup)]
+        Step3[3. You put it in an envelope<br>(Add TCP/IP headers)]
+        Step4[4. Post office picks it up<br>(Your ISP)]
+        Step5[5. Sorted through distribution centers<br>(Internet routers)]
+        Step6[6. Delivered to recipient's mailbox<br>(Server receives)]
+        Step7[7. Recipient reads and writes reply<br>(Server processes)]
+        Step8[8. Reply travels back same way<br>(Response)]
+        Step9[9. You receive and read the reply<br>(Browser renders)]
+
+        Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6 --> Step7 --> Step8 --> Step9
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    SENDING A LETTER                                  │
 │                                                                      │
@@ -75,6 +95,8 @@ Think of the request-response lifecycle like sending a letter and receiving a re
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Key insight**: Just like mail, internet communication involves multiple steps, multiple parties, and can fail at any point.
 
@@ -95,7 +117,25 @@ This analogy will be referenced throughout:
 
 Let's trace what happens when you type `https://www.amazon.com` and press Enter.
 
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Server
+
+    Note over Browser: 1. URL Parsing
+    Browser->>Server: 2. DNS Lookup
+    Browser->>Server: 3. TCP Handshake
+    Browser->>Server: 4. TLS Handshake
+    Browser->>Server: 5. HTTP Request
+    Note over Server: 6. Server Processing
+    Server-->>Browser: 7. HTTP Response
+    Note over Browser: 8. Browser Rendering
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                    COMPLETE REQUEST LIFECYCLE                             │
 │                                                                           │
@@ -114,6 +154,8 @@ Let's trace what happens when you type `https://www.amazon.com` and press Enter.
 │      │                                                          │         │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Step 1: URL Parsing
 
@@ -151,7 +193,28 @@ public class URLParser {
 
 **DNS (Domain Name System)** translates human-readable names to IP addresses.
 
+```mermaid
+sequenceDiagram
+    participant YC as Your Computer
+    participant DR as DNS Resolver
+    participant RD as Root DNS
+    participant CD as .com DNS
+    participant AD as amazon.com DNS
+
+    YC->>DR: "www.amazon.com?"
+    DR->>RD: "Who handles .com?"
+    RD-->>DR: "Ask 192.5.6.30"
+    DR->>CD: "Who handles amazon.com?"
+    CD-->>DR: "Ask 205.251.192.47"
+    DR->>AD: "What is www.amazon.com?"
+    AD-->>DR: "54.239.28.85"
+    DR-->>YC: "54.239.28.85"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your Computer          DNS Resolver         Root DNS          .com DNS         amazon.com DNS
       │                    │                   │                  │                  │
       │ "www.amazon.com?"  │                   │                  │                  │
@@ -178,6 +241,8 @@ Your Computer          DNS Resolver         Root DNS          .com DNS         a
       │◄───────────────────│                   │                  │                  │
 ```
 
+</details>
+
 **DNS Record Types**:
 
 | Record | Purpose               | Example                      |
@@ -190,7 +255,22 @@ Your Computer          DNS Resolver         Root DNS          .com DNS         a
 
 **DNS Caching** (why repeated visits are faster):
 
+```mermaid
+graph TD
+    subgraph "DNS CACHING LAYERS"
+        Layer1[1. Browser cache<br>(Chrome: chrome://net-internals/#dns)<br>TTL: Usually 1-5 minutes]
+        Layer2[2. Operating System cache<br>Windows: ipconfig /displaydns<br>Linux: systemd-resolve --statistics]
+        Layer3[3. Router cache<br>Your home router remembers lookups]
+        Layer4[4. ISP DNS resolver cache<br>Shared across all ISP customers]
+
+        Layer1 --> Layer2 --> Layer3 --> Layer4
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     DNS CACHING LAYERS                           │
 │                                                                  │
@@ -210,11 +290,27 @@ Your Computer          DNS Resolver         Root DNS          .com DNS         a
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Step 3: TCP Handshake
 
 **TCP (Transmission Control Protocol)** establishes a reliable connection.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: SYN (seq=100)<br>"I want to connect, my sequence starts at 100"
+    Server-->>Client: SYN-ACK (seq=300, ack=101)<br>"OK, my sequence is 300, I expect 101 next"
+    Client->>Server: ACK (seq=101, ack=301)<br>"Got it, I expect 301 next"
+    Note over Client,Server: CONNECTION ESTABLISHED
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client                                              Server
    │                                                   │
    │  SYN (seq=100)                                    │
@@ -233,6 +329,8 @@ Client                                              Server
    │                                                   │
 ```
 
+</details>
+
 **Why three-way handshake?**
 
 1. **SYN**: Client proves it can send
@@ -243,7 +341,25 @@ This ensures both sides can send and receive before exchanging data.
 
 **What a TCP packet looks like**:
 
+```mermaid
+graph TD
+    subgraph "TCP PACKET HEADER"
+        Row1["Source Port (16 bits)<br>e.g., 52431 | Destination Port (16 bits)<br>e.g., 443"]
+        Row2["Sequence Number (32 bits)<br>e.g., 1000 (position of first byte in this segment)"]
+        Row3["Acknowledgment Number (32 bits)<br>e.g., 5001 (next byte expected from other side)"]
+        Row4["Flags: SYN, ACK, FIN, RST, PSH, URG"]
+        Row5["Window Size (flow control)"]
+        Row6["Checksum (error detection)"]
+        Row7["DATA (your actual HTTP request/response)"]
+
+        Row1 --> Row2 --> Row3 --> Row4 --> Row5 --> Row6 --> Row7
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │                       TCP PACKET HEADER                             │
 ├──────────────────────────────┬─────────────────────────────────────┤
@@ -266,11 +382,31 @@ This ensures both sides can send and receive before exchanging data.
 └────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Step 4: TLS Handshake (for HTTPS)
 
 **TLS (Transport Layer Security)** encrypts the connection.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: ClientHello<br>- Supported TLS versions (1.2, 1.3)<br>- Supported cipher suites<br>- Random number (for key generation)
+    Server-->>Client: ServerHello<br>- Chosen TLS version<br>- Chosen cipher suite<br>- Server's random number<br>- Server's certificate (contains public key)
+    Note over Client: Client verifies certificate<br>- Is it signed by trusted CA?<br>- Is the domain name correct?<br>- Is it expired?
+    Client->>Server: Key Exchange<br>- Client generates pre-master secret<br>- Encrypts with server's public key
+    Note over Client,Server: Both sides derive session keys from:<br>- Client random<br>- Server random<br>- Pre-master secret
+    Client->>Server: "Finished" (encrypted with session key)
+    Server-->>Client: "Finished" (encrypted with session key)
+    Note over Client,Server: SECURE CONNECTION ESTABLISHED<br>All further data is encrypted
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client                                                Server
    │                                                     │
    │  ClientHello                                        │
@@ -308,6 +444,8 @@ Client                                                Server
    │     All further data is encrypted                  │
 ```
 
+</details>
+
 ### Step 5: HTTP Request
 
 Now the browser sends the actual request:
@@ -326,7 +464,22 @@ Cookie: session-id=123-456-789; ubid-main=123-456-789
 
 **HTTP Request Structure**:
 
+```mermaid
+graph TD
+    subgraph "HTTP REQUEST"
+        RequestLine["REQUEST LINE:<br>METHOD   PATH              VERSION<br>GET      /books?cat=fiction HTTP/1.1"]
+        Headers["HEADERS:<br>Host: www.amazon.com        (Required in HTTP/1.1)<br>User-Agent: Chrome/120      (What browser you're using)<br>Accept: text/html           (What formats you accept)<br>Cookie: session=abc         (Your session data)<br>Authorization: Bearer xyz   (Your credentials)"]
+        BlankLine["BLANK LINE (separates headers from body)"]
+        Body["BODY (optional, used in POST/PUT):<br>{\"productId\": \"123\", \"quantity\": 1}"]
+
+        RequestLine --> Headers --> BlankLine --> Body
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      HTTP REQUEST                                │
 ├─────────────────────────────────────────────────────────────────┤
@@ -348,6 +501,8 @@ Cookie: session-id=123-456-789; ubid-main=123-456-789
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **HTTP Methods**:
 
 | Method  | Purpose             | Has Body | Idempotent | Safe |
@@ -365,7 +520,23 @@ Cookie: session-id=123-456-789; ubid-main=123-456-789
 
 ### Step 6: Server Processing
 
+```mermaid
+graph TD
+    subgraph "SERVER-SIDE PROCESSING"
+        Request[Request arrives at port 443]
+        LB[Load Balancer<br>Distributes across multiple servers]
+        WebServer[Web Server<br>(Reverse Proxy)<br>Nginx/Apache handles static files, SSL<br>termination, compression]
+        AppServer[Application Server<br>Spring Boot, Node.js, Django<br>Business logic, authentication]
+        DB[Database/Cache<br>PostgreSQL, Redis, Elasticsearch<br>Data retrieval]
+
+        Request --> LB --> WebServer --> AppServer --> DB
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       SERVER-SIDE PROCESSING                             │
 │                                                                          │
@@ -397,6 +568,8 @@ Cookie: session-id=123-456-789; ubid-main=123-456-789
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Step 7: HTTP Response
 
@@ -431,7 +604,25 @@ X-Request-Id: abc-123-def
 
 ### Step 8: Browser Rendering
 
+```mermaid
+graph TD
+    subgraph "BROWSER RENDERING PIPELINE"
+        Step1[1. Parse HTML] --> DOM[DOM Tree<br>(Document Object Model)]
+        Step2[2. Parse CSS] --> CSSOM[CSSOM<br>(CSS Object Model)]
+        Step3[3. Execute JavaScript<br>(may modify DOM/CSSOM)]
+        DOM --> RenderTree[4. Combine DOM + CSSOM → Render Tree]
+        CSSOM --> RenderTree
+        Step3 --> RenderTree
+        RenderTree --> Layout[5. Layout<br>Calculate position and size of each element]
+        Layout --> Paint[6. Paint<br>Draw pixels to screen]
+        Paint --> Composite[7. Composite<br>Combine layers for final image]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      BROWSER RENDERING PIPELINE                          │
 │                                                                          │
@@ -452,6 +643,8 @@ X-Request-Id: abc-123-def
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 4️⃣ Simulation-First Explanation
@@ -468,7 +661,25 @@ Let's trace exactly what happens when you visit `https://example.com/hello`.
 
 **Step 1: DNS Query (UDP packet)**
 
+```mermaid
+graph LR
+    YourComputer[Your Computer<br>(192.168.1.100)] --> DNSServer[DNS Server<br>(8.8.8.8)]
+
+    subgraph "UDP Packet"
+        UDPHeader["Source IP: 192.168.1.100<br>Dest IP: 8.8.8.8<br>Source Port: 54321<br>Dest Port: 53 (DNS)"]
+        DNSQuery["DNS Query:<br>Transaction ID: 0xABCD<br>Question: example.com<br>Type: A (IPv4 address)"]
+        UDPHeader --> DNSQuery
+    end
+
+    subgraph "DNS Response"
+        DNSResp["Transaction ID: 0xABCD<br>Answer: example.com → 93.184.216.34<br>TTL: 3600 seconds"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your Computer (192.168.1.100) → DNS Server (8.8.8.8)
 
 UDP Packet:
@@ -492,9 +703,25 @@ DNS Response:
 └────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Step 2: TCP SYN**
 
+```mermaid
+graph LR
+    YourComputer[Your Computer] --> Example[example.com]
+
+    subgraph "TCP Packet #1"
+        TCPHeader1["Source IP: 192.168.1.100<br>Dest IP: 93.184.216.34<br>Source Port: 52000<br>Dest Port: 443"]
+        TCPData1["Sequence: 1000<br>Flags: SYN<br>Window: 65535"]
+        TCPHeader1 --> TCPData1
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your Computer → example.com
 
 TCP Packet #1:
@@ -510,9 +737,25 @@ TCP Packet #1:
 └────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Step 3: TCP SYN-ACK**
 
+```mermaid
+graph LR
+    Example[example.com] --> YourComputer[Your Computer]
+
+    subgraph "TCP Packet #2"
+        TCPHeader2["Source IP: 93.184.216.34<br>Dest IP: 192.168.1.100<br>Source Port: 443<br>Dest Port: 52000"]
+        TCPData2["Sequence: 5000<br>Acknowledgment: 1001<br>Flags: SYN, ACK"]
+        TCPHeader2 --> TCPData2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 example.com → Your Computer
 
 TCP Packet #2:
@@ -528,9 +771,23 @@ TCP Packet #2:
 └────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Step 4: TCP ACK**
 
+```mermaid
+graph LR
+    YourComputer[Your Computer] --> Example[example.com]
+
+    subgraph "TCP Packet #3"
+        TCPData3["Sequence: 1001<br>Acknowledgment: 5001<br>Flags: ACK"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your Computer → example.com
 
 TCP Packet #3:
@@ -540,6 +797,8 @@ TCP Packet #3:
 │ Flags: ACK                                 │
 └────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Step 5-8: TLS Handshake** (multiple packets exchanged)
 
@@ -570,7 +829,27 @@ Content-Type: text/html
 
 ### Round-Trip Time Components
 
+```mermaid
+graph TD
+    subgraph "ROUND-TRIP TIME BREAKDOWN"
+        Title["Total time for https://example.com from New York:"]
+        DNS["DNS Lookup:<br>~20ms (cached) or ~100ms (uncached)"]
+        TCP["TCP Handshake:<br>~30ms (1.5 RTT to server)"]
+        TLS["TLS Handshake:<br>~60ms (2 RTT for TLS 1.2, 1 RTT for TLS 1.3)"]
+        HTTP["HTTP Request/Response:<br>~30ms"]
+        Total["Total: ~140ms (first request)"]
+
+        Subsequent["Subsequent requests (same connection):<br>- No DNS (cached)<br>- No TCP handshake (connection reused)<br>- No TLS handshake (session resumed)<br>- Just HTTP: ~30ms"]
+
+        Title --> DNS --> TCP --> TLS --> HTTP --> Total
+        Title --> Subsequent
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     ROUND-TRIP TIME BREAKDOWN                            │
 │                                                                          │
@@ -592,6 +871,8 @@ Content-Type: text/html
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 5️⃣ How Engineers Actually Use This in Production
@@ -609,7 +890,25 @@ Google found TCP+TLS too slow for modern web. They created QUIC:
 
 **Cloudflare's Edge Network**:
 
+```mermaid
+graph TD
+    subgraph "CLOUDFLARE'S APPROACH"
+        User[User in Tokyo]
+        Request[Request to yoursite.com]
+        Edge[Cloudflare Edge<br>(DNS + CDN)<br>Tokyo data center<br>- DNS resolution: 1ms<br>- TLS termination here<br>- Cached content served directly]
+        Origin[Origin Server<br>(Your server)<br>San Francisco]
+        Result[Result: User experiences 10ms instead of 200ms]
+
+        User --> Request --> Edge
+        Edge -->|Only if cache miss| Origin
+        Edge --> Result
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CLOUDFLARE'S APPROACH                                 │
 │                                                                          │
@@ -634,6 +933,8 @@ Google found TCP+TLS too slow for modern web. They created QUIC:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Real Workflows and Tooling
 
@@ -1045,7 +1346,37 @@ HttpClient client = HttpClient.newBuilder()
 
 ### REST vs gRPC vs GraphQL
 
+```mermaid
+graph TD
+    subgraph "REST (HTTP/JSON)"
+        REST_Example["GET /users/123<br>Response: {\"id\": 123, \"name\": \"John\", ...}"]
+        REST_Pros["Pros: Simple, cacheable, widely understood"]
+        REST_Cons["Cons: Over-fetching, multiple round trips"]
+        REST_Example --> REST_Pros
+        REST_Example --> REST_Cons
+    end
+
+    subgraph "gRPC (HTTP/2 + Protobuf)"
+        GRPC_Example["userService.GetUser(UserRequest{id: 123})<br>Response: Binary protobuf"]
+        GRPC_Pros["Pros: Fast, typed, streaming"]
+        GRPC_Cons["Cons: Not browser-friendly, harder to debug"]
+        GRPC_Example --> GRPC_Pros
+        GRPC_Example --> GRPC_Cons
+    end
+
+    subgraph "GraphQL (HTTP POST + JSON)"
+        GraphQL_Example["POST /graphql<br>{ user(id: 123) { name, email } }<br>Response: {\"data\": {\"user\": {...}}}"]
+        GraphQL_Pros["Pros: Fetch exactly what you need"]
+        GraphQL_Cons["Cons: Caching complex, learning curve"]
+        GraphQL_Example --> GraphQL_Pros
+        GraphQL_Example --> GraphQL_Cons
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 REST (HTTP/JSON):
 ┌─────────────────────────────────────────────┐
 │ GET /users/123                              │
@@ -1074,6 +1405,8 @@ GraphQL (HTTP POST + JSON):
 │ Cons: Caching complex, learning curve       │
 └─────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
