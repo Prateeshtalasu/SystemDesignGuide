@@ -63,7 +63,7 @@ graph LR
         Account["You have $1000 in your account"]
         BranchA[Branch A<br>Balance: $1000]
         BranchB[Branch B<br>Balance: $1000]
-        Phone[Phone Line<br>(the network)]
+        Phone["Phone Line<br/>(the network)"]
         Scenario["SCENARIO: The phone line goes down (network partition!)<br>You walk into Branch A to withdraw $800<br>Branch A has THREE options:"]
         
         BranchA <-->|Phone Line| BranchB
@@ -318,9 +318,9 @@ graph LR
 graph LR
     subgraph "AVAILABILITY"
         DefA["Definition: Every request receives a non-error response,<br>without guarantee that it's the most recent write."]
-        NodeA_2[Node A<br>(up)]
-        NodeB_2[Node B<br>(up)]
-        NodeC_2[Node C<br>(down)]
+        NodeA_2["Node A<br/>(up)"]
+        NodeB_2["Node B<br/>(up)"]
+        NodeC_2["Node C<br/>(down)"]
         Available["AVAILABLE:<br>- Request to Node A → Response (maybe stale, but responds)<br>- Request to Node B → Response<br>- Request to Node C → This node is down, but A and B respond"]
         NotAvailable["NOT AVAILABLE:<br>- Request to Node A → 'Error: Cannot reach other nodes'<br>- Request to Node A → Timeout (no response)"]
         KeyA["Key: A response must be returned, even if the data might be stale"]
@@ -473,7 +473,21 @@ sequenceDiagram
 
 ### CP vs AP Systems
 
+```mermaid
+graph LR
+    subgraph "CP SYSTEMS (Consistency + Partition Tolerance)"
+        CP_Behavior["Behavior during partition:<br>- Refuse writes/reads that can't be verified<br>- May become unavailable for some operations<br>- Guarantees you never see stale data"]
+        CP_Examples["Examples:<br>- MongoDB (with majority write concern)<br>- HBase<br>- Redis Cluster (for certain operations)<br>- Zookeeper<br>- etcd"]
+        CP_UseCases["Use cases:<br>- Financial transactions<br>- Inventory management (can't oversell)<br>- Leader election<br>- Configuration management"]
+        
+        CP_Behavior --> CP_Examples --> CP_UseCases
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CP SYSTEMS                                            │
 │                    (Consistency + Partition Tolerance)                   │
@@ -497,7 +511,24 @@ sequenceDiagram
 │  - Configuration management                                              │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 
+```mermaid
+graph LR
+    subgraph "AP SYSTEMS (Availability + Partition Tolerance)"
+        AP_Behavior["Behavior during partition:<br>- Always respond to requests<br>- May return stale data<br>- Resolves conflicts later (eventual consistency)"]
+        AP_Examples["Examples:<br>- Cassandra<br>- DynamoDB<br>- CouchDB<br>- Riak"]
+        AP_UseCases["Use cases:<br>- Shopping carts (better to show old cart than error)<br>- Social media feeds (slightly stale is OK)<br>- DNS (availability critical)<br>- Caching layers"]
+        
+        AP_Behavior --> AP_Examples --> AP_UseCases
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AP SYSTEMS                                            │
 │                    (Availability + Partition Tolerance)                  │
@@ -521,6 +552,7 @@ sequenceDiagram
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -536,7 +568,26 @@ Let's trace what happens with a shopping cart during a network partition.
 - User's cart data replicated to both
 - Network partition occurs between data centers
 
+```mermaid
+graph LR
+    subgraph "BEFORE PARTITION"
+        UserCart["User's Cart: [iPhone, AirPods]"]
+        USEast["US-EAST<br>Cart: [iPhone, AirPods]"]
+        USWest["US-WEST<br>Cart: [iPhone, AirPods]"]
+        Note1["Both data centers have identical data. All is well."]
+        
+        UserCart --> USEast
+        UserCart --> USWest
+        USEast <-->|Sync| USWest
+        USEast --> Note1
+        USWest --> Note1
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BEFORE PARTITION                                      │
 │                                                                          │
@@ -553,10 +604,28 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Partition Occurs**:
 
+```mermaid
+graph LR
+    subgraph "PARTITION OCCURS"
+        USEast2["US-EAST<br>Cart: [iPhone, AirPods]"]
+        USWest2["US-WEST<br>Cart: [iPhone, AirPods]"]
+        Partition["╳ BROKEN ╳"]
+        Note2["Network between data centers is down.<br>They can't sync anymore."]
+        
+        USEast2 -.->|Partition| Partition
+        Partition -.->|Partition| USWest2
+        Partition --> Note2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PARTITION OCCURS                                      │
 │                                                                          │
@@ -572,10 +641,33 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **CP System Behavior (Consistency Priority)**:
 
+```mermaid
+graph TD
+    subgraph "CP SYSTEM BEHAVIOR"
+        UserCA["User in California tries to add MacBook to cart"]
+        USEast3["US-EAST<br>Cart: [iPhone, AirPods]"]
+        USWest3["US-WEST<br>'Cannot modify cart - service unavailable'"]
+        Partition2["╳ Partition ╳"]
+        Error["User sees error page"]
+        Result["Result:<br>- User can't add to cart (bad UX)<br>- But cart data stays consistent<br>- No risk of lost items or duplicates"]
+        
+        UserCA --> USEast3
+        USEast3 -.->|Partition| Partition2
+        Partition2 -.->|Partition| USWest3
+        UserCA --> Error
+        USWest3 --> Error
+        Error --> Result
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CP SYSTEM BEHAVIOR                                    │
 │                                                                          │
@@ -600,10 +692,37 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **AP System Behavior (Availability Priority)**:
 
+```mermaid
+graph TD
+    subgraph "AP SYSTEM BEHAVIOR"
+        UserNY["User in New York removes AirPods"]
+        UserCA2["User in California adds MacBook"]
+        USEast4["US-EAST<br>Cart: [iPhone]<br>(removed AirPods)"]
+        USWest4["US-WEST<br>Cart: [iPhone, AirPods, MacBook]<br>(added MacBook)"]
+        Partition3["╳ Partition ╳"]
+        ViewNY["User in New York sees: [iPhone]"]
+        ViewCA["User in California sees: [iPhone, AirPods, MacBook]"]
+        Note3["Both users got responses! But carts are different (inconsistent)"]
+        
+        UserNY --> USEast4
+        UserCA2 --> USWest4
+        USEast4 -.->|Partition| Partition3
+        Partition3 -.->|Partition| USWest4
+        USEast4 --> ViewNY
+        USWest4 --> ViewCA
+        ViewNY --> Note3
+        ViewCA --> Note3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AP SYSTEM BEHAVIOR                                    │
 │                                                                          │
@@ -626,10 +745,30 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **After Partition Heals (AP System)**:
 
+```mermaid
+graph TD
+    subgraph "CONFLICT RESOLUTION"
+        Conflict["Network restored. Now we have conflicting data:<br>- US-East: [iPhone]<br>- US-West: [iPhone, AirPods, MacBook]"]
+        LWW["1. Last Write Wins (LWW)<br>- Most recent timestamp wins<br>- Simple but can lose data<br>- Result: Depends on which write was 'last'"]
+        Merge["2. Merge (Union)<br>- Combine all items<br>- Result: [iPhone, AirPods, MacBook]<br>- May resurrect deleted items"]
+        AppLogic["3. Application-specific logic<br>- Let user resolve conflicts<br>- 'We found changes from multiple devices, which cart?'"]
+        Amazon["Amazon's approach: Merge (union) for carts<br>- Better to have extra items than missing items<br>- User can remove unwanted items at checkout"]
+        
+        Conflict --> LWW
+        Conflict --> Merge
+        Conflict --> AppLogic
+        Merge --> Amazon
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CONFLICT RESOLUTION                                   │
 │                                                                          │
@@ -659,6 +798,7 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -689,7 +829,39 @@ Let's trace what happens with a shopping cart during a network partition.
 
 ### Real Workflows: Choosing Your Database
 
+```mermaid
+flowchart TD
+    Start["Start: What are you storing?"]
+    Q1{"Financial transactions?"}
+    Q2{"User sessions / carts?"}
+    Q3{"Configuration / coordination?"}
+    Q4{"Social media posts / feeds?"}
+    Q5{"Analytics / metrics?"}
+    
+    CP1["CP (PostgreSQL, Spanner)<br>Need strong consistency"]
+    AP1["AP (DynamoDB, Cassandra)<br>Need availability"]
+    CP2["CP (etcd, Zookeeper)<br>Need consistency"]
+    AP2["AP (Cassandra)<br>Availability matters more"]
+    AP3["AP<br>Availability + eventual consistency"]
+    Evaluate["Evaluate your specific needs"]
+    
+    Start --> Q1
+    Q1 -->|Yes| CP1
+    Q1 -->|No| Q2
+    Q2 -->|Yes| AP1
+    Q2 -->|No| Q3
+    Q3 -->|Yes| CP2
+    Q3 -->|No| Q4
+    Q4 -->|Yes| AP2
+    Q4 -->|No| Q5
+    Q5 -->|Yes| AP3
+    Q5 -->|No| Evaluate
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DECISION FLOWCHART                                    │
 │                                                                          │
@@ -721,6 +893,7 @@ Let's trace what happens with a shopping cart during a network partition.
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What is Automated vs Manual
 

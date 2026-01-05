@@ -245,7 +245,22 @@ graph TD
 
 ### USE Method (For Resources)
 
+```mermaid
+graph TD
+    subgraph "USE METHOD (Brendan Gregg's Framework)"
+        U["U - UTILIZATION<br>How busy is the resource?<br>Example: CPU at 75%"]
+        S["S - SATURATION<br>How much extra work is queued?<br>Example: 10 requests waiting in queue"]
+        E["E - ERRORS<br>How many errors occurred?<br>Example: 5 disk I/O errors"]
+        Table["Resource Metrics Table:<br>CPU: CPU % | Run queue | -<br>Memory: Used/Total | Swap usage | OOM events<br>Disk: Disk busy % | I/O queue | I/O errors<br>Network: Bandwidth used | Socket queue | Packet drops<br>Threads: Active/Max | Queue depth | Rejections<br>DB Conns: Used/Max | Wait time | Timeouts"]
+        
+        U --> S --> E --> Table
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    USE METHOD                                            │
 │                    (Brendan Gregg's Framework)                           │
@@ -277,10 +292,25 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Logs: What to Log
 
+```mermaid
+graph TD
+    subgraph "LOGGING BEST PRACTICES"
+        Levels["LOG LEVELS:<br>ERROR: Something failed, needs attention<br>WARN: Something unexpected but handled<br>INFO: Important business events<br>DEBUG: Detailed technical information (usually disabled in production)<br>TRACE: Very detailed, step-by-step (rarely used in production)"]
+        Include["WHAT TO INCLUDE IN LOGS:<br>✓ Timestamp (ISO 8601)<br>✓ Log level (ERROR, WARN, INFO)<br>✓ Service name<br>✓ Request/Trace ID<br>✓ User ID<br>✓ Message (human-readable)<br>✓ Structured data (JSON)"]
+        Exclude["WHAT NOT TO LOG:<br>✗ Passwords, tokens, secrets<br>✗ Credit card numbers, SSN<br>✗ Personal health information<br>✗ Full request/response bodies (too verbose)"]
+        
+        Levels --> Include --> Exclude
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOGGING BEST PRACTICES                                │
 │                                                                          │
@@ -324,10 +354,35 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Traces: Distributed Tracing
 
+```mermaid
+sequenceDiagram
+    participant API as API Gateway<br>150ms
+    participant Order as Order Service<br>120ms
+    participant User as User Service<br>20ms
+    participant Inventory as Inventory<br>40ms
+    participant DB as Database<br>50ms
+    
+    Note over API,DB: Request: GET /api/orders/123<br>Trace ID: abc-123-def
+    API->>Order: Call
+    Order->>User: Call
+    User-->>Order: Response (20ms)
+    Order->>Inventory: Call
+    Inventory-->>Order: Response (40ms)
+    Order->>DB: Query
+    DB-->>Order: Response (50ms)
+    Order-->>API: Response (120ms total)
+    
+    Note over API,DB: Each box is a "span" with:<br>• Span ID, Parent Span ID<br>• Service name, Operation<br>• Duration, Tags<br><br>From this trace:<br>• Database is the slowest (50ms)<br>• Total request time is 150ms<br>• Order service waits for 3 downstream calls
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DISTRIBUTED TRACING                                   │
 │                                                                          │
@@ -366,6 +421,7 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Health Checks
 

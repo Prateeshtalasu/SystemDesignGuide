@@ -138,7 +138,7 @@ graph LR
             Network1[1 Gbps] --> Network2[10 Gbps] --> Network3[25 Gbps] --> Network4[100 Gbps]
         end
         
-        Cloud1[t3.micro<br>(1 vCPU, 1 GB RAM)] --> Cloud2[m5.large<br>(2 vCPU, 8 GB RAM)] --> Cloud3[m5.4xlarge<br>(16 vCPU, 64 GB RAM)] --> Cloud4[x1e.32xlarge<br>(128 vCPU, 3904 GB RAM)]
+        Cloud1["t3.micro<br/>(1 vCPU, 1 GB RAM)"] --> Cloud2["m5.large<br/>(2 vCPU, 8 GB RAM)"] --> Cloud3["m5.4xlarge<br/>(16 vCPU, 64 GB RAM)"] --> Cloud4["x1e.32xlarge<br/>(128 vCPU, 3904 GB RAM)"]
     end
 ```
 
@@ -206,10 +206,10 @@ graph LR
 ```mermaid
 graph TD
     subgraph "HORIZONTAL SCALING ARCHITECTURE"
-        LB[Load Balancer<br>(distributes requests)]
-        S1[Server 1<br>(App)]
-        S2[Server 2<br>(App)]
-        S3[Server 3<br>(App)]
+        LB["Load Balancer<br/>(distributes requests)"]
+        S1["Server 1<br/>(App)"]
+        S2["Server 2<br/>(App)"]
+        S3["Server 3<br/>(App)"]
         DB[Database Cluster]
         
         LB --> S1
@@ -346,9 +346,9 @@ Let's trace how an e-commerce site might scale from 100 to 10 million users.
 graph TD
     subgraph "STAGE 1: SINGLE SERVER - Users: 100 | RPS: 10"
         subgraph "Single Server"
-            App1[App<br>(Java)]
-            DB1[Database<br>(MySQL)]
-            Files1[Files<br>(images)]
+            App1["App<br/>(Java)"]
+            DB1["Database<br/>(MySQL)"]
+            Files1["Files<br/>(images)"]
             Resources1["Resources: 2 CPU, 4GB RAM, 100GB disk<br>Cost: $50/month"]
         end
         Note1["Works fine. Simple to manage."]
@@ -390,9 +390,9 @@ graph TD
         Problem2["Problem: Site getting slow during peak hours"]
         Solution2["Solution: Upgrade to bigger server"]
         subgraph "Bigger Server"
-            App2[App<br>(Java)]
-            DB2[Database<br>(MySQL)]
-            Files2[Files<br>(images)]
+            App2["App<br/>(Java)"]
+            DB2["Database<br/>(MySQL)"]
+            Files2["Files<br/>(images)"]
             Resources2["Resources: 8 CPU, 32GB RAM, 500GB SSD<br>Cost: $400/month"]
         end
         Note2["Still simple. Just changed instance size."]
@@ -438,10 +438,10 @@ graph LR
         Problem3["Problem: Database and app competing for resources"]
         Solution3["Solution: Separate database to its own server"]
         subgraph "App Server"
-            App3[App<br>(Java)<br>8 CPU, 16GB RAM<br>$300/month]
+            App3["App<br/>(Java)<br/>8 CPU, 16GB RAM<br/>$300/month"]
         end
         subgraph "Database Server"
-            DB3[Database<br>(MySQL)<br>8 CPU, 64GB RAM<br>$500/month]
+            DB3["Database<br/>(MySQL)<br/>8 CPU, 64GB RAM<br/>$500/month"]
         end
         App3 <-->|Network| DB3
         Note3["First step toward distribution. App and DB can scale independently."]
@@ -489,7 +489,7 @@ graph TD
         App1_4[App 1<br>$300]
         App2_4[App 2<br>$300]
         App3_4[App 3<br>$300]
-        DB4[Database<br>(Master)<br>$800/month]
+        DB4["Database<br/>(Master)<br/>$800/month"]
         Note4["Added: Load balancer ($100), Redis for sessions ($100)<br>Total: ~$1,700/month<br><br>Can now add/remove app servers based on traffic."]
         
         LB4 --> App1_4
@@ -552,10 +552,10 @@ graph TD
         App3_5[App 3]
         App4_5[App 4]
         App5_5[App 5]
-        Redis5[Redis Cache<br>(reduces DB load 80%)]
-        Master5[Master<br>(Write)]
-        Replica1_5[Replica<br>(Read)]
-        Replica2_5[Replica<br>(Read)]
+        Redis5["Redis Cache<br/>(reduces DB load 80%)"]
+        Master5["Master<br/>(Write)"]
+        Replica1_5["Replica<br/>(Read)"]
+        Replica2_5["Replica<br/>(Read)"]
         Note5["Writes go to Master, reads distributed across replicas<br>Total: ~$5,000/month"]
         
         LB5 --> App1_5
@@ -625,7 +625,7 @@ graph TD
     subgraph "STAGE 6: FULL DISTRIBUTION - Users: 10,000,000 | RPS: 100,000"
         Problem6["Problem: Single database can't handle writes"]
         Solution6["Solution: Sharding + microservices + CDN"]
-        CDN6[CDN<br>(static files, images)]
+        CDN6["CDN<br/>(static files, images)"]
         Gateway6[API Gateway]
         UserSvc6[User<br>Svc]
         OrderSvc6[Order<br>Svc]

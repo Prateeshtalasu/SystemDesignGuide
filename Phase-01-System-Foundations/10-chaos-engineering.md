@@ -267,7 +267,24 @@ graph TD
 
 ### The Chaos Experiment Lifecycle
 
+```mermaid
+graph TD
+    subgraph "CHAOS EXPERIMENT LIFECYCLE"
+        Step1["1. DEFINE STEADY STATE<br>Metrics that indicate 'system is healthy':<br>• Error rate < 0.1%<br>• p99 latency < 200ms<br>• Throughput: 1000 ± 50 RPS"]
+        Step2["2. FORM HYPOTHESIS<br>'If we kill 1 of 3 database replicas,<br>the system will failover to remaining replicas<br>and maintain steady state within 30 seconds'"]
+        Step3["3. DESIGN EXPERIMENT<br>• Target: Database replica in us-east-1a<br>• Action: Terminate instance<br>• Duration: Until failover complete or 5 minutes<br>• Abort conditions: Error rate > 5%, latency > 2s<br>• Rollback: Restart instance, verify health"]
+        Step4["4. RUN EXPERIMENT<br>• Notify team (or run during GameDay)<br>• Start monitoring dashboards<br>• Inject failure<br>• Observe system behavior<br>• Record all observations"]
+        Step5["5. ANALYZE RESULTS<br>Hypothesis confirmed:<br>✓ Failover completed in 15 seconds<br>✓ Error rate peaked at 0.5% during failover<br>✓ Latency spike to 500ms, recovered to normal<br><br>OR Hypothesis disproved:<br>✗ Failover took 3 minutes (expected 30 seconds)<br>✗ Error rate hit 10% (expected < 1%)<br>→ Create ticket to fix failover configuration"]
+        Step6["6. IMPROVE AND REPEAT<br>• Fix discovered weaknesses<br>• Update runbooks with learnings<br>• Schedule next experiment<br>• Increase blast radius gradually"]
+        
+        Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CHAOS EXPERIMENT LIFECYCLE                            │
 │                                                                          │
@@ -332,10 +349,27 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Netflix Chaos Monkey
 
+```mermaid
+graph TD
+    subgraph "NETFLIX CHAOS MONKEY"
+        What["What it does:<br>Randomly terminates virtual machine instances in production"]
+        Why["Why:<br>'The best way to avoid failure is to fail constantly'<br>- Netflix"]
+        Schedule["Schedule:<br>Runs during business hours (when engineers are available)<br>Doesn't run on weekends or holidays"]
+        Timeline["9 AM ──────────────────────── Chaos Monkey Active ──────────────────────── 5 PM<br>🐵 Kill Instance | 🐵 Kill Instance | 🐵 Kill Instance<br>Services auto-recover, no user impact"]
+        SimianArmy["THE SIMIAN ARMY (Netflix's chaos tools):<br>• Chaos Monkey: Kills instances<br>• Chaos Kong: Kills entire regions<br>• Latency Monkey: Adds artificial delays<br>• Conformity Monkey: Finds non-conforming instances<br>• Janitor Monkey: Cleans up unused resources<br>• Security Monkey: Finds security violations"]
+        
+        What --> Why --> Schedule --> Timeline --> SimianArmy
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NETFLIX CHAOS MONKEY                                  │
 │                                                                          │
@@ -374,6 +408,7 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -383,7 +418,39 @@ graph TD
 
 **Scenario**: Test that your order service handles database failures gracefully.
 
+```mermaid
+sequenceDiagram
+    participant Setup
+    participant SteadyState
+    participant Hypothesis
+    participant T0 as T+0s
+    participant T5 as T+5s
+    participant T10 as T+10s
+    participant T30 as T+30s
+    participant T45 as T+45s
+    participant T50 as T+50s
+    participant Results
+    
+    Note over Setup: SETUP:<br>Order Service (3 instances) → PostgreSQL (Primary + 2 Replicas)<br>Circuit breaker: Failure threshold 50%, Timeout 5s, Fallback enabled
+    
+    Note over SteadyState: STEADY STATE:<br>Error rate: 0.02%, p99 latency: 150ms, Orders/minute: 500
+    
+    Note over Hypothesis: HYPOTHESIS:<br>When DB primary fails, circuit breaker will open,<br>return fallback responses, recover within 60 seconds
+    
+    T0->>T5: Inject: Block network to DB primary
+    T5->>T10: First timeouts, Circuit breaker: 5/10 failures, Error rate: 2%
+    T10->>T30: Circuit breaker OPENS, Fallback responses, Error rate: 0.5%, Latency: 50ms
+    T30->>T45: DB failover complete, Replica promoted, Reconnecting
+    T45->>T50: Circuit breaker HALF-OPEN, Testing limited requests
+    T50->>Results: Circuit breaker CLOSED, Normal operation, Error rate: 0.02%, Latency: 160ms
+    
+    Note over Results: RESULTS:<br>✓ Circuit breaker opened as expected<br>✓ Fallback responses worked<br>✓ Recovery within 60 seconds<br>⚠️ 2% error spike during initial failure<br><br>ACTION ITEMS:<br>• Reduce circuit breaker timeout from 5s to 2s<br>• Add retry for first failure<br>• Update runbook with observed failover time
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    EXPERIMENT: DATABASE FAILURE                          │
 │                                                                          │
@@ -458,6 +525,7 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -492,7 +560,24 @@ graph TD
 
 ### Chaos Engineering Tools
 
+```mermaid
+graph TD
+    subgraph "CHAOS ENGINEERING TOOLS"
+        ChaosMonkey["CHAOS MONKEY (Netflix)<br>• Randomly terminates instances<br>• AWS focused<br>• Part of Simian Army<br>• Open source"]
+        Gremlin["GREMLIN (Commercial)<br>• Full chaos platform<br>• Infrastructure, network, application chaos<br>• SaaS with enterprise features<br>• Great UI and reporting"]
+        Litmus["LITMUS CHAOS (CNCF)<br>• Kubernetes-native<br>• ChaosHub with pre-built experiments<br>• GitOps friendly<br>• Open source"]
+        ChaosMesh["CHAOS MESH (CNCF)<br>• Kubernetes-native<br>• Pod, network, I/O, time chaos<br>• Dashboard included<br>• Open source"]
+        FIS["AWS FAULT INJECTION SIMULATOR<br>• AWS managed service<br>• EC2, ECS, EKS, RDS experiments<br>• Integrated with AWS services<br>• Pay per use"]
+        ToxiProxy["TOXIPROXY (Shopify)<br>• Network chaos proxy<br>• Add latency, timeouts, bandwidth limits<br>• Great for testing<br>• Open source"]
+        
+        ChaosMonkey --> Gremlin --> Litmus --> ChaosMesh --> FIS --> ToxiProxy
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CHAOS ENGINEERING TOOLS                               │
 │                                                                          │
@@ -540,6 +625,7 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

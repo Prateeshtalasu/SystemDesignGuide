@@ -62,15 +62,15 @@ Think of the request-response lifecycle like sending a letter and receiving a re
 ```mermaid
 graph TD
     subgraph "SENDING A LETTER"
-        Step1[1. You write a letter<br>(Create HTTP Request)]
-        Step2[2. You look up the address<br>(DNS Lookup)]
-        Step3[3. You put it in an envelope<br>(Add TCP/IP headers)]
-        Step4[4. Post office picks it up<br>(Your ISP)]
-        Step5[5. Sorted through distribution centers<br>(Internet routers)]
-        Step6[6. Delivered to recipient's mailbox<br>(Server receives)]
-        Step7[7. Recipient reads and writes reply<br>(Server processes)]
-        Step8[8. Reply travels back same way<br>(Response)]
-        Step9[9. You receive and read the reply<br>(Browser renders)]
+        Step1["1. You write a letter<br/>Create HTTP Request"]
+        Step2["2. You look up the address<br/>DNS Lookup"]
+        Step3["3. You put it in an envelope<br/>Add TCP/IP headers"]
+        Step4["4. Post office picks it up<br/>Your ISP"]
+        Step5["5. Sorted through distribution centers<br/>Internet routers"]
+        Step6["6. Delivered to recipient's mailbox<br/>Server receives"]
+        Step7["7. Recipient reads and writes reply<br/>Server processes"]
+        Step8["8. Reply travels back same way<br/>Response"]
+        Step9["9. You receive and read the reply<br/>Browser renders"]
 
         Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6 --> Step7 --> Step8 --> Step9
     end
@@ -258,7 +258,7 @@ Your Computer          DNS Resolver         Root DNS          .com DNS         a
 ```mermaid
 graph TD
     subgraph "DNS CACHING LAYERS"
-        Layer1[1. Browser cache<br>(Chrome: chrome://net-internals/#dns)<br>TTL: Usually 1-5 minutes]
+        Layer1["1. Browser cache<br/>(Chrome: chrome://net-internals/#dns)<br/>TTL: Usually 1-5 minutes"]
         Layer2[2. Operating System cache<br>Windows: ipconfig /displaydns<br>Linux: systemd-resolve --statistics]
         Layer3[3. Router cache<br>Your home router remembers lookups]
         Layer4[4. ISP DNS resolver cache<br>Shared across all ISP customers]
@@ -525,7 +525,7 @@ graph TD
     subgraph "SERVER-SIDE PROCESSING"
         Request[Request arrives at port 443]
         LB[Load Balancer<br>Distributes across multiple servers]
-        WebServer[Web Server<br>(Reverse Proxy)<br>Nginx/Apache handles static files, SSL<br>termination, compression]
+        WebServer["Web Server<br/>(Reverse Proxy)<br/>Nginx/Apache handles static files, SSL<br/>termination, compression"]
         AppServer[Application Server<br>Spring Boot, Node.js, Django<br>Business logic, authentication]
         DB[Database/Cache<br>PostgreSQL, Redis, Elasticsearch<br>Data retrieval]
 
@@ -607,9 +607,9 @@ X-Request-Id: abc-123-def
 ```mermaid
 graph TD
     subgraph "BROWSER RENDERING PIPELINE"
-        Step1[1. Parse HTML] --> DOM[DOM Tree<br>(Document Object Model)]
-        Step2[2. Parse CSS] --> CSSOM[CSSOM<br>(CSS Object Model)]
-        Step3[3. Execute JavaScript<br>(may modify DOM/CSSOM)]
+        Step1["1. Parse HTML"] --> DOM["DOM Tree<br/>(Document Object Model)"]
+        Step2["2. Parse CSS"] --> CSSOM["CSSOM<br/>(CSS Object Model)"]
+        Step3["3. Execute JavaScript<br/>(may modify DOM/CSSOM)"]
         DOM --> RenderTree[4. Combine DOM + CSSOM → Render Tree]
         CSSOM --> RenderTree
         Step3 --> RenderTree
@@ -663,7 +663,7 @@ Let's trace exactly what happens when you visit `https://example.com/hello`.
 
 ```mermaid
 graph LR
-    YourComputer[Your Computer<br>(192.168.1.100)] --> DNSServer[DNS Server<br>(8.8.8.8)]
+    YourComputer["Your Computer<br/>(192.168.1.100)"] --> DNSServer["DNS Server<br/>(8.8.8.8)"]
 
     subgraph "UDP Packet"
         UDPHeader["Source IP: 192.168.1.100<br>Dest IP: 8.8.8.8<br>Source Port: 54321<br>Dest Port: 53 (DNS)"]
@@ -895,8 +895,8 @@ graph TD
     subgraph "CLOUDFLARE'S APPROACH"
         User[User in Tokyo]
         Request[Request to yoursite.com]
-        Edge[Cloudflare Edge<br>(DNS + CDN)<br>Tokyo data center<br>- DNS resolution: 1ms<br>- TLS termination here<br>- Cached content served directly]
-        Origin[Origin Server<br>(Your server)<br>San Francisco]
+        Edge["Cloudflare Edge<br/>(DNS + CDN)<br/>Tokyo data center<br/>- DNS resolution: 1ms<br/>- TLS termination here<br/>- Cached content served directly"]
+        Origin["Origin Server<br/>(Your server)<br/>San Francisco"]
         Result[Result: User experiences 10ms instead of 200ms]
 
         User --> Request --> Edge

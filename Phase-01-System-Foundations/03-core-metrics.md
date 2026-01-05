@@ -63,9 +63,9 @@ Think of your system as a highway:
 ```mermaid
 graph TD
     subgraph "THE HIGHWAY ANALOGY"
-        Latency[LATENCY = How long it takes ONE car to travel from A to B<br>(Time for a single request)]
-        Throughput[THROUGHPUT = How many cars pass a point per hour<br>(Requests per second the system handles)]
-        Bandwidth[BANDWIDTH = How many lanes the highway has<br>(Maximum data transfer capacity)]
+        Latency["LATENCY = How long it takes ONE car to travel from A to B<br/>(Time for a single request)"]
+        Throughput["THROUGHPUT = How many cars pass a point per hour<br/>(Requests per second the system handles)"]
+        Bandwidth["BANDWIDTH = How many lanes the highway has<br/>(Maximum data transfer capacity)"]
         
         Highway1["Highway Lane 1 →"]
         Highway2["Highway Lane 2 →"]
@@ -601,10 +601,10 @@ Insight: Average (52.55ms) hides the outlier (250ms) that p99 reveals!
 graph TD
     subgraph "METRICS PIPELINE"
         App[Application]
-        Agent[Metrics Agent<br>(in-process)<br>Micrometer, StatsD, Prometheus client]
-        Store[Metrics Store<br>(time-series DB)<br>Prometheus, InfluxDB, Datadog]
-        Dashboard[Dashboard<br>(visualization)<br>Grafana, Datadog, CloudWatch]
-        Alerting[Alerting<br>(notification)<br>PagerDuty, OpsGenie, Slack]
+        Agent["Metrics Agent<br/>(in-process)<br/>Micrometer, StatsD, Prometheus client"]
+        Store["Metrics Store<br/>(time-series DB)<br/>Prometheus, InfluxDB, Datadog"]
+        Dashboard["Dashboard<br/>(visualization)<br/>Grafana, Datadog, CloudWatch"]
+        Alerting["Alerting<br/>(notification)<br/>PagerDuty, OpsGenie, Slack"]
         
         App -->|Emit metrics (latency, throughput, errors)| Agent
         Agent -->|Push/Pull metrics| Store

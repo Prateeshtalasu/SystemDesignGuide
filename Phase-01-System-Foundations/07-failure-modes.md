@@ -242,7 +242,7 @@ graph LR
         ServiceA[Service A]
         ServiceB[Service B]
         ServiceC[Service C]
-        DB[Database<br>(slow: 10s)]
+        DB["Database<br/>(slow: 10s)"]
         
         ServiceA --> ServiceB
         ServiceB --> ServiceC
@@ -615,7 +615,30 @@ graph TD
 
 **Failure Scenario: Payment Service Timeout**
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant OrderService
+    participant PaymentService
+    participant BankAPI
+    
+    Note over User,BankAPI: WITHOUT PROPER FAILURE HANDLING
+    User->>OrderService: T+0: Place Order
+    OrderService->>OrderService: T+1s: Cart validated ✓
+    OrderService->>OrderService: T+2s: Inventory checked and reserved ✓
+    OrderService->>PaymentService: T+3s: Payment request sent
+    PaymentService->>BankAPI: T+4s: Calls Bank API
+    Note over BankAPI: T+5s: Bank API is slow today...
+    Note over User: T+30s: User still waiting, sees spinning wheel
+    Note over PaymentService: T+60s: Connection timeout! Payment status UNKNOWN
+    
+    Note over User,OrderService: Problems:<br>1. User waited 60 seconds with no feedback<br>2. Inventory is reserved but order not created<br>3. Did the payment go through? We don't know!<br>4. User might try again → double charge risk
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITHOUT PROPER FAILURE HANDLING                       │
 │                                                                          │
@@ -638,10 +661,36 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **With Proper Failure Handling**:
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant OrderService
+    participant PaymentService
+    participant BankAPI
+    participant AsyncJob
+    
+    Note over User,AsyncJob: WITH PROPER FAILURE HANDLING
+    User->>OrderService: T+0: Place Order<br>Generate idempotency key: "order-123-abc"
+    OrderService->>OrderService: T+1s: Cart validated ✓
+    OrderService->>OrderService: T+2s: Inventory checked (not reserved yet)<br>Circuit breaker: CLOSED
+    OrderService->>PaymentService: T+3s: Payment request with idempotency key<br>Timeout: 10 seconds<br>Circuit breaker: CLOSED
+    PaymentService->>BankAPI: T+4s: Calls Bank API
+    Note over BankAPI: T+5s: Bank API slow...
+    Note over PaymentService: T+13s: Timeout! Payment status unknown<br>Circuit breaker failure count: 1 of 5
+    OrderService->>User: T+13s: "Payment processing. We'll email confirmation"<br>Create order in PENDING state<br>Queue async job
+    User->>User: T+14s: Sees: "Order received! Confirmation coming soon."
+    
+    Note over AsyncJob: Background (T+15s to T+60s):<br>- Checks payment status with Bank API<br>- Payment confirmed → Order: CONFIRMED<br>- Payment failed → Order: FAILED, notify user<br>- If user retries, idempotency key prevents double charge
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITH PROPER FAILURE HANDLING                          │
 │                                                                          │
@@ -676,6 +725,7 @@ graph TD
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
