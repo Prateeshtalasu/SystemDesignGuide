@@ -678,7 +678,19 @@ public class CacheService {
 
 **Cache Stampede Simulation:**
 
+```mermaid
+flowchart TD
+    Start["Scenario: Popular URL cache expires, 10,000 requests arrive<br/>T+0ms: Cache entry expires for 'abc123'<br/>T+0ms: 10,000 requests arrive simultaneously"]
+    Start --> WithoutProtection
+    WithoutProtection["Without Protection:<br/>- All 10,000 requests see cache MISS<br/>- All 10,000 requests hit database<br/>- Database overwhelmed (10,000 concurrent queries)<br/>- Latency: 5ms → 500ms<br/>- Some requests timeout"]
+    Start --> WithProtection
+    WithProtection["With Protection (Locking):<br/>- Request 1: Acquires lock, fetches from DB<br/>- Requests 2-10,000: Lock unavailable, wait 50ms<br/>- Request 1: Populates cache, releases lock<br/>- Requests 2-10,000: Retry cache → HIT<br/>- Database: Only 1 query (not 10,000)<br/>- Latency: 5ms (cache hit) for 99.99% of requests"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Scenario: Popular URL cache expires, 10,000 requests arrive
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -706,6 +718,9 @@ Scenario: Popular URL cache expires, 10,000 requests arrive
 │ - Database: Only 1 query (not 10,000)                      │
 │ - Latency: 5ms (cache hit) for 99.99% of requests          │
 └─────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 **Probabilistic Early Expiration Benefits:**

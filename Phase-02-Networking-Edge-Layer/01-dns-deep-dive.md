@@ -128,7 +128,28 @@ Before we trace a request, let's define the players:
 
 Let's trace what happens when you type `www.example.com` in your browser:
 
+```mermaid
+sequenceDiagram
+    participant Browser as Your Browser
+    participant Resolver as Recursive Resolver
+    participant Root as Root Server
+    participant TLD as TLD Server (.com)
+    participant Auth as Authoritative Server
+    
+    Browser->>Resolver: 1. "What's www.example.com?"
+    Resolver->>Root: 2. "Who handles .com?"
+    Root->>Resolver: 3. "Ask 192.5.6.30 (TLD)"
+    Resolver->>TLD: 4. "Who handles example.com?"
+    TLD->>Resolver: 5. "Ask 93.184.216.34"
+    Resolver->>Auth: 6. "What's www.example.com?"
+    Auth->>Resolver: 7. "93.184.216.34"
+    Resolver->>Browser: 8. "93.184.216.34"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         DNS RESOLUTION FLOW                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -164,6 +185,7 @@ Your Browser                 Recursive Resolver              Root Server
      │ <─────────────────────────────                              │
      │                              │                              │
 ```
+</details>
 
 ### Recursive vs Iterative Resolution
 
@@ -742,7 +764,21 @@ www.example.com.  300  IN  A  93.184.216.34
 
 ### Where Caching Happens
 
+```mermaid
+flowchart LR
+    Browser["Browser Cache<br/>(minutes)"] --> OS["OS Cache<br/>(minutes)"]
+    OS --> Resolver["Resolver Cache<br/>(per TTL)"]
+    Resolver --> Auth["Authoritative Server<br/>(source)"]
+    
+    Browser -.->|"Chrome: 1 minute<br/>Firefox: 60s"| Browser
+    OS -.->|"Linux: nscd/systemd-resolved<br/>Windows: DNS Client service"| OS
+    Resolver -.->|"8.8.8.8: per TTL<br/>1.1.1.1: per TTL"| Resolver
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         DNS CACHING LAYERS                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -761,6 +797,7 @@ www.example.com.  300  IN  A  93.184.216.34
    network.dnsCacheExpiration  DNS Client    per TTL
    (default: 60s)        service
 ```
+</details>
 
 ### The TTL Countdown Problem
 
@@ -823,7 +860,28 @@ Query 3: [10.0.1.3, 10.0.1.1, 10.0.1.2]
 
 Return different IPs based on the client's geographic location.
 
+```mermaid
+flowchart TD
+    GeoDNS["GeoDNS Server"]
+    US["US-East DC<br/>10.0.1.1"]
+    EU["EU-West DC<br/>10.0.2.1"]
+    Asia["Asia DC<br/>10.0.3.1"]
+    NY["User in New York"]
+    London["User in London"]
+    Tokyo["User in Tokyo"]
+    
+    GeoDNS --> US
+    GeoDNS --> EU
+    GeoDNS --> Asia
+    NY --> US
+    London --> EU
+    Tokyo --> Asia
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            GeoDNS ROUTING                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -844,6 +902,7 @@ Return different IPs based on the client's geographic location.
           │                          │                          │
    User in New York           User in London            User in Tokyo
 ```
+</details>
 
 **How GeoDNS determines location**:
 1. Client IP → GeoIP database lookup
@@ -865,7 +924,26 @@ api.example.com.  60  IN  A  10.0.1.3  ; weight=10 (small server)
 
 Modern DNS providers integrate health checks:
 
+```mermaid
+flowchart TD
+    DNS["DNS Provider<br/>(Route 53)"]
+    S1["Server 1<br/>✓ OK"]
+    S2["Server 2<br/>✗ DOWN"]
+    S3["Server 3<br/>✓ OK"]
+    Result["DNS only returns healthy servers:<br/>[Server 1, Server 3]"]
+    
+    DNS -->|"Health Check"| S1
+    DNS -->|"Health Check"| S2
+    DNS -->|"Health Check"| S3
+    S1 --> Result
+    S3 --> Result
+    S2 -.->|"Unhealthy"| Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       HEALTH-CHECKED DNS                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -889,6 +967,7 @@ Modern DNS providers integrate health checks:
                     DNS only returns healthy servers:
                     [Server 1, Server 3]
 ```
+</details>
 
 ---
 

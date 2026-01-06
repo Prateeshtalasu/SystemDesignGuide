@@ -88,7 +88,31 @@ class SortedSetEntry {
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Applications, SDKs, Command Line"]
+    Clients --> Node1
+    Clients --> Node2
+    Clients --> Node3
+    Node1["Node 1 (Master)"]
+    Node2["Node 2 (Replica)"]
+    Node3["Node 3 (Replica)"]
+    Node1 --> ReplicationProtocol
+    Node2 --> ReplicationProtocol
+    Node3 --> ReplicationProtocol
+    ReplicationProtocol["Replication Protocol"]
+    ReplicationProtocol --> InMemoryStorage
+    ReplicationProtocol --> Persistence
+    ReplicationProtocol --> Clustering
+    InMemoryStorage["In-Memory Storage"]
+    Persistence["Persistence (RDB/AOF)"]
+    Clustering["Clustering (Sharding)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                      CLIENTS                             │
 │         (Applications, SDKs, Command Line)               │
@@ -116,6 +140,9 @@ class SortedSetEntry {
 │  In-Memory    │   │  Persistence  │   │  Clustering  │
 │   Storage     │   │  (RDB/AOF)    │   │  (Sharding)  │
 └───────────────┘   └───────────────┘   └──────────────┘
+```
+
+</details>
 ```
 
 ---

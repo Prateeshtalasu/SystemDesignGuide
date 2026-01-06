@@ -400,7 +400,24 @@ public class CardInsertedState implements ATMState {
 
 **State Diagram:**
 
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+
+    IDLE --> CARD_INSERTED: Insert card
+    CARD_INSERTED --> IDLE: Cancel / Eject
+
+    CARD_INSERTED --> AUTHENTICATED: Enter PIN
+    CARD_INSERTED --> IDLE: Wrong PIN (3x)
+
+    AUTHENTICATED --> TRANSACTION_IN_PROGRESS: Select transaction
+    TRANSACTION_IN_PROGRESS --> IDLE: Complete / Eject card
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────────┐
                     │                     │
                     ▼                     │
@@ -429,6 +446,8 @@ public class CardInsertedState implements ATMState {
    └──────────│TRANSACTION_IN_PROG │─────┘
               └────────────────────┘
 ```
+
+</details>
 
 ---
 

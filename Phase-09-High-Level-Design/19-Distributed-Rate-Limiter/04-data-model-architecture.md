@@ -51,7 +51,19 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    APIServers["API Servers (Multiple)"]
+    APIServers --> RateLimiterService
+    RateLimiterService["Rate Limiter Service<br/>- Token Bucket<br/>- Sliding Window"]
+    RateLimiterService --> RedisCluster
+    RedisCluster["Redis Cluster<br/>- Counters<br/>- Buckets<br/>- Windows"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                        DISTRIBUTED RATE LIMITER SYSTEM                                │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -78,6 +90,9 @@ We choose **Availability + Partition Tolerance (AP)**:
                     │  - Buckets       │
                     │  - Windows       │
                     └───────────────────┘
+```
+
+</details>
 ```
 
 ---

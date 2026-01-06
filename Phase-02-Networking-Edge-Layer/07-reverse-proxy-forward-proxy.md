@@ -36,7 +36,19 @@ Direct client-to-server communication has limitations:
 
 ### What Systems Looked Like Before Proxies
 
+```mermaid
+flowchart LR
+    ClientA["Client A"] --> Server["Server"]
+    ClientB["Client B"] --> Server
+    ClientC["Client C"] --> Server
+    
+    Note1["Problems:<br/>- Server knows all client IPs (privacy concern)<br/>- Each client makes full request (no shared cache)<br/>- Server handles SSL for every connection (CPU intensive)<br/>- Server exposed directly to internet (security risk)<br/>- No central logging or access control"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    DIRECT CLIENT-SERVER COMMUNICATION                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -52,6 +64,7 @@ Problems:
 - Server exposed directly to internet (security risk)
 - No central logging or access control
 ```
+</details>
 
 ### Real Examples of the Problem
 
@@ -82,7 +95,33 @@ Without a reverse proxy, each microservice must implement its own authentication
 - Customer doesn't know which specific person answered
 - Receptionist can screen calls, take messages, handle common questions
 
+```mermaid
+flowchart TD
+    subgraph Forward["FORWARD PROXY (Protects Clients)"]
+        direction LR
+        CA["Client A"] --> FP["Forward Proxy"]
+        CB["Client B"] --> FP
+        CC["Client C"] --> FP
+        FP --> Internet["Internet<br/>Server X<br/>Server Y<br/>Server Z"]
+        
+        NoteF["- Clients know about proxy<br/>- Servers see proxy IP, not client IP<br/>- Proxy can cache, filter, log"]
+    end
+    
+    subgraph Reverse["REVERSE PROXY (Protects Servers)"]
+        direction LR
+        Internet2["Internet<br/>Client X<br/>Client Y<br/>Client Z"] --> RP["Reverse Proxy"]
+        RP --> SA["Server A"]
+        RP --> SB["Server B"]
+        RP --> SC["Server C"]
+        
+        NoteR["- Clients don't know about backend servers<br/>- Servers see proxy IP, not client IP<br/>- Proxy can load balance, cache, terminate SSL"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    FORWARD vs REVERSE PROXY                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -117,6 +156,7 @@ REVERSE PROXY (Protects Servers):
 - Servers see proxy IP, not client IP
 - Proxy can load balance, cache, terminate SSL
 ```
+</details>
 
 ### The Key Insight
 
@@ -129,7 +169,24 @@ REVERSE PROXY (Protects Servers):
 
 ### Forward Proxy Architecture
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Forward Proxy
+    participant Server
+    
+    Client->>Proxy: 1. GET http://example.com/page
+    Proxy->>Server: 2. GET /page HTTP/1.1<br/>Host: example.com
+    Server->>Proxy: 3. HTTP/1.1 200 OK
+    Proxy->>Client: 4. HTTP/1.1 200 OK
+    
+    Note over Client,Server: Key points:<br/>- Client explicitly connects to proxy (configured in browser/OS)<br/>- Proxy makes request to server on behalf of client<br/>- Server sees proxy's IP address, not client's
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    FORWARD PROXY FLOW                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -155,12 +212,32 @@ Key points:
 - Proxy makes request to server on behalf of client
 - Server sees proxy's IP address, not client's
 ```
+</details>
 
 ### Forward Proxy Use Cases
 
 #### 1. Corporate Internet Access Control
 
+```mermaid
+sequenceDiagram
+    participant Employee as Employee Laptop
+    participant Proxy as Corporate Proxy
+    participant Internet
+    
+    Employee->>Proxy: GET facebook.com
+    Note over Proxy: [Blocked by policy]
+    Proxy->>Employee: 403 Forbidden<br/>"Social media blocked"
+    
+    Employee->>Proxy: GET salesforce.com
+    Proxy->>Internet: GET salesforce.com
+    Internet->>Proxy: 200 OK
+    Proxy->>Employee: 200 OK
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CORPORATE PROXY                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -184,10 +261,33 @@ Employee Laptop                Corporate Proxy                  Internet
       │  200 OK                      │                              │
       │  <───────────────────────────│                              │
 ```
+</details>
 
 #### 2. Caching Proxy
 
+```mermaid
+sequenceDiagram
+    participant ClientA as Client A
+    participant Proxy as Proxy Cache
+    participant Server
+    participant ClientB as Client B
+    
+    ClientA->>Proxy: GET /jquery.min.js
+    Note over Proxy: [Cache MISS]
+    Proxy->>Server: GET /jquery.min.js
+    Server->>Proxy: 200 OK + jquery.min.js
+    Note over Proxy: [Store in cache]
+    Proxy->>ClientA: 200 OK + jquery.min.js
+    
+    ClientB->>Proxy: GET /jquery.min.js
+    Note over Proxy: [Cache HIT]
+    Proxy->>ClientB: 200 OK + jquery.min.js<br/>(from cache)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CACHING FORWARD PROXY                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -210,6 +310,8 @@ Client B                          │                              │
    │                              │                              │
    │  GET /jquery.min.js          │                              │
    │  ───────────────────────────>│                              │
+```
+</details>
    │                              │  [Cache HIT!]                │
    │  200 OK + jquery.min.js      │  [No request to server]      │
    │  <───────────────────────────│                              │
@@ -299,7 +401,25 @@ public class ProxyHttpClient {
 
 ### Reverse Proxy Architecture
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Reverse Proxy
+    participant Backend as Backend Server
+    
+    Client->>Proxy: 1. GET https://api.example.com/users
+    Note over Proxy: [SSL terminated]<br/>[Route to backend]
+    Proxy->>Backend: 2. GET /users HTTP/1.1<br/>Host: backend-server:8080<br/>X-Forwarded-For: client-ip
+    Backend->>Proxy: 3. HTTP/1.1 200 OK<br/>[{"id":1,"name":"Alice"}]
+    Proxy->>Client: 4. HTTP/1.1 200 OK<br/>[{"id":1,"name":"Alice"}]
+    
+    Note over Client,Backend: Key points:<br/>- Client connects to reverse proxy (thinks it's the server)<br/>- Proxy forwards to backend servers<br/>- Client doesn't know about backend servers
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REVERSE PROXY FLOW                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -330,12 +450,28 @@ Key points:
 - Proxy forwards to backend servers
 - Client doesn't know about backend servers
 ```
+</details>
 
 ### Reverse Proxy Use Cases
 
 #### 1. SSL/TLS Termination
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Reverse Proxy
+    participant Backend as Backend Servers
+    
+    Client->>Proxy: HTTPS (encrypted)
+    Proxy->>Backend: HTTP (unencrypted)
+    
+    Note over Client,Backend: Benefits:<br/>- SSL certificates managed in one place<br/>- Backend servers don't need SSL configuration<br/>- Faster backend communication (no encryption overhead)<br/>- Easier certificate rotation
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SSL TERMINATION                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -355,10 +491,26 @@ Benefits:
 - Faster backend communication (no encryption overhead)
 - Easier certificate rotation
 ```
+</details>
 
 #### 2. Load Balancing
 
+```mermaid
+flowchart TD
+    Proxy["Reverse Proxy<br/>(Nginx/HAProxy)"]
+    Server1["App Server 1<br/>(8080)"]
+    Server2["App Server 2<br/>(8080)"]
+    Server3["App Server 3<br/>(8080)"]
+    
+    Proxy --> Server1
+    Proxy --> Server2
+    Proxy --> Server3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REVERSE PROXY LOAD BALANCING                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -376,10 +528,30 @@ Benefits:
     │  (8080)       │    │  (8080)       │    │  (8080)       │
     └───────────────┘    └───────────────┘    └───────────────┘
 ```
+</details>
 
 #### 3. Static Content Serving
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Reverse Proxy
+    participant Backend as Backends
+    
+    Client->>Proxy: GET /images/logo.png
+    Note over Proxy: [Serve from disk/cache]
+    Proxy->>Client: Response<br/>(No backend needed!)
+    
+    Client->>Proxy: GET /api/users
+    Proxy->>Backend: [Forward to app server]
+    Backend->>Proxy: Response
+    Proxy->>Client: Response
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    STATIC vs DYNAMIC ROUTING                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -399,6 +571,7 @@ Client Request             Reverse Proxy                    Backends
       │                         │  <─────────────────────────  │
       │  <────────────────────  │                              │
 ```
+</details>
 
 #### 4. Request Buffering
 
@@ -423,7 +596,37 @@ Benefits:
 
 #### 5. Caching
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy
+    participant Backend
+    
+    Note over Client,Backend: Request 1: GET /api/products
+    Client->>Proxy: GET /api/products
+    Proxy->>Backend: Forward request
+    Backend->>Proxy: Response
+    Note over Proxy: Cache response<br/>(Cache-Control: max-age=60)
+    Proxy->>Client: Response
+    
+    Note over Client,Backend: Request 2: GET /api/products (within 60 seconds)
+    Client->>Proxy: GET /api/products
+    Note over Proxy: [Cache HIT]
+    Proxy->>Client: Response<br/>(Backend not contacted!)
+    
+    Note over Client,Backend: Request 3: GET /api/products (after 60 seconds)
+    Client->>Proxy: GET /api/products
+    Note over Proxy: [Cache MISS]
+    Proxy->>Backend: Forward request
+    Backend->>Proxy: Response
+    Note over Proxy: Refresh cache
+    Proxy->>Client: Response
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REVERSE PROXY CACHING                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -440,6 +643,7 @@ Request 3: GET /api/products (after 60 seconds)
   Client → Proxy → [Cache MISS] → Backend → Response
   Proxy refreshes cache
 ```
+</details>
 
 ---
 
@@ -687,7 +891,27 @@ http {
 
 ### High Availability Nginx Setup
 
+```mermaid
+flowchart TD
+    DNS["DNS / Route53"]
+    Nginx1["Nginx (VIP)<br/>Primary"]
+    Nginx2["Nginx (VIP)<br/>Secondary"]
+    Pool1["Backend Pool"]
+    Pool2["Backend Pool"]
+    
+    DNS --> Nginx1
+    DNS --> Nginx2
+    Nginx1 <-->|"Keepalived"| Nginx2
+    Nginx1 --> Pool1
+    Nginx1 --> Pool2
+    Nginx2 --> Pool1
+    Nginx2 --> Pool2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HA REVERSE PROXY ARCHITECTURE                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -713,6 +937,7 @@ http {
             │  Backend Pool │     │  Backend Pool │
             └───────────────┘     └───────────────┘
 ```
+</details>
 
 **Keepalived Configuration** (for VIP failover):
 

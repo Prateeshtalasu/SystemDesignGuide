@@ -235,7 +235,54 @@ CREATE INDEX idx_precomputed_expiry ON precomputed_recommendations(expires_at);
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string user_id UK
+        string preferred_categories
+        string engagement_level
+        boolean is_new_user
+    }
+    items {
+        int id PK
+        string item_id UK
+        string title
+        string category
+        string content_features
+        boolean is_new_item
+    }
+    interactions {
+        string user_id PK
+        timestamp event_time CK
+        string item_id CK
+        string action_type
+        string context
+    }
+    precomputed_recommendations {
+        string user_id PK
+        string recommendation_type PK
+        int rank PK
+        string item_id
+        float score
+        timestamp expires_at
+    }
+    
+    users ||--o{ interactions : "has"
+    items ||--o{ interactions : "receives"
+    users ||--o{ precomputed_recommendations : "has"
+    items ||--o{ precomputed_recommendations : "recommended_in"
 ```
+
+**Embedding Stores:**
+- Redis: `user_embedding:{user_id}` → vector
+- Redis: `user_features:{user_id}` → feature hash
+- FAISS: item_embeddings index
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐       ┌─────────────────────┐
 │       users         │       │       items         │
 ├─────────────────────┤       ├─────────────────────┤
@@ -279,6 +326,9 @@ CREATE INDEX idx_precomputed_expiry ON precomputed_recommendations(expires_at);
 │ score                                               │
 │ expires_at                                          │
 └─────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---
@@ -354,7 +404,56 @@ CREATE INDEX idx_precomputed_expiry ON precomputed_recommendations(expires_at);
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Mobile Apps, Web Browsers, API Consumers"]
+    Clients --> APIGateway
+    APIGateway["API Gateway<br/>(Rate Limiting, Auth)"]
+    APIGateway --> RecAPI
+    APIGateway --> InteractionAPI
+    APIGateway --> FeedbackAPI
+    RecAPI["Recommendation API<br/>GET /recommendations"]
+    InteractionAPI["Interaction API<br/>POST /interactions"]
+    FeedbackAPI["Feedback API<br/>POST /feedback"]
+    RecAPI --> CandidateGen
+    InteractionAPI --> InteractionService
+    FeedbackAPI --> FeedbackService
+    CandidateGen["Candidate Generation"]
+    InteractionService["Interaction Service"]
+    FeedbackService["Feedback Service"]
+    CandidateGen --> RankingService
+    InteractionService --> Kafka
+    FeedbackService --> Kafka
+    RankingService["Ranking Service"]
+    Kafka["Kafka (Event Stream)"]
+    Kafka --> InteractionService
+    subgraph AppLayer["APPLICATION LAYER"]
+        CandidateGen
+        RankingService
+        InteractionService
+        FeedbackService
+    end
+    AppLayer --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        FeatureStore["Feature Store (Redis)"]
+        InteractionStore["Interaction Store (Cassandra)"]
+        ItemCatalog["Item Catalog (PostgreSQL)"]
+        EmbeddingIndex["Embedding Index (FAISS)"]
+        PrecomputedRecs["Pre-computed Recs (Redis)"]
+        ModelStore["Model Store (S3/GCS)"]
+    end
+    DataLayer --> BatchProcessing
+    subgraph BatchProcessing["BATCH PROCESSING"]
+        TrainingPipeline["Training Pipeline (Spark/Ray)"]
+        EmbeddingGen["Embedding Generation (GPU Cluster)"]
+        PrecomputeJobs["Pre-compute Recommendations (Batch Jobs)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Mobile Apps, Web Browsers, API Consumers)                       │
@@ -419,6 +518,9 @@ CREATE INDEX idx_precomputed_expiry ON precomputed_recommendations(expires_at);
 │  └─────────────────┘         └─────────────────┘         └─────────────────┘     │
 │                                                                                    │
 └───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

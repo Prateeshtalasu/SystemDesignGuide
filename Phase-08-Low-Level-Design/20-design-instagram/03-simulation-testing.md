@@ -10,20 +10,51 @@ Bob's posts: [B3, B1]
 Charlie's posts: [C4, C2]
 
 Step 1: Initialize priority queue
+
+```mermaid
+flowchart LR
+    A["For Bob: add B3, B1 to PQ<br/>For Charlie: add C4, C2 to PQ<br/><br/>PQ: [C4, B3, C2, B1]<br/>(sorted by timestamp, newest first)"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ For Bob: add B3, B1 to PQ                                       │
 │ For Charlie: add C4, C2 to PQ                                   │
 │                                                                  │
 │ PQ: [C4, B3, C2, B1]  (sorted by timestamp, newest first)       │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Extract top N (limit=3)
+
+```mermaid
+flowchart TD
+    A["poll() → C4<br/>Feed: [C4]"]
+    B["poll() → B3<br/>Feed: [C4, B3]"]
+    C["poll() → C2<br/>Feed: [C4, B3, C2]<br/>limit reached"]
+    
+    A --> B
+    B --> C
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ poll() → C4  │ Feed: [C4]                                       │
 │ poll() → B3  │ Feed: [C4, B3]                                   │
 │ poll() → C2  │ Feed: [C4, B3, C2]                               │
 │ limit reached                                                    │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result: [C4, B3, C2]
 ```

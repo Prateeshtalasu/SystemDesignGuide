@@ -33,7 +33,33 @@ public User getUser(Long userId) {
 
 **This works until...**
 
+```mermaid
+flowchart LR
+    Problem["THE LOCAL CACHE PROBLEM"]
+    
+    subgraph S1["Server 1"]
+        C1["Local Cache:<br/>user:123 = John"]
+    end
+    
+    subgraph S2["Server 2"]
+        C2["Local Cache:<br/>user:123 = ???<br/>← Different data!"]
+    end
+    
+    User["User updates<br/>name to 'Johnny'"]
+    LB["Load balancer sends<br/>request to Server 2"]
+    
+    User --> S1
+    S1 -->|Server 1 cache<br/>updated to 'Johnny'| C1
+    LB --> S2
+    S2 -->|Server 2 returns<br/>'John' (stale!)| C2
+    
+    Note["Problem: Each server has its own cache. They're not synchronized."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE LOCAL CACHE PROBLEM                               │
 │                                                                          │
@@ -52,6 +78,8 @@ public User getUser(Long userId) {
 │                                                                          │
 │   Problem: Each server has its own cache. They're not synchronized.     │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **The fundamental problems**:
@@ -104,7 +132,36 @@ public User getUser(Long userId) {
 
 Think of Redis as a **giant whiteboard in a shared office**:
 
+```mermaid
+flowchart TD
+    Whiteboard["THE SHARED WHITEBOARD"]
+    
+    subgraph Without["Without Redis (Local Caches)"]
+        A["Developer A<br/>[notepad]<br/>user:123='John'"]
+        B["Developer B<br/>[notepad]<br/>user:123='Johnny'"]
+        C["Developer C<br/>[notepad]<br/>user:123=???"]
+        Note1["Each has their own notes. They don't match!"]
+    end
+    
+    subgraph With["With Redis (Shared Whiteboard)"]
+        Shared["SHARED WHITEBOARD<br/>user:123 = 'Johnny'<br/>session:abc = {userId: 123, expires: ...}<br/>product:456 = {name: 'Keyboard', price: 99.99}"]
+        A2["Developer A"]
+        B2["Developer B"]
+        C2["Developer C"]
+        Shared --> A2
+        Shared --> B2
+        Shared --> C2
+        Note2["Everyone reads and writes to the same whiteboard!"]
+    end
+    
+    Whiteboard --> Without
+    Whiteboard --> With
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE SHARED WHITEBOARD                                 │
 │                                                                          │
@@ -137,6 +194,8 @@ Think of Redis as a **giant whiteboard in a shared office**:
 │   Everyone reads and writes to the same whiteboard!                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 - **Single source of truth**: Everyone sees the same data
@@ -150,7 +209,38 @@ Think of Redis as a **giant whiteboard in a shared office**:
 
 ### Redis Architecture
 
+```mermaid
+flowchart TD
+    Redis["REDIS ARCHITECTURE"]
+    
+    subgraph Clients["CLIENT CONNECTIONS"]
+        App1["App 1"]
+        App2["App 2"]
+        App3["App 3"]
+        Pool["TCP Connection Pool"]
+        App1 --> Pool
+        App2 --> Pool
+        App3 --> Pool
+    end
+    
+    subgraph Server["REDIS SERVER"]
+        EventLoop["Event Loop<br/>(Single Thread)<br/>- Read request<br/>- Process<br/>- Write response<br/>~100K ops/sec per core"]
+        Memory["Memory<br/>Key-Value Store<br/>'user:123' → String<br/>'cart:456' → Hash<br/>'feed:789' → List<br/>'tags:abc' → Set<br/>'leaderboard' → ZSet"]
+    end
+    
+    subgraph Persistence["PERSISTENCE (Optional)"]
+        RDB["RDB Snapshot<br/>(Point-in-time)"]
+        AOF["AOF Log<br/>(Every write)"]
+    end
+    
+    Clients --> Server
+    Server --> Persistence
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REDIS ARCHITECTURE                                    │
 │                                                                          │
@@ -188,6 +278,8 @@ Think of Redis as a **giant whiteboard in a shared office**:
 │   │   └───────────────┘              └───────────────┘              │   │
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Why Single-Threaded?
@@ -229,7 +321,34 @@ Single-Threaded Event Loop:
 
 Redis is not just a key-value store. It's a **data structure server**. Each value can be one of several types:
 
+```mermaid
+flowchart TD
+    Structures["REDIS DATA STRUCTURES"]
+    
+    S1["1. STRING<br/>Key: 'user:123:name'<br/>Value: 'John Doe'<br/>Use: Simple values, counters, JSON blobs"]
+    
+    S2["2. HASH<br/>Key: 'user:123'<br/>Value: {name: 'John', email: 'john@example.com', age: 30}<br/>Use: Objects with fields (like a row in a table)"]
+    
+    S3["3. LIST<br/>Key: 'notifications:123'<br/>Value: ['New message', 'Friend request', 'Like on post']<br/>Use: Queues, recent items, activity feeds"]
+    
+    S4["4. SET<br/>Key: 'user:123:followers'<br/>Value: {456, 789, 101, 102} (unique, unordered)<br/>Use: Tags, unique items, membership testing"]
+    
+    S5["5. SORTED SET (ZSET)<br/>Key: 'leaderboard:game1'<br/>Value: {(player1, 1000), (player2, 950), (player3, 900)}<br/>Use: Rankings, time-series, priority queues"]
+    
+    S6["6. STREAM<br/>Key: 'events:orders'<br/>Value: Append-only log of events with IDs<br/>Use: Event sourcing, message queues, activity streams"]
+    
+    Structures --> S1
+    Structures --> S2
+    Structures --> S3
+    Structures --> S4
+    Structures --> S5
+    Structures --> S6
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REDIS DATA STRUCTURES                                 │
 │                                                                          │
@@ -263,6 +382,8 @@ Redis is not just a key-value store. It's a **data structure server**. Each valu
 │     Value: Append-only log of events with IDs                          │
 │     Use: Event sourcing, message queues, activity streams               │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -307,6 +428,27 @@ ZADD leaderboard 1500 "player:bob"
 ZADD leaderboard 1200 "player:charlie"
 
 # Internal representation (skip list + hash table):
+```mermaid
+flowchart LR
+    SkipList["Skip List (sorted by score)"]
+    
+    subgraph Levels["Levels"]
+        L3["Level 3: HEAD ─────────────────────────────────────────▶ 1500 (bob)"]
+        L2["Level 2: HEAD ────────────────────▶ 1200 (charlie) ───────▶ 1500"]
+        L1["Level 1: HEAD ──▶ 1000 (alice) ───────▶ 1200 ────────────▶ 1500"]
+        L0["Level 0: HEAD ──▶ 1000 ───────────────▶ 1200 ────────────▶ 1500"]
+    end
+    
+    HashTable["Hash Table (for O(1) score lookup):<br/>'player:alice' → 1000<br/>'player:bob' → 1500<br/>'player:charlie' → 1200"]
+    
+    SkipList --> Levels
+    SkipList --> HashTable
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  Skip List (sorted by score):                                           │
 │                                                                          │
@@ -323,6 +465,9 @@ ZADD leaderboard 1200 "player:charlie"
 │  "player:bob" → 1500                                                    │
 │  "player:charlie" → 1200                                                │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+```
 
 # Get top 3 players
 ZREVRANGE leaderboard 0 2 WITHSCORES
@@ -1126,7 +1271,25 @@ public class RedisPatterns {
 
 ### RDB (Snapshotting)
 
+```mermaid
+gantt
+    title RDB PERSISTENCE Timeline
+    dateFormat X
+    axisFormat %H:%M
+    
+    section Snapshots
+    Snapshot created (dump.rdb) :0, 15
+    100 writes happen :15, 15
+    Snapshot created (dump.rdb) :30, 0
+    Redis crashes! :35, 0
+    
+    Note: Recovery: Load 10:30 snapshot<br/>Data loss: ~5 minutes of writes<br/><br/>Configuration:<br/>save 900 1      # Snapshot if 1 key changed in 15 minutes<br/>save 300 10     # Snapshot if 10 keys changed in 5 minutes<br/>save 60 10000   # Snapshot if 10000 keys changed in 1 minute<br/><br/>Pros:<br/>- Compact file format<br/>- Fast recovery<br/>- Good for backups<br/><br/>Cons:<br/>- Data loss between snapshots<br/>- Fork can be slow with large datasets
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    RDB PERSISTENCE                                       │
 │                                                                          │
@@ -1158,10 +1321,31 @@ public class RedisPatterns {
 │   - Fork can be slow with large datasets                                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### AOF (Append Only File)
 
+```mermaid
+flowchart TD
+    AOF["AOF PERSISTENCE<br/>Logs every write operation"]
+    
+    File["AOF File Contents:<br/>*3<br/>$3<br/>SET<br/>$9<br/>user:123<br/>$4<br/>John<br/>*3<br/>$3<br/>SET<br/>$9<br/>user:456<br/>$4<br/>Jane"]
+    
+    Sync["Sync Options:<br/>appendfsync always    # Every write (safest, slowest)<br/>appendfsync everysec  # Every second (good balance)<br/>appendfsync no        # OS decides (fastest, risky)"]
+    
+    Pros["Pros:<br/>- Minimal data loss (1 second with everysec)<br/>- Human-readable log<br/>- Can be edited to fix corruption"]
+    
+    Cons["Cons:<br/>- Larger file size than RDB<br/>- Slower recovery (replays all commands)<br/>- Can grow very large without rewriting"]
+    
+    AOF --> File --> Sync --> Pros
+    AOF --> Cons
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AOF PERSISTENCE                                       │
 │                                                                          │
@@ -1201,10 +1385,28 @@ public class RedisPatterns {
 │   - Can grow very large without rewriting                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Hybrid Persistence (Recommended)
 
+```mermaid
+flowchart TD
+    Hybrid["HYBRID PERSISTENCE (Redis 4.0+)<br/>Combines RDB and AOF benefits"]
+    
+    File["AOF File Structure:<br/>[RDB Snapshot] | [AOF Commands since snapshot]<br/>(binary, fast) | (text, incremental)"]
+    
+    Config["Configuration:<br/>aof-use-rdb-preamble yes"]
+    
+    Benefits["Benefits:<br/>- Fast recovery (RDB part loads quickly)<br/>- Minimal data loss (AOF part has recent writes)<br/>- Compact file size (RDB + recent AOF)"]
+    
+    Hybrid --> File --> Config --> Benefits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HYBRID PERSISTENCE (Redis 4.0+)                       │
 │                                                                          │
@@ -1224,6 +1426,8 @@ public class RedisPatterns {
 │   - Minimal data loss (AOF part has recent writes)                      │
 │   - Compact file size (RDB + recent AOF)                                │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

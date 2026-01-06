@@ -150,7 +150,22 @@ No duplicate assignments, proper thread-safe queue handling
 
 ### State Diagram
 
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> MOVING_UP: Request received
+    MOVING_UP --> STOPPED: Reached top or no more up stops
+    STOPPED --> MOVING_DOWN: More down stops
+    MOVING_DOWN --> IDLE: No more requests
+    MOVING_DOWN --> STOPPED: Reached bottom or no more down stops
+    STOPPED --> MOVING_UP: More up stops
+    STOPPED --> IDLE: No more requests
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────────┐
                     │                     │
                     ▼                     │
@@ -182,6 +197,8 @@ No duplicate assignments, proper thread-safe queue handling
    └──────────│MOVING_DOWN │─────────────┘
               └────────────┘
 ```
+
+</details>
 
 ---
 

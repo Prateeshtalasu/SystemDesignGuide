@@ -393,6 +393,28 @@ Thread B: acquires lock → debit fails (insufficient) → release
 ```
 transfer(aliceWallet, bobWallet, $100)
 
+```mermaid
+flowchart TD
+    A["Step 1: Create Transaction<br/>Transaction {<br/>  type: TRANSFER_OUT<br/>  amount: $100<br/>  from: aliceWallet<br/>  to: bobWallet<br/>  status: PENDING<br/>}"]
+    
+    B["Step 2: Check Spending Limits<br/>Per-transaction: $100 <= $500 ✓<br/>Daily spent: $200 + $100 = $300 <= $1000 ✓<br/>Monthly spent: $3000 + $100 = $3100 <= $10000 ✓"]
+    
+    C["Step 3: Check Fraud Rules<br/>LargeAmountRule: $100 <= $5000 ✓<br/>FrequencyRule: 3 txns in 60 min <= 10 ✓<br/>VelocityRule: $300 total in 60 min <= $10000 ✓<br/>NewAccountRule: account 30 days old ✓"]
+    
+    D["Step 4: Execute Transfer (synchronized)<br/>BEFORE:<br/>  Alice: $750<br/>  Bob: $500<br/><br/>aliceWallet.debit($100) → Alice: $650<br/>bobWallet.credit($100) → Bob: $600<br/><br/>AFTER:<br/>  Alice: $650<br/>  Bob: $600"]
+    
+    E["Step 5: Complete Transaction<br/>Transaction {<br/>  status: COMPLETED<br/>}<br/><br/>Create TRANSFER_IN for Bob's history"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Step 1: Create Transaction                                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -450,6 +472,9 @@ transfer(aliceWallet, bobWallet, $100)
 │                                                                  │
 │ Create TRANSFER_IN for Bob's history                            │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

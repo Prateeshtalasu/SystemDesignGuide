@@ -610,7 +610,7 @@ graph TD
         Step1["1. Parse HTML"] --> DOM["DOM Tree<br/>(Document Object Model)"]
         Step2["2. Parse CSS"] --> CSSOM["CSSOM<br/>(CSS Object Model)"]
         Step3["3. Execute JavaScript<br/>(may modify DOM/CSSOM)"]
-        DOM --> RenderTree[4. Combine DOM + CSSOM → Render Tree]
+        DOM --> RenderTree["4. Combine DOM + CSSOM → Render Tree"]
         CSSOM --> RenderTree
         Step3 --> RenderTree
         RenderTree --> Layout[5. Layout<br>Calculate position and size of each element]

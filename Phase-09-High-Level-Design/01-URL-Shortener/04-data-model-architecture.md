@@ -21,7 +21,41 @@ Before looking at diagrams, let's understand each component and why it exists.
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web Browsers, Mobile Apps, API Users"]
+    Clients --> CDN
+    CDN["CDN (CloudFront)<br/>Edge caching for popular redirects"]
+    CDN --> LoadBalancer
+    LoadBalancer["LOAD BALANCER (AWS ALB)<br/>Health checks, SSL termination"]
+    LoadBalancer --> URLService1
+    LoadBalancer --> URLService2
+    LoadBalancer --> URLServiceN
+    URLService1["URL Service<br/>(Pod 1)"]
+    URLService2["URL Service<br/>(Pod 2)"]
+    URLServiceN["URL Service<br/>(Pod N)"]
+    URLService1 --> Redis
+    URLService2 --> Redis
+    URLServiceN --> Redis
+    URLService1 --> Kafka
+    URLService2 --> Kafka
+    URLServiceN --> Kafka
+    URLService1 --> PostgreSQL
+    URLService2 --> PostgreSQL
+    URLServiceN --> PostgreSQL
+    Redis["Redis Cluster<br/>(Cache)"]
+    Kafka["Kafka<br/>(Events)"]
+    PostgreSQL["PostgreSQL<br/>(Primary + 2 Replicas)"]
+    Kafka --> AnalyticsService
+    AnalyticsService["Analytics Service<br/>(Kafka Consumer)"]
+    AnalyticsService --> ClickHouse
+    ClickHouse["ClickHouse/TimescaleDB<br/>(Analytics Storage)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                    │
 │                    (Web Browsers, Mobile Apps, API Users)                   │
@@ -69,11 +103,49 @@ Before looking at diagrams, let's understand each component and why it exists.
                     └──────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Detailed Component Diagram
 
+```mermaid
+flowchart TB
+    subgraph Gateway["API GATEWAY LAYER"]
+        RateLimiter["Rate Limiter<br/>(per IP/API key)"]
+        Auth["Auth<br/>(API Key validation)"]
+        Routing["Routing<br/>(path-based routing)"]
+        Logging["Logging<br/>(request tracing)"]
+    end
+    
+    subgraph Application["APPLICATION LAYER"]
+        URLController["URL Controller<br/>POST /v1/urls<br/>GET /v1/urls<br/>DELETE /v1/urls"]
+        RedirectController["Redirect Controller<br/>GET /{code}"]
+        AnalyticsController["Analytics Controller<br/>GET /v1/urls/{code}/stats"]
+    end
+    
+    subgraph Service["SERVICE LAYER"]
+        URLService["URLService<br/>- createUrl()<br/>- getUrl()<br/>- deleteUrl()"]
+        RedirectService["RedirectService<br/>- resolve()<br/>- trackClick()"]
+        AnalyticsService["AnalyticsService<br/>- recordClick()<br/>- getStats()<br/>- aggregate()"]
+    end
+    
+    subgraph Data["DATA LAYER"]
+        Redis["Redis Cluster<br/>short_code → original_url<br/>TTL: 24 hours"]
+        PostgreSQL["PostgreSQL<br/>urls table<br/>clicks table<br/>users table"]
+        Kafka["Kafka<br/>click-events topic<br/>Partitions: 12<br/>Retention: 7 days"]
+    end
+    
+    Gateway --> Application
+    Application --> Service
+    Service --> Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐    │
@@ -132,13 +204,39 @@ Before looking at diagrams, let's understand each component and why it exists.
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Request Flow: URL Creation
 
 ### Sequence Diagram
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant LB as Load Balancer
+    participant URLSvc as URL Service
+    participant Redis
+    participant PG as PostgreSQL
+    
+    Client->>LB: POST /v1/urls
+    LB->>URLSvc: Forward request
+    URLSvc->>URLSvc: Validate URL
+    URLSvc->>PG: Generate short_code
+    URLSvc->>PG: INSERT INTO urls
+    PG-->>URLSvc: Success
+    URLSvc->>Redis: SET short_code
+    Redis-->>URLSvc: OK
+    URLSvc-->>LB: 201 Created
+    LB-->>Client: 201 Created
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌────────────┐     ┌────────────┐     ┌───────┐     ┌──────────┐
 │Client│     │Load Balancer│    │URL Service │     │ Redis │     │PostgreSQL│
 └──┬───┘     └─────┬──────┘     └─────┬──────┘     └───┬───┘     └────┬─────┘
@@ -175,6 +273,9 @@ Before looking at diagrams, let's understand each component and why it exists.
    │               │                  │                │              │
 ```
 
+</details>
+```
+
 ### Step-by-Step Explanation
 
 1. **Client sends POST request** with the long URL to create
@@ -191,7 +292,30 @@ Before looking at diagrams, let's understand each component and why it exists.
 
 ### Sequence Diagram
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CDN
+    participant LB as Load Balancer
+    participant URLSvc as URL Service
+    participant Redis
+    participant Kafka
+    
+    Client->>CDN: GET /abc123
+    CDN->>LB: Cache MISS
+    LB->>URLSvc: Forward request
+    URLSvc->>Redis: GET short_code
+    Redis-->>URLSvc: original_url
+    URLSvc->>Kafka: Publish click event
+    URLSvc-->>LB: 301 Redirect
+    LB-->>CDN: 301 Redirect (cache it)
+    CDN-->>Client: 301 Redirect
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────┐     ┌────────────┐     ┌────────────┐     ┌───────┐     ┌───────┐
 │Client│     │ CDN │     │Load Balancer│    │URL Service │     │ Redis │     │ Kafka │
 └──┬───┘     └──┬──┘     └─────┬──────┘     └─────┬──────┘     └───┬───┘     └───┬───┘
@@ -224,6 +348,9 @@ Before looking at diagrams, let's understand each component and why it exists.
    │ 301 Redirect              │                  │                │             │
    │<───────────│              │                  │                │             │
    │            │              │                  │                │             │
+```
+
+</details>
 ```
 
 ### Step-by-Step Explanation
@@ -265,7 +392,35 @@ Latency: ~50ms
 
 ## Analytics Data Flow
 
+```mermaid
+flowchart TB
+    URLService["URL Service<br/>Redirect happens"]
+    URLService --> KafkaCluster
+    subgraph KafkaCluster["KAFKA CLUSTER"]
+        Topic["click-events topic<br/>Partition 0: [event1, event2, event3, ...]<br/>Partition 1: [event4, event5, event6, ...]<br/>...<br/>Partition 11: [eventN, ...]<br/>Partitioned by: short_code hash<br/>Retention: 7 days"]
+    end
+    KafkaCluster --> Consumer1
+    KafkaCluster --> Consumer2
+    KafkaCluster --> ConsumerN
+    Consumer1["Analytics Consumer 1<br/>Partitions: 0-3"]
+    Consumer2["Analytics Consumer 2<br/>Partitions: 4-7"]
+    ConsumerN["Analytics Consumer N<br/>Partitions: 8-11"]
+    Consumer1 --> BatchProcessor
+    Consumer2 --> BatchProcessor
+    ConsumerN --> BatchProcessor
+    BatchProcessor["BATCH PROCESSOR<br/>- Parse user agent<br/>- GeoIP lookup<br/>- Aggregate by minute<br/>- Deduplicate visitors"]
+    BatchProcessor --> ClickHouse
+    BatchProcessor --> PostgreSQL
+    BatchProcessor --> Redis
+    ClickHouse["ClickHouse<br/>(Raw clicks)<br/>For ad-hoc analytics"]
+    PostgreSQL["PostgreSQL<br/>(Daily stats)<br/>daily_stats table"]
+    Redis["Redis<br/>(Real-time)<br/>click_count increment"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                            ANALYTICS PIPELINE                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -318,6 +473,9 @@ Latency: ~50ms
                └──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
+</details>
+```
+
 ### Why This Architecture?
 
 1. **Kafka decouples redirect from analytics**: Redirect returns immediately, analytics processed async
@@ -329,7 +487,36 @@ Latency: ~50ms
 
 ## Caching Architecture
 
+```mermaid
+flowchart TB
+    Client["CLIENT"]
+    Client -->|"Cache MISS"| CDN
+    subgraph Layer1["LAYER 1: CDN CACHE (CloudFront)<br/>Hit Rate: ~60% for popular URLs"]
+        Edge1["Edge Location 1<br/>abc123 → X<br/>TTL: 1 hour"]
+        Edge2["Edge Location 2<br/>def456 → Y<br/>TTL: 1 hour"]
+        Edge3["Edge Location 3<br/>abc123 → X<br/>TTL: 1 hour"]
+        EdgeN["Edge Location N<br/>xyz789 → Z<br/>TTL: 1 hour"]
+    end
+    CDN -->|"Cache MISS"| Redis
+    subgraph Layer2["LAYER 2: APPLICATION CACHE (Redis Cluster)<br/>Hit Rate: ~95% after warm-up"]
+        RedisNode1["Redis Node 1<br/>Slots 0-5460<br/>abc123 → url1<br/>jkl012 → url4<br/>TTL: 24 hours"]
+        RedisNode2["Redis Node 2<br/>Slots 5461-10922<br/>def456 → url2<br/>mno345 → url5<br/>TTL: 24 hours"]
+        RedisNode3["Redis Node 3<br/>Slots 10923-16383<br/>ghi789 → url3<br/>pqr678 → url6<br/>TTL: 24 hours"]
+    end
+    Redis -->|"Cache MISS"| PostgreSQL
+    subgraph Layer3["LAYER 3: DATABASE (PostgreSQL)<br/>QPS: ~1,200 (after cache misses)"]
+        Primary["Primary (Writes)<br/>urls table<br/>(6B rows)"]
+        Replica1["Read Replica 1<br/>urls table<br/>(6B rows)"]
+        Replica2["Read Replica 2<br/>urls table<br/>(6B rows)"]
+        Primary -.->|"async repl"| Replica1
+        Replica1 -.->|"async repl"| Replica2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              MULTI-LAYER CACHING                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -385,6 +572,9 @@ Latency: ~50ms
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### Cache Strategy Details
 
 | Layer      | What's Cached      | TTL      | Invalidation                |
@@ -397,7 +587,23 @@ Latency: ~50ms
 
 ## Database Replication Architecture
 
+```mermaid
+flowchart TB
+    Primary["PRIMARY (Leader)<br/>- All WRITE queries<br/>- WAL generation<br/>- Synchronous to Replica 1<br/>Region: us-east-1a"]
+    Primary -->|"Sync Replication"| Replica1
+    Primary -->|"Async Replication"| Replica2
+    Primary -->|"Async Replication"| Replica3
+    Replica1["REPLICA 1 (Sync)<br/>- READ queries<br/>- Failover target<br/>- Zero data loss<br/>Region: us-east-1b"]
+    Replica2["REPLICA 2 (Async)<br/>- READ queries<br/>- Analytics queries<br/>- May lag slightly<br/>Region: us-west-2a"]
+    Replica3["REPLICA 3 (DR)<br/>- Disaster Recovery<br/>- Different region<br/>- Cold standby<br/>Region: eu-west-1a"]
+    
+    Note["FAILOVER SCENARIO:<br/>1. Primary fails<br/>2. Replica 1 promoted to Primary (automatic, < 30 seconds)<br/>3. Replica 2 reconfigured to follow new Primary<br/>4. DNS updated to point to new Primary<br/>5. Old Primary recovered as new Replica"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                         PostgreSQL REPLICATION TOPOLOGY                              │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -445,6 +651,9 @@ FAILOVER SCENARIO:
 3. Replica 2 reconfigured to follow new Primary
 4. DNS updated to point to new Primary
 5. Old Primary recovered as new Replica
+```
+
+</details>
 ```
 
 ---
@@ -666,7 +875,30 @@ CREATE INDEX idx_daily_stats_date ON daily_stats(date);
 
 ## Deployment Architecture (Kubernetes)
 
+```mermaid
+flowchart TB
+    subgraph K8s["KUBERNETES CLUSTER"]
+        Ingress["INGRESS CONTROLLER<br/>(NGINX / AWS ALB Ingress)"]
+        Ingress --> URLDeploy
+        Ingress --> AnalyticsDeploy
+        Ingress --> AdminDeploy
+        URLDeploy["url-service Deployment<br/>Replicas: 10<br/>CPU: 2 cores<br/>Memory: 4Gi<br/>Pod 1, Pod 2, Pod 3, ..."]
+        AnalyticsDeploy["analytics-svc Deployment<br/>Replicas: 5<br/>CPU: 2 cores<br/>Memory: 4Gi<br/>Pod 1, Pod 2, ..."]
+        AdminDeploy["admin-service Deployment<br/>Replicas: 2<br/>CPU: 1 core<br/>Memory: 2Gi<br/>Pod 1, Pod 2"]
+        Services["SERVICES (ClusterIP)<br/>url-service:8080<br/>analytics-service:8080<br/>admin-service:8080"]
+        URLDeploy --> Services
+        AnalyticsDeploy --> Services
+        AdminDeploy --> Services
+        Services --> StatefulSets
+        StatefulSets["STATEFULSETS<br/>redis-cluster (Replicas: 6, 3 primary + 3 replica)<br/>kafka-cluster (Replicas: 3)<br/>zookeeper (Replicas: 3)"]
+    end
+    External["EXTERNAL SERVICES<br/>AWS RDS (PostgreSQL)<br/>- Multi-AZ deployment<br/>- Automated backups<br/>- Read replicas<br/>AWS CloudFront (CDN)<br/>- Edge locations worldwide<br/>- SSL/TLS termination<br/>- DDoS protection"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              KUBERNETES CLUSTER                                      │
 │                                                                                      │
@@ -698,7 +930,7 @@ CREATE INDEX idx_daily_stats_date ON daily_stats(date);
 │  │                           SERVICES (ClusterIP)                             │    │
 │  │                                                                            │    │
 │  │  url-service:8080    analytics-service:8080    admin-service:8080         │    │
-│  └────────────────────────────────────────────────────────────────────────────┘    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                        │                                            │
 │  ┌─────────────────────────────────────┴──────────────────────────────────────┐    │
 │  │                              STATEFULSETS                                   │    │
@@ -727,11 +959,46 @@ CREATE INDEX idx_daily_stats_date ON daily_stats(date);
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Failure Points and Mitigation
 
+```mermaid
+flowchart LR
+    subgraph Failures["FAILURE ANALYSIS"]
+        CDN["CDN<br/>Edge failure"] --> CDNImpact["Minor latency increase"]
+        CDNImpact --> CDNMit["Automatic failover to other edges"]
+        
+        LB["Load Balancer<br/>Instance down"] --> LBImpact["Brief outage (seconds)"]
+        LBImpact --> LBMit["HA pair with health checks"]
+        
+        URLSvc["URL Service<br/>Pod crash"] --> URLSvcImpact["Degraded capacity"]
+        URLSvcImpact --> URLSvcMit["K8s auto-restart + HPA scaling"]
+        
+        Redis["Redis<br/>Node failure"] --> RedisImpact["Cache miss spike"]
+        RedisImpact --> RedisMit["Cluster mode with automatic failover"]
+        
+        PGPrimary["PostgreSQL Primary<br/>Primary down"] --> PGImpact["Writes fail (30 seconds)"]
+        PGImpact --> PGMit["Automatic failover to sync replica"]
+        
+        PGReplica["PostgreSQL Replica<br/>Replica down"] --> PGReplicaImpact["Increased primary load"]
+        PGReplicaImpact --> PGReplicaMit["Other replicas take over reads"]
+        
+        Kafka["Kafka<br/>Broker down"] --> KafkaImpact["Analytics delayed"]
+        KafkaImpact --> KafkaMit["Replication factor 3, auto-recovery"]
+        
+        Analytics["Analytics Service<br/>Consumer crash"] --> AnalyticsImpact["Stats delayed"]
+        AnalyticsImpact --> AnalyticsMit["Consumer group rebalancing"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              FAILURE ANALYSIS                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -777,6 +1044,9 @@ Component              Failure Mode           Impact              Mitigation
 │  Analytics  │ ───── Consumer crash ──── Stats delayed ───── Consumer group
 │  Service    │                                               rebalancing
 └─────────────┘
+```
+
+</details>
 ```
 
 ---

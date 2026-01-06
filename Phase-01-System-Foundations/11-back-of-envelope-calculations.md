@@ -826,6 +826,24 @@ Back-of-envelope calculations are quick, rough estimates that help you validate 
 ## Quick Reference Card
 
 ```
+```mermaid
+graph TD
+    subgraph "ESTIMATION CHEAT SHEET"
+        Time["TIME<br>1 day ≈ 100,000 seconds (use 10^5)<br>1 month ≈ 2.5 million seconds<br>1 year ≈ 30 million seconds"]
+        Data["DATA<br>1 KB = 10^3 bytes | 1 MB = 10^6 bytes<br>1 GB = 10^9 bytes | 1 TB = 10^12 bytes"]
+        Sizes["TYPICAL SIZES<br>Tweet: 300 bytes | Photo: 500 KB<br>Web page: 2 MB | 1 min video (720p): 100 MB"]
+        Latency["LATENCY<br>RAM: 100 ns | SSD: 150 μs<br>Same datacenter: 0.5 ms | Cross-country: 50 ms"]
+        Throughput["THROUGHPUT<br>Web server: 1,000-10,000 RPS<br>Database: 10,000-100,000 simple QPS<br>Redis: 100,000+ ops/sec"]
+        Formula["FORMULA<br>Daily → Per second: divide by 100,000<br>Peak traffic: 3-10x average<br>Storage: records × bytes_per_record × replication_factor<br>Servers: peak_RPS / server_capacity × redundancy"]
+        
+        Time --> Data --> Sizes --> Latency --> Throughput --> Formula
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                ESTIMATION CHEAT SHEET                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -857,5 +875,7 @@ Back-of-envelope calculations are quick, rough estimates that help you validate 
 │   Storage: records × bytes_per_record × replication_factor  │
 │   Servers: peak_RPS / server_capacity × redundancy          │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 

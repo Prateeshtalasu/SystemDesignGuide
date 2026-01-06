@@ -54,7 +54,21 @@ Year 3: Query scans 1 billion rows
 ### What Systems Looked Like Before Sharding
 
 **Vertical Scaling (Scale Up)**:
+```mermaid
+flowchart TD
+    Year1["Year 1: Small server<br/>4 CPU, 16 GB RAM, 500 GB disk<br/>Cost: $500/month"]
+    Year2["Year 2: Medium server<br/>16 CPU, 64 GB RAM, 2 TB disk<br/>Cost: $2,000/month"]
+    Year3["Year 3: Large server<br/>64 CPU, 256 GB RAM, 10 TB disk<br/>Cost: $10,000/month"]
+    Year4["Year 4: Maximum server<br/>128 CPU, 1 TB RAM, 50 TB disk<br/>Cost: $50,000/month"]
+    Year5["Year 5: ??? No bigger server exists!<br/>Hardware limits reached."]
+    
+    Year1 --> Year2 --> Year3 --> Year4 --> Year5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    VERTICAL SCALING                          │
 │                                                              │
@@ -78,11 +92,27 @@ Year 3: Query scans 1 billion rows
 │          Hardware limits reached.                            │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Sharding
 
 **1. Single Point of Bottleneck**
+```mermaid
+flowchart TD
+    Writes["All writes"]
+    Leader["Leader<br/>← ALL writes (bottleneck!)"]
+    Replicas["Replicas<br/>← Only help with reads"]
+    
+    Writes --> Leader
+    Leader --> Replicas
+    
+    Note["Even with replicas, all writes go to one leader"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 All writes → One server → Overwhelmed
 
 Even with replicas:
@@ -94,6 +124,7 @@ Even with replicas:
 │  Replicas  │ ← Only help with reads
 └────────────┘
 ```
+</details>
 
 **2. Backup and Recovery Nightmares**
 ```
@@ -139,7 +170,19 @@ On sharded tables:
 
 **Single Database = One Giant Library**
 
+```mermaid
+flowchart TD
+    subgraph GiantLibrary["ONE GIANT LIBRARY"]
+        Books["📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚<br/>📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚<br/>📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚<br/>(1 billion books)"]
+        
+        Problems["Problems:<br/>- Building is full, can't add more shelves<br/>- One librarian can't handle all requests<br/>- Finding a book takes forever (too many to search)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    ONE GIANT LIBRARY                         │
 │                                                              │
@@ -154,10 +197,24 @@ On sharded tables:
 │  - Finding a book takes forever (too many to search)        │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Sharded Database = Multiple Branch Libraries**
 
+```mermaid
+flowchart LR
+    BranchA["Branch A (Authors A-F)<br/>📚📚📚📚📚📚📚📚<br/>(170M books)<br/>Own librarians"]
+    BranchB["Branch B (Authors G-M)<br/>📚📚📚📚📚📚📚📚<br/>(170M books)<br/>Own librarians"]
+    BranchC["Branch C (Authors N-S)<br/>📚📚📚📚📚📚📚📚<br/>(170M books)<br/>Own librarians"]
+    BranchD["Branch D (Authors T-Z)<br/>📚📚📚📚📚📚📚📚<br/>(170M books)<br/>Own librarians"]
+    
+    Benefits["Benefits:<br/>- Each branch has room to grow<br/>- Multiple librarians work in parallel<br/>- Finding a book: Go to right branch, search smaller set"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 BRANCH LIBRARY SYSTEM                        │
 │                                                              │
@@ -181,6 +238,7 @@ On sharded tables:
 │  - Finding a book: Go to right branch, search smaller set   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -219,7 +277,26 @@ Example with 4 shards:
 
 **Visual representation**:
 
+```mermaid
+flowchart TD
+    Request["User Request: Get user_123"]
+    Hash["hash('user_123') = 7823456<br/>7823456 % 4 = 0"]
+    
+    Shard0["Shard 0<br/>✓ user_123<br/>user_234"]
+    Shard1["Shard 1<br/>user_456<br/>user_567"]
+    Shard2["Shard 2<br/>user_789<br/>user_890"]
+    Shard3["Shard 3<br/>user_012<br/>user_345"]
+    
+    Request --> Hash
+    Hash --> Shard0
+    
+    ProsCons["Pros: Even distribution, simple<br/>Cons: Adding shards requires rehashing ALL data"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   HASH-BASED SHARDING                        │
 │                                                              │
@@ -243,10 +320,33 @@ Example with 4 shards:
 │  Cons: Adding shards requires rehashing ALL data            │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Consistent Hashing** (Better version):
 
+```mermaid
+flowchart LR
+    subgraph Ring["Hash ring (0 to 2^32)"]
+        ShardA["Shard A"]
+        ShardB["Shard B"]
+        ShardC["Shard C"]
+        ShardD["Shard D"]
+        
+        ShardA --> ShardB
+        ShardB --> ShardC
+        ShardC --> ShardD
+        ShardD --> ShardA
+    end
+    
+    Key["Key 'user_123' hashes to position X<br/>Walk clockwise to find first shard"]
+    
+    Adding["Adding Shard E:<br/>- Only keys between D and E need to move<br/>- Other shards unaffected!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  CONSISTENT HASHING                          │
 │                                                              │
@@ -270,6 +370,7 @@ Example with 4 shards:
 │  - Other shards unaffected!                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### 2. Range-Based Sharding
 
@@ -284,7 +385,25 @@ Shard 2: user_id 2,000,001 - 3,000,000
 
 **Visual representation**:
 
+```mermaid
+flowchart TD
+    Request2["User Request: Get user_1500000"]
+    Range["1500000 is in<br/>range 1M - 2M"]
+    
+    Shard0_2["Shard 0<br/>1 - 1M"]
+    Shard1_2["Shard 1<br/>1M - 2M<br/>✓"]
+    Shard2_2["Shard 2<br/>2M - 3M"]
+    Shard3_2["Shard 3<br/>3M - 4M"]
+    
+    Request2 --> Range --> Shard1_2
+    
+    ProsCons2["Pros: Range queries efficient, easy to understand<br/>Cons: Hot spots if recent data accessed more"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   RANGE-BASED SHARDING                       │
 │                                                              │
@@ -307,6 +426,7 @@ Shard 2: user_id 2,000,001 - 3,000,000
 │  Cons: Hot spots if recent data accessed more               │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Time-based range example**:
 
@@ -324,7 +444,29 @@ Problem: Current month's shard gets ALL writes!
 
 **How it works**: Maintain a lookup table that maps keys to shards.
 
+```mermaid
+flowchart TD
+    subgraph LookupTable["Lookup Table (in separate service/database)"]
+        Row1["user_1-100 → Shard A"]
+        Row2["user_101-500 → Shard B"]
+        Row3["user_501-800 → Shard A<br/>(Can split ranges!)"]
+        Row4["user_801+ → Shard C"]
+    end
+    
+    Request3["User Request: Get user_600"]
+    Lookup["Lookup: user_600 → Shard A"]
+    ShardA2["Shard A"]
+    
+    Request3 --> Lookup --> ShardA2
+    LookupTable --> Lookup
+    
+    ProsCons3["Pros: Flexible, can rebalance without rehashing<br/>Cons: Lookup table is single point of failure<br/>Extra hop for every query"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 DIRECTORY-BASED SHARDING                     │
 │                                                              │
@@ -353,6 +495,7 @@ Problem: Current month's shard gets ALL writes!
 │        Extra hop for every query                            │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Choosing a Shard Key
 
@@ -391,7 +534,24 @@ E-commerce platform:
 
 ### The Hot Partition Problem (Celebrity Problem)
 
+```mermaid
+flowchart LR
+    Scenario["Scenario: Twitter sharded by user_id<br/><br/>Normal users: ~100 followers, ~10 tweets/day<br/>Celebrity: 50 million followers, 100 tweets/day"]
+    
+    Shard0_3["Shard 0<br/>10% load"]
+    Shard1_3["Shard 1<br/>10% load"]
+    Shard2_3["Shard 2<br/>70% 🔥 load<br/>Celebrity here!"]
+    Shard3_3["Shard 3<br/>10% load"]
+    
+    Problem["Shard containing celebrity:<br/>- 50 million timeline updates per tweet<br/>- 1000x more load than other shards<br/>- Becomes bottleneck"]
+    
+    Solutions["Solutions:<br/>1. Add random suffix to celebrity keys (spread writes)<br/>2. Special handling for celebrities (dedicated shard)<br/>3. Cache celebrity data aggressively<br/>4. Rate limit celebrity operations"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    HOT PARTITION PROBLEM                     │
 │                                                              │
@@ -420,12 +580,40 @@ E-commerce platform:
 │  4. Rate limit celebrity operations                         │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cross-Shard Queries
 
 **The biggest challenge with sharding.**
 
+```mermaid
+flowchart TD
+    Query["Query: SELECT * FROM orders WHERE total > 100<br/>ORDER BY created_at LIMIT 10<br/><br/>Problem: Data is spread across all shards!"]
+    
+    Shard0_4["Shard 0<br/>Top 10"]
+    Shard1_4["Shard 1<br/>Top 10"]
+    Shard2_4["Shard 2<br/>Top 10"]
+    Shard3_4["Shard 3<br/>Top 10"]
+    
+    App["Application<br/>Merge & Sort<br/>Return Top 10"]
+    
+    Query --> Shard0_4
+    Query --> Shard1_4
+    Query --> Shard2_4
+    Query --> Shard3_4
+    
+    Shard0_4 --> App
+    Shard1_4 --> App
+    Shard2_4 --> App
+    Shard3_4 --> App
+    
+    Note["Execution:<br/>1. Send query to ALL shards<br/>2. Each shard returns its top 10<br/>3. Application merges results<br/>4. Application sorts and takes final top 10<br/><br/>Performance: 4x slower than single shard<br/>Complexity: Application must handle merging"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   CROSS-SHARD QUERY                          │
 │                                                              │
@@ -458,6 +646,7 @@ E-commerce platform:
 │  Complexity: Application must handle merging                │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Cross-shard JOIN** (Even harder):
 
@@ -663,7 +852,33 @@ Cons: Complex application code, hard to change
 
 **Approach 2: Proxy-Based Sharding (Vitess, ProxySQL)**
 
+```mermaid
+flowchart TD
+    App2["Application"]
+    Proxy["Vitess Proxy<br/>← Handles routing, query rewriting"]
+    
+    Shard0_5["Shard0"]
+    Shard1_5["Shard1"]
+    Shard2_5["Shard2"]
+    Shard3_5["Shard3"]
+    Shard4["Shard4"]
+    
+    App2 --> Proxy
+    Proxy --> Shard0_5
+    Proxy --> Shard1_5
+    Proxy --> Shard2_5
+    Proxy --> Shard3_5
+    Proxy --> Shard4
+    
+    Note2["Application thinks it's talking to one database!"]
+    
+    ProsCons4["Pros: Transparent to application, handles cross-shard queries<br/>Cons: Additional infrastructure, potential bottleneck"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    PROXY-BASED SHARDING                      │
 │                                                              │
@@ -682,6 +897,7 @@ Cons: Complex application code, hard to change
 │  Application thinks it's talking to one database!           │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 Pros: Transparent to application, handles cross-shard queries
 Cons: Additional infrastructure, potential bottleneck
@@ -1399,7 +1615,24 @@ Large tenants (enterprise):
 
 **Architecture:**
 
+```mermaid
+flowchart TD
+    subgraph Directory["Tenant Directory Service"]
+        Row1_2["tenant_id: small_1<br/>tier: small<br/>shard_info: shard_pool_1"]
+        Row2_2["tenant_id: small_2<br/>tier: small<br/>shard_info: shard_pool_1"]
+        Row3_2["tenant_id: medium_1<br/>tier: medium<br/>shard_info: shard_5"]
+        Row4_2["tenant_id: enterprise<br/>tier: large<br/>shard_info: shards 10-15"]
+    end
+    
+    Routing["Routing:<br/>1. Look up tenant in directory<br/>2. Route to appropriate shard(s)<br/>3. For large tenants, also route by secondary key"]
+    
+    Directory --> Routing
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    TENANT ROUTING                            │
 │                                                              │
@@ -1419,6 +1652,7 @@ Large tenants (enterprise):
 │  3. For large tenants, also route by secondary key          │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Cross-Tenant Queries** (admin/analytics):
 - Separate analytics database

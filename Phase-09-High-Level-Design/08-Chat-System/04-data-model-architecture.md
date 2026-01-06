@@ -282,7 +282,55 @@ LREM pending:{user_id} 1 "{message_json}"
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string user_id UK
+        string username
+        string phone_number
+        string public_key
+    }
+    conversations {
+        int id PK
+        string conversation_id
+        string type
+        string name
+        timestamp last_message_at
+    }
+    conversation_participants {
+        int id PK
+        int conversation_id FK
+        int user_id FK
+        string role
+        int last_read_message_id
+        timestamp muted_until
+    }
+    messages {
+        string conversation_id PK
+        string message_id CK
+        int sender_id
+        string content_type
+        text content
+        int sequence_number
+        timestamp created_at
+    }
+    
+    users ||--o{ conversation_participants : "participates_in"
+    conversations ||--o{ conversation_participants : "has"
+    conversations ||--o{ messages : "contains"
 ```
+
+**Redis Cache:**
+- `session:{user_id}:{device_id}` → connection info
+- `presence:{user_id}` → online/offline
+- `pending:{user_id}` → undelivered messages
+- `typing:{conv_id}:{user_id}` → typing indicator
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐       ┌─────────────────────┐
 │       users         │       │   conversations     │
 ├─────────────────────┤       ├─────────────────────┤
@@ -328,6 +376,9 @@ LREM pending:{user_id} 1 "{message_json}"
 │ pending:{user_id} → undelivered messages            │
 │ typing:{conv_id}:{user_id} → typing indicator       │
 └─────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---
@@ -636,7 +687,23 @@ Alice sends message to "Family" group (50 members)
 
 ## Presence System
 
+```mermaid
+flowchart TD
+    Start["USER CONNECTS<br/>User Alice connects to Chat Server"]
+    Start --> ConnectSteps
+    ConnectSteps["1. WebSocket handshake<br/>2. Authenticate token<br/>3. Register connection in Redis:<br/>   HSET session:alice:device_1 server_id 'chat-server-42'<br/>   SADD user_devices:alice 'device_1'<br/>4. Set presence:<br/>   SET presence:alice 'online'<br/>   EXPIRE presence:alice 60"]
+    ConnectSteps --> Broadcast
+    Broadcast["PRESENCE BROADCAST<br/><br/>1. Get Alice's contacts who are online<br/>2. For each online contact:<br/>   - Find their chat server<br/>   - Send presence update: 'Alice is online'<br/><br/>Optimization: Don't broadcast to all contacts<br/>- Only broadcast to users who have chat open with Alice<br/>- Others will fetch on-demand when opening chat"]
+    Broadcast --> Heartbeat
+    Heartbeat["HEARTBEAT MECHANISM<br/><br/>Client → Server: PING (every 30s)<br/>Server → Redis: EXPIRE presence:alice 60<br/>Server → Client: PONG<br/><br/>If no heartbeat for 60s → presence key expires → user considered offline"]
+    Heartbeat --> Disconnect
+    Disconnect["DISCONNECT HANDLING<br/><br/>On disconnect:<br/>1. Remove session: DEL session:alice:device_1<br/>2. Check if other devices: SCARD user_devices:alice<br/>3. If no other devices:<br/>   - Set last_seen: SET last_seen:alice '2024-01-20T15:30:00Z'<br/>   - Set presence offline: SET presence:alice 'offline'<br/>   - Broadcast offline to relevant contacts<br/>4. If other devices still connected:<br/>   - Keep presence as online"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          PRESENCE SYSTEM                                             │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -712,11 +779,26 @@ Alice sends message to "Family" group (50 members)
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Multi-Device Sync
 
+```mermaid
+flowchart TD
+    Start["Alice has 3 devices: Phone, Tablet, Laptop"]
+    Start --> Scenario1
+    Scenario1["SCENARIO: Alice sends message from Phone<br/><br/>Phone (Sender) → Chat Server: Send 'Hello'<br/>Chat Server: Store + Sync to other devices<br/>Chat Server → Tablet: Sync 'Hello'<br/>Chat Server → Laptop: Sync 'Hello'<br/><br/>All devices now show the sent message"]
+    Start --> Scenario2
+    Scenario2["SCENARIO: Device comes online after being offline<br/>Laptop was offline for 2 hours, now reconnects<br/><br/>1. Laptop connects to Chat Server<br/>2. Laptop sends: 'Last sync timestamp: 2024-01-20T13:30:00Z'<br/>3. Server queries messages since that timestamp<br/>4. Server sends batch of missed messages<br/>5. Laptop updates local state<br/>6. Laptop sends ACKs for delivered messages<br/><br/>Delta Sync Query:<br/>SELECT * FROM messages<br/>WHERE conversation_id IN (user's conversations)<br/>AND created_at > '2024-01-20T13:30:00Z'<br/>ORDER BY created_at ASC<br/>LIMIT 1000"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          MULTI-DEVICE SYNC                                           │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -772,11 +854,36 @@ Alice has 3 devices: Phone, Tablet, Laptop
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## End-to-End Encryption
 
+```mermaid
+sequenceDiagram
+    participant Alice
+    participant Server
+    participant Bob
+    
+    Note over Alice,Bob: KEY EXCHANGE (First Message)
+    Alice->>Server: 1. Get Bob's public keys
+    Server-->>Alice: 2. Bob's identity key + signed pre-key + one-time pre-key
+    Alice->>Alice: 3. Generate shared secret using X3DH protocol
+    Alice->>Alice: 4. Encrypt message with derived key
+    Alice->>Server: 5. Send encrypted message
+    Server->>Bob: 6. Forward (can't read)
+    Bob->>Bob: 7. Derive same shared secret
+    Bob->>Bob: 8. Decrypt message
+    
+    Note over Alice,Bob: MESSAGE ENCRYPTION<br/>Plaintext: "Hello Bob!"<br/>1. Generate message key (from Double Ratchet)<br/>2. Encrypt with AES-256-GCM<br/>3. Add authentication tag<br/>Ciphertext: "a7f3b2c1..." (+ auth tag + key ID)<br/><br/>Server sees: Encrypted blob, sender, recipient, timestamp<br/>Server CANNOT see: Message content
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          END-TO-END ENCRYPTION (Signal Protocol)                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -832,11 +939,31 @@ Alice has 3 devices: Phone, Tablet, Laptop
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Message Delivery Protocol
 
+```mermaid
+sequenceDiagram
+    participant Sender
+    participant Server
+    participant Recipient
+    
+    Sender->>Server: 1. Send message
+    Server->>Server: 2. Store message
+    Server-->>Sender: 3. ACK (sent)
+    Server->>Recipient: 4. Push to recipient
+    Recipient-->>Server: 5. ACK (received)
+    Server-->>Sender: 6. Status: delivered
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          MESSAGE DELIVERY PROTOCOL                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -859,6 +986,10 @@ Sender                    Server                    Recipient
   │                         │ <─────────────────────────
   │                         │                          │
   │ 6. Status: delivered    │                          │
+```
+
+</details>
+```
   │ <───────────────────────│                          │
   │                         │                          │
   │                         │ 7. User reads message    │

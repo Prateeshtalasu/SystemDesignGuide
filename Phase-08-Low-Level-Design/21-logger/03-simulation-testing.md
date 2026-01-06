@@ -4,7 +4,20 @@
 
 ### Scenario 1: Happy Path - Logging Flow
 
+```mermaid
+flowchart TD
+    A["Step 1: Check Level<br/>Logger level: INFO<br/>Message level: INFO<br/>INFO.priority (1) >= INFO.priority (1) → ENABLED"]
+    B["Step 2: Create LogEvent<br/>LogEvent { timestamp, level=INFO, loggerName=&quot;com.app.UserService&quot;, message=&quot;User logged in: john_doe&quot;, threadName=&quot;main&quot; }"]
+    C["Step 3: Format Message<br/>SimpleFormatter.format(event) →<br/>\"2024-01-15 10:30:45.123 [INFO] [main] UserService - User...\""]
+    D["Step 4: Send to Appenders<br/>ConsoleAppender.append() → System.out.println(... )<br/>FileAppender.append() → writer.write(... )"]
+
+    A --> B --> C --> D
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 logger.info("User logged in: %s", username)
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -44,6 +57,8 @@ logger.info("User logged in: %s", username)
 │ FileAppender.append() → writer.write(...)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Final State:**
 ```

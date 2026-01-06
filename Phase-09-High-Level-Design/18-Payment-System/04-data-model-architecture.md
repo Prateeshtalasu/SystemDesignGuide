@@ -79,7 +79,35 @@ We choose **Consistency + Partition Tolerance (CP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["Clients<br/>Web, Mobile"]
+    Clients --> LoadBalancer
+    LoadBalancer["Load Balancer (CloudFlare)"]
+    LoadBalancer --> APIGateway
+    APIGateway["API Gateway<br/>- Auth<br/>- Rate Limiting<br/>- SSL/TLS"]
+    APIGateway --> PaymentService
+    APIGateway --> FraudService
+    APIGateway --> ReconciliationService
+    PaymentService["Payment Service<br/>- Process payments<br/>- Refunds"]
+    FraudService["Fraud Service<br/>- ML Models<br/>- Risk Score<br/>- Block Rules"]
+    ReconciliationService["Reconciliation Service<br/>- Match transactions<br/>- Reports"]
+    PaymentService --> LedgerService
+    FraudService --> LedgerService
+    ReconciliationService --> LedgerService
+    LedgerService["Ledger Service<br/>- Double-entry<br/>- Balances"]
+    LedgerService --> PostgreSQL
+    LedgerService --> Redis
+    LedgerService --> PaymentProcessors
+    PostgreSQL["PostgreSQL (Primary)<br/>- Transactions<br/>- Ledger<br/>- Methods"]
+    Redis["Redis Cluster<br/>- Idempotency<br/>- Cache<br/>- Sessions"]
+    PaymentProcessors["Payment Processors<br/>- Stripe<br/>- PayPal<br/>- Square"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                           PAYMENT SYSTEM ARCHITECTURE                                 │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -134,6 +162,9 @@ We choose **Consistency + Partition Tolerance (CP)**:
 │ - Ledger      │   │ - Cache       │   │ - PayPal      │
 │ - Methods     │   │ - Sessions    │   │ - Square      │
 └───────────────┘   └───────────────┘   └───────────────┘
+```
+
+</details>
 ```
 
 ---

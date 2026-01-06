@@ -4,7 +4,48 @@
 
 ### System Overview
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web Client (Editor), Mobile App (View), API Client (Headless), Offline Client"]
+    Clients --> LoadBalancer
+    LoadBalancer["Load Balancer (WebSocket LB)"]
+    LoadBalancer --> RESTGateway
+    LoadBalancer --> WSGateway
+    LoadBalancer --> DocumentService
+    RESTGateway["REST API Gateway"]
+    WSGateway["WebSocket Gateway"]
+    DocumentService["Document Service"]
+    RESTGateway --> ServiceMesh
+    WSGateway --> ServiceMesh
+    DocumentService --> ServiceMesh
+    ServiceMesh["Service Mesh"]
+    ServiceMesh --> OTEngine
+    ServiceMesh --> PresenceService
+    ServiceMesh --> CommentService
+    OTEngine["OT Engine"]
+    PresenceService["Presence Service"]
+    CommentService["Comment Service"]
+    OTEngine --> VersionService
+    PresenceService --> SearchService
+    CommentService --> NotificationService
+    VersionService["Version Service"]
+    SearchService["Search Service"]
+    NotificationService["Notification Service"]
+    VersionService --> DataLayer
+    SearchService --> DataLayer
+    NotificationService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        PostgreSQL["PostgreSQL (Metadata)"]
+        Cassandra["Cassandra (Ops)"]
+        Redis["Redis (State)"]
+        Kafka["Kafka (Events)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                    Collaborative Document Editor Architecture                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -48,6 +89,10 @@
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐          │          │
 │  │  │PostgreSQL│  │ Cassandra│  │  Redis   │  │  Kafka   │          │          │
 │  │  │(Metadata)│  │  (Ops)   │  │ (State)  │  │ (Events) │          │          │
+```
+
+</details>
+```
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘          │          │
 │  │                                                                    │          │
 │  └────────────────────────────────────────────────────────────────────┘          │

@@ -152,6 +152,39 @@ Expenses:
 4. Diana paid $200 hotel (Alice 40%, Bob 35%, Diana 25%)
 
 Step 1: Calculate individual debts
+
+```mermaid
+flowchart TD
+    subgraph E1["From Expense 1 (Dinner $100, 4-way)"]
+        E1A["Alice paid, each owes $25"]
+        E1B["Bob → Alice: $25"]
+        E1C["Charlie → Alice: $25"]
+        E1D["Diana → Alice: $25"]
+    end
+    
+    subgraph E2["From Expense 2 (Groceries $60, 3-way)"]
+        E2A["Bob paid, each owes $20"]
+        E2B["Alice → Bob: $20"]
+        E2C["Charlie → Bob: $20"]
+    end
+    
+    subgraph E3["From Expense 3 (Gas $100)"]
+        E3A["Charlie paid"]
+        E3B["Alice → Charlie: $50"]
+        E3C["Bob → Charlie: $30"]
+    end
+    
+    subgraph E4["From Expense 4 (Hotel $200)"]
+        E4A["Diana paid"]
+        E4B["Alice → Diana: $80 (40%)"]
+        E4C["Bob → Diana: $70 (35%)"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ From Expense 1 (Dinner $100, 4-way):                            │
 │   Alice paid, each owes $25                                     │
@@ -174,8 +207,43 @@ Step 1: Calculate individual debts
 │   Alice → Diana: $80 (40%)                                      │
 │   Bob → Diana: $70 (35%)                                        │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Calculate net balances
+
+```mermaid
+flowchart TD
+    subgraph A["Alice"]
+        A1["Received: $25 + $25 + $25 = $75"]
+        A2["Owes: $20 + $50 + $80 = $150"]
+        A3["Net: -$75 (owes $75)"]
+    end
+    
+    subgraph B["Bob"]
+        B1["Received: $20 + $20 = $40"]
+        B2["Owes: $25 + $30 + $70 = $125"]
+        B3["Net: -$85 (owes $85)"]
+    end
+    
+    subgraph C["Charlie"]
+        C1["Received: $50 + $30 = $80"]
+        C2["Owes: $25 + $20 = $45"]
+        C3["Net: +$35 (owed $35)"]
+    end
+    
+    subgraph D["Diana"]
+        D1["Received: $80 + $70 = $150"]
+        D2["Owes: $25 = $25"]
+        D3["Net: +$125 (owed $125)"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Alice:                                                          │
 │   Received: $25 + $25 + $25 = $75                              │
@@ -197,8 +265,31 @@ Step 2: Calculate net balances
 │   Owes: $25 = $25                                              │
 │   Net: +$125 (owed $125)                                       │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 3: Match creditors with debtors
+
+```mermaid
+flowchart TD
+    A["Creditors (owed): Diana (+$125), Charlie (+$35)<br/>Debtors (owe): Bob (-$85), Alice (-$75)"]
+    
+    B["Match 1: Bob pays Diana $85<br/>Diana remaining: $125 - $85 = $40"]
+    
+    C["Match 2: Alice pays Diana $40<br/>Diana remaining: $0<br/>Alice remaining: $75 - $40 = $35"]
+    
+    D["Match 3: Alice pays Charlie $35<br/>Both settled"]
+    
+    A --> B
+    B --> C
+    C --> D
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Creditors (owed): Diana (+$125), Charlie (+$35)                │
 │ Debtors (owe): Bob (-$85), Alice (-$75)                        │
@@ -213,6 +304,9 @@ Step 3: Match creditors with debtors
 │ Match 3: Alice pays Charlie $35                                │
 │   Both settled                                                 │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result: 3 transactions instead of 8!
   Bob → Diana: $85

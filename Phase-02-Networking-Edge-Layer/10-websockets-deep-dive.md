@@ -28,7 +28,31 @@ HTTP was designed for document retrieval: client asks, server responds. But mode
 
 ### What Systems Looked Like Before WebSocket
 
+```mermaid
+sequenceDiagram
+    participant ClientA
+    participant Server
+    participant ClientB
+    
+    ClientA->>Server: POST /send<br/>{"to":"B","msg":"Hi"}
+    Note over Server: [Store message]
+    Server->>ClientA: 200 OK
+    
+    ClientB->>Server: GET /messages (polling)
+    Server->>ClientB: 200 OK []
+    
+    Note over ClientB,Server: [5 seconds later...]
+    
+    ClientB->>Server: GET /messages (polling)
+    Server->>ClientB: 200 OK [{"msg":"Hi"}]
+    
+    Note over ClientA,ClientB: Problems:<br/>- 5 second delay before Client B sees message<br/>- Constant polling wastes bandwidth<br/>- Server load from empty responses
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    POLLING FOR REAL-TIME UPDATES                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -62,6 +86,7 @@ Problems:
 - Constant polling wastes bandwidth
 - Server load from empty responses
 ```
+</details>
 
 ### What Breaks Without WebSocket
 
@@ -102,7 +127,31 @@ Traders need real-time price updates. Even 1-second delay can mean significant l
 - Conversation flows naturally
 - Hang up when done (close)
 
+```mermaid
+flowchart TD
+    subgraph HTTP["HTTP (Request-Response)"]
+        H1["Client: 'Any messages?' ──────────> Server: 'No'"]
+        H2["Client: 'Any messages?' ──────────> Server: 'No'"]
+        H3["Client: 'Any messages?' ──────────> Server: 'Yes, here's one'"]
+        H4["Client: 'Any messages?' ──────────> Server: 'No'"]
+        H1 --> H2 --> H3 --> H4
+        NoteH["(Client always asks, server only responds)"]
+    end
+    
+    subgraph WS["WebSocket (Bidirectional)"]
+        W1["Client: 'Let's connect' ══════════> Server: 'Connected'"]
+        W2["Client: <══════════════════════════ Server: 'New message for you'"]
+        W3["Client: 'Here's my reply' ════════> Server"]
+        W4["Client: <══════════════════════════ Server: 'Another update'"]
+        W1 --> W2 --> W3 --> W4
+        NoteW["(Either side can send anytime)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HTTP vs WEBSOCKET                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -121,6 +170,7 @@ WebSocket (Bidirectional):
     Client: <══════════════════════════ Server: "Another update"
     (Either side can send anytime)
 ```
+</details>
 
 ### The Key Insight
 
@@ -134,7 +184,20 @@ WebSocket provides a **persistent, full-duplex connection** over a single TCP so
 
 WebSocket starts as HTTP, then "upgrades" to WebSocket protocol.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: HTTP Request (Upgrade Request):<br/>GET /chat HTTP/1.1<br/>Host: server.example.com<br/>Upgrade: websocket<br/>Connection: Upgrade<br/>Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==<br/>Sec-WebSocket-Version: 13<br/>Sec-WebSocket-Protocol: chat, superchat
+    Server->>Client: HTTP Response (Upgrade Response):<br/>HTTP/1.1 101 Switching Protocols<br/>Upgrade: websocket<br/>Connection: Upgrade<br/>Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=<br/>Sec-WebSocket-Protocol: chat
+    Note over Client,Server: WebSocket Connection Established
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET HANDSHAKE                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -163,6 +226,7 @@ Client                                                    Server
    │            WebSocket Connection Established             │
    │  ═══════════════════════════════════════════════════════│
 ```
+</details>
 
 **Key Headers**:
 - `Upgrade: websocket`: Request to switch protocols
@@ -179,7 +243,26 @@ Sec-WebSocket-Accept = Base64(SHA1(Sec-WebSocket-Key + "258EAFA5-E914-47DA-95CA-
 
 After handshake, data is sent in **frames** (not HTTP anymore).
 
+```mermaid
+flowchart TD
+    subgraph Frame["WebSocket Frame Format"]
+        Bytes["Bytes 0-3:<br/>FIN(1) RSV(3) Opcode(4) MASK(1) Payload Len(7)<br/>Extended Payload Length (16/64 if needed)"]
+        MaskKey["Masking Key (4 bytes)<br/>if MASK=1"]
+        Payload["Payload Data<br/>(variable length)"]
+        
+        Bytes --> MaskKey
+        MaskKey --> Payload
+    end
+    
+    Note1["Fields:<br/>- FIN (1 bit): Is this the final fragment?<br/>- RSV1-3 (3 bits): Reserved for extensions<br/>- Opcode (4 bits): Frame type<br/>- MASK (1 bit): Is payload masked? (client→server must be masked)<br/>- Payload length (7 bits): 0-125 = actual length, 126 = next 2 bytes, 127 = next 8 bytes<br/>- Masking key (4 bytes): XOR key for payload (if masked)<br/>- Payload: The actual data"]
+    
+    Note2["Opcodes:<br/>- 0x0: Continuation frame<br/>- 0x1: Text frame (UTF-8)<br/>- 0x2: Binary frame<br/>- 0x8: Connection close<br/>- 0x9: Ping<br/>- 0xA: Pong"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET FRAME FORMAT                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -220,10 +303,32 @@ Opcodes:
 - 0x9: Ping
 - 0xA: Pong
 ```
+</details>
 
 ### Frame Types
 
+```mermaid
+flowchart TD
+    FrameTypes["WebSocket Frame Types"]
+    Text["1. TEXT FRAME (opcode 0x1)<br/>- UTF-8 encoded text<br/>- Most common for JSON messages"]
+    Binary["2. BINARY FRAME (opcode 0x2)<br/>- Raw binary data<br/>- Used for files, images, protobuf"]
+    Ping["3. PING FRAME (opcode 0x9)<br/>- Heartbeat from either side<br/>- Receiver must respond with PONG"]
+    Pong["4. PONG FRAME (opcode 0xA)<br/>- Response to PING<br/>- Confirms connection is alive"]
+    Close["5. CLOSE FRAME (opcode 0x8)<br/>- Initiates connection close<br/>- Contains status code and reason"]
+    Continuation["6. CONTINUATION FRAME (opcode 0x0)<br/>- Continues a fragmented message<br/>- FIN=0 means more fragments coming"]
+    
+    FrameTypes --> Text
+    FrameTypes --> Binary
+    FrameTypes --> Ping
+    FrameTypes --> Pong
+    FrameTypes --> Close
+    FrameTypes --> Continuation
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET FRAME TYPES                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -252,10 +357,24 @@ Opcodes:
    - Continues a fragmented message
    - FIN=0 means more fragments coming
 ```
+</details>
 
 ### Connection Lifecycle
 
+```mermaid
+stateDiagram-v2
+    [*] --> CONNECTING: Client sends HTTP upgrade request
+    CONNECTING --> OPEN: 101 Switching Protocols
+    OPEN --> OPEN: data frames
+    OPEN --> CLOSING: CLOSE frame sent/received
+    CLOSING --> CLOSED: CLOSE frame acknowledged
+    CLOSED --> [*]: TCP connection terminated
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET CONNECTION LIFECYCLE                            │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -297,12 +416,34 @@ State Diagram:
               │   CLOSED    │
               └─────────────┘
 ```
+</details>
 
 ### Heartbeat (Ping/Pong)
 
 Connections can silently die (network issues, NAT timeouts). Heartbeats detect dead connections.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client,Server: [Connection established]
+    Note over Client,Server: ... 25 seconds of silence ...
+    Client->>Server: PING frame
+    Server->>Client: PONG frame
+    Note over Client: [Connection confirmed alive]
+    Note over Client,Server: ... 25 seconds later ...
+    Client->>Server: PING frame
+    Note over Client: [No PONG received within timeout]
+    Note over Client: [Connection considered dead, close and reconnect]
+    
+    Note over Client,Server: Typical intervals:<br/>- Ping every 25-30 seconds<br/>- Pong timeout: 10 seconds<br/>- If no pong, close connection and reconnect
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET HEARTBEAT                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -331,6 +472,7 @@ Typical intervals:
 - Pong timeout: 10 seconds
 - If no pong, close connection and reconnect
 ```
+</details>
 
 ---
 
@@ -340,7 +482,27 @@ Let's trace the complete flow of a chat message through WebSocket.
 
 ### Scenario: Alice sends "Hello!" to Bob
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice's Browser
+    participant Server
+    participant Bob as Bob's Browser
+    
+    Note over Alice,Bob: [Already connected]
+    Alice->>Server: TEXT Frame:<br/>{"type":"message",<br/>"to":"bob",<br/>"text":"Hello!"}
+    Note over Server: [Parse message]<br/>[Find Bob's connection]
+    Server->>Bob: TEXT Frame:<br/>{"type":"message",<br/>"from":"alice",<br/>"text":"Hello!"}
+    Note over Bob: [Display message]
+    Server->>Alice: TEXT Frame:<br/>{"type":"ack",<br/>"status":"delivered"}
+    Note over Alice: [Show "delivered" ✓]
+    
+    Note over Alice,Bob: Timeline:<br/>- T=0ms: Alice sends message<br/>- T=1ms: Server receives<br/>- T=2ms: Server routes to Bob<br/>- T=3ms: Bob receives<br/>- T=4ms: Server sends ACK to Alice<br/><br/>Total: ~4ms (vs 5+ seconds with polling!)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CHAT MESSAGE FLOW                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -382,10 +544,42 @@ Timeline:
 
 Total: ~4ms (vs 5+ seconds with polling!)
 ```
+</details>
 
 ### Frame-Level Detail
 
 ```
+Alice sends: {"type":"message","to":"bob","text":"Hello!"}
+
+```mermaid
+flowchart LR
+    subgraph ClientFrame["WebSocket Frame (Client → Server)"]
+        CF1["FIN=1, RSV=000, Opcode=0x1 (text)"]
+        CF2["MASK=1 (client must mask)"]
+        CF3["Payload Length=47"]
+        CF4["Masking Key=0x12345678"]
+        CF5["Payload (masked): [masked JSON bytes]"]
+        CF1 --> CF2 --> CF3 --> CF4 --> CF5
+    end
+```
+
+Server sends to Bob: {"type":"message","from":"alice","text":"Hello!"}
+
+```mermaid
+flowchart LR
+    subgraph ServerFrame["WebSocket Frame (Server → Client)"]
+        SF1["FIN=1, RSV=000, Opcode=0x1 (text)"]
+        SF2["MASK=0 (server doesn't mask)"]
+        SF3["Payload Length=52"]
+        SF4["Payload: {'type':'message','from':'alice','text':'Hello!'}"]
+        SF1 --> SF2 --> SF3 --> SF4
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Alice sends: {"type":"message","to":"bob","text":"Hello!"}
 
 WebSocket Frame (Client → Server):
@@ -406,6 +600,8 @@ WebSocket Frame (Server → Client):
 │ Payload Length=52                                                           │
 │ Payload: {"type":"message","from":"alice","text":"Hello!"}                  │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -443,7 +639,34 @@ WebSocket Frame (Server → Client):
 
 ### Production Architecture
 
+```mermaid
+flowchart TD
+    LB["Load Balancer<br/>(L7, Sticky)"]
+    WS1["WS Server 1<br/>(50K conns)"]
+    WS2["WS Server 2<br/>(50K conns)"]
+    WS3["WS Server 3<br/>(50K conns)"]
+    Redis["Redis Pub/Sub<br/>(Message Bus)"]
+    DB["Database"]
+    Cache["Cache"]
+    Queue["Queue"]
+    
+    LB --> WS1
+    LB --> WS2
+    LB --> WS3
+    WS1 --> Redis
+    WS2 --> Redis
+    WS3 --> Redis
+    Redis --> DB
+    Redis --> Cache
+    Redis --> Queue
+    
+    Note1["Key Components:<br/>1. Load Balancer: Sticky sessions (same user → same server)<br/>2. WS Servers: Handle connections, stateful<br/>3. Redis Pub/Sub: Cross-server message routing<br/>4. Database: Persist messages, user data"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET PRODUCTION ARCHITECTURE                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -481,6 +704,7 @@ Key Components:
 3. Redis Pub/Sub: Cross-server message routing
 4. Database: Persist messages, user data
 ```
+</details>
 
 ---
 
@@ -1015,7 +1239,28 @@ net.ipv4.tcp_fin_timeout = 15
 
 #### 2. Horizontal Scaling (More Servers)
 
+```mermaid
+flowchart TD
+    LB["Load Balancer<br/>(Sticky)"]
+    WS1["WS Server 1<br/>Users: A,B,C"]
+    WS2["WS Server 2<br/>Users: D,E,F"]
+    WS3["WS Server 3<br/>Users: G,H,I"]
+    Redis["Redis Pub/Sub"]
+    
+    LB --> WS1
+    LB --> WS2
+    LB --> WS3
+    WS1 --> Redis
+    WS2 --> Redis
+    WS3 --> Redis
+    
+    Note1["Message from A to D:<br/>1. A sends to WS Server 1<br/>2. Server 1 doesn't have D's connection<br/>3. Server 1 publishes to Redis channel 'user:D'<br/>4. Server 2 receives from Redis<br/>5. Server 2 sends to D's WebSocket"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HORIZONTAL WEBSOCKET SCALING                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1046,6 +1291,7 @@ Message from A to D:
 4. Server 2 receives from Redis
 5. Server 2 sends to D's WebSocket
 ```
+</details>
 
 #### 3. Consistent Hashing for Routing
 
@@ -1084,7 +1330,30 @@ public class WebSocketRouter {
 
 Socket.IO is a library that provides WebSocket-like functionality with additional features.
 
+```mermaid
+flowchart LR
+    subgraph WS["WebSocket"]
+        WS1["Raw protocol"]
+        WS2["Binary and text frames"]
+        WS3["No automatic reconnection"]
+        WS4["No fallbacks"]
+        WS5["Lightweight"]
+    end
+    
+    subgraph SIO["Socket.IO"]
+        SIO1["Library on top of WebSocket"]
+        SIO2["Automatic reconnection"]
+        SIO3["Fallback transports (polling)"]
+        SIO4["Rooms and namespaces"]
+        SIO5["Acknowledgments built-in"]
+        SIO6["Heavier (more features)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    WEBSOCKET vs SOCKET.IO                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1104,6 +1373,7 @@ Socket.IO:
 - Acknowledgments built-in
 - Heavier (more features)
 ```
+</details>
 
 ### Socket.IO Features
 

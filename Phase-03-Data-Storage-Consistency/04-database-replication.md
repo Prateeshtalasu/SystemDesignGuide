@@ -21,7 +21,20 @@ Before diving into database replication, you should understand:
 Imagine you're running a popular e-commerce site with a single database server:
 
 **Problem 1: Single Point of Failure**
+```mermaid
+flowchart LR
+    App["Application"]
+    DB["Database Server<br/>(all data here)"]
+    
+    App --> DB
+    
+    Problems["What if this server:<br/>- Hard drive fails? → ALL DATA LOST<br/>- Network goes down? → ENTIRE SITE DOWN<br/>- Needs maintenance? → SCHEDULED DOWNTIME"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    SINGLE DATABASE                        │
 │                                                           │
@@ -34,9 +47,30 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  - Needs maintenance?    → SCHEDULED DOWNTIME           │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Problem 2: Read Scalability**
+```mermaid
+flowchart TD
+    Users1["1000 users reading"]
+    Users2["1000 users reading"]
+    Users3["1000 users reading"]
+    Users4["1000 users reading"]
+    
+    DB["Database Server<br/>(overwhelmed!)"]
+    
+    Users1 --> DB
+    Users2 --> DB
+    Users3 --> DB
+    Users4 --> DB
+    
+    Problem["One server can handle ~10,000 queries/second<br/>You need 100,000 queries/second<br/>Result: Slow responses, timeouts, angry users"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    SINGLE DATABASE                        │
 │                                                           │
@@ -50,9 +84,30 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  Result: Slow responses, timeouts, angry users          │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Problem 3: Geographic Latency**
+```mermaid
+flowchart TD
+    DB["Database in New York"]
+    
+    NY["User in New York<br/>10ms latency ✓"]
+    London["User in London<br/>80ms latency 😐"]
+    Tokyo["User in Tokyo<br/>150ms latency 😞"]
+    Sydney["User in Sydney<br/>200ms latency 😢"]
+    
+    NY --> DB
+    London --> DB
+    Tokyo --> DB
+    Sydney --> DB
+    
+    Note["Physics limit: Light takes ~67ms NYC → Tokyo"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    SINGLE DATABASE                        │
 │                                                           │
@@ -66,11 +121,25 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  Physics limit: Light takes ~67ms NYC → Tokyo           │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Systems Looked Like Before Replication
 
 **Backup-only approach**:
+```mermaid
+flowchart LR
+    DB["Database"]
+    Backup["Backup<br/>(once per day)"]
+    
+    DB --> Backup
+    
+    Problem["Problem: If server dies at 5 PM, you lose<br/>everything since last night's backup.<br/>That's potentially 17 hours of data!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    NIGHTLY BACKUP                         │
 │                                                           │
@@ -81,9 +150,27 @@ Imagine you're running a popular e-commerce site with a single database server:
 │           That's potentially 17 hours of data!           │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Manual failover**:
+```mermaid
+flowchart TD
+    Primary["Primary dies"]
+    Page["Page on-call engineer"]
+    Wake["Engineer wakes up<br/>(30 min)"]
+    Diagnose["Engineer diagnoses<br/>(30 min)"]
+    Restore["Engineer restores from backup<br/>(2 hours)"]
+    Online["Site back online<br/>(3+ hours later)"]
+    
+    Primary --> Page --> Wake --> Diagnose --> Restore --> Online
+    
+    Cost["3 hours of downtime = $millions lost for big sites"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                    MANUAL FAILOVER                        │
 │                                                           │
@@ -96,6 +183,7 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  3 hours of downtime = $millions lost for big sites     │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples of the Problem
 
@@ -113,7 +201,20 @@ Imagine you're running a popular e-commerce site with a single database server:
 
 **Single Database = One Reporter Taking Notes**
 
+```mermaid
+flowchart LR
+    Event["Event happens"]
+    Reporter["Reporter writes it down"]
+    
+    Event --> Reporter
+    
+    Problems["Problems:<br/>- Reporter gets sick → No one covers the story<br/>- Reporter is slow → Stories delayed<br/>- Reporter's notebook lost → Story gone forever"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │              ONE REPORTER (Single Database)               │
 │                                                           │
@@ -125,10 +226,31 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  - Reporter's notebook lost → Story gone forever        │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Leader-Follower Replication = Head Reporter + Copy Editors**
 
+```mermaid
+flowchart TD
+    Event2["Event"]
+    HeadReporter["Head Reporter writes story"]
+    
+    Editor1["Copy Editor 1<br/>(copies the story)"]
+    Editor2["Copy Editor 2<br/>(copies the story)"]
+    Editor3["Copy Editor 3<br/>(copies the story)"]
+    
+    Event2 --> HeadReporter
+    HeadReporter --> Editor1
+    HeadReporter --> Editor2
+    HeadReporter --> Editor3
+    
+    Benefits["Benefits:<br/>- Head reporter sick? Promote a copy editor<br/>- Need more readers? Copy editors can serve them<br/>- One copy lost? Others still have it"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │         HEAD REPORTER + COPY EDITORS (Leader-Follower)   │
 │                                                           │
@@ -144,10 +266,27 @@ Imagine you're running a popular e-commerce site with a single database server:
 │  - One copy lost? Others still have it                  │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Multi-Leader Replication = Multiple Head Reporters**
 
+```mermaid
+flowchart LR
+    NYC["NYC Office:<br/>Reporter A writes stories"]
+    London["London Office:<br/>Reporter B writes stories"]
+    Tokyo["Tokyo Office:<br/>Reporter C writes stories"]
+    
+    NYC <--> London
+    London <--> Tokyo
+    Tokyo <--> NYC
+    
+    Problem["Problem: What if A and B write conflicting stories<br/>about the same event?<br/>→ Need conflict resolution!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │         MULTIPLE HEAD REPORTERS (Multi-Leader)           │
 │                                                           │
@@ -162,6 +301,7 @@ Imagine you're running a popular e-commerce site with a single database server:
 │           → Need conflict resolution!                    │
 └──────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -180,7 +320,31 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 
 **The most common replication topology.**
 
+```mermaid
+flowchart TD
+    Writes["Writes"]
+    Leader["LEADER<br/>(Primary)"]
+    
+    Follower1["FOLLOWER<br/>(Replica)"]
+    Follower2["FOLLOWER<br/>(Replica)"]
+    Follower3["FOLLOWER<br/>(Replica)"]
+    
+    Reads["Reads"]
+    
+    Writes --> Leader
+    Leader -->|"Replication<br/>(WAL / Binlog)"| Follower1
+    Leader -->|"Replication<br/>(WAL / Binlog)"| Follower2
+    Leader -->|"Replication<br/>(WAL / Binlog)"| Follower3
+    
+    Follower1 --> Reads
+    Follower2 --> Reads
+    Follower3 --> Reads
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              LEADER-FOLLOWER REPLICATION                     │
 │                                                              │
@@ -203,6 +367,7 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **How it works step by step**:
 
@@ -238,7 +403,26 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 
 **Synchronous Replication**:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Leader
+    participant Followers
+    
+    Note over Client,Followers: SYNCHRONOUS REPLICATION
+    Client->>Leader: 1. Send write
+    Leader->>Leader: 2. Write locally
+    Leader->>Followers: 3. Send to Followers
+    Followers->>Leader: 4. Confirm (WAIT)
+    Leader->>Client: 5. Respond
+    
+    Note over Client,Followers: ✅ Guarantee: If leader says "done", followers have it<br/>❌ Tradeoff: Slow (must wait for followers)<br/>❌ Tradeoff: If any follower is slow/down, writes block
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SYNCHRONOUS REPLICATION                         │
 │                                                              │
@@ -257,10 +441,29 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │  ❌ Tradeoff: If any follower is slow/down, writes block   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Asynchronous Replication**:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Leader
+    participant Followers
+    
+    Note over Client,Followers: ASYNCHRONOUS REPLICATION
+    Client->>Leader: 1. Send write
+    Leader->>Leader: 2. Write locally
+    Leader->>Client: 3. Respond immediately
+    Leader->>Followers: 4. Send to Followers (async, later)
+    
+    Note over Client,Followers: ✅ Fast (no waiting)<br/>❌ Risk: Leader can fail before replicating<br/>❌ Risk: Followers may lag behind
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              ASYNCHRONOUS REPLICATION                        │
 │                                                              │
@@ -284,7 +487,25 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 
 **Semi-Synchronous (Practical Compromise)**:
 
+```mermaid
+flowchart TD
+    Leader["Leader"]
+    
+    Follower1["Follower 1<br/>(sync, must confirm)"]
+    Follower2["Follower 2<br/>(async)"]
+    Follower3["Follower 3<br/>(async)"]
+    
+    Leader -->|"sync"| Follower1
+    Leader -->|"async"| Follower2
+    Leader -->|"async"| Follower3
+    
+    Benefits["✅ At least 2 copies before acknowledging<br/>✅ Not as slow as full sync<br/>✅ Can tolerate slow followers (except the sync one)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SEMI-SYNCHRONOUS REPLICATION                    │
 │                                                              │
@@ -300,12 +521,35 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │  ✅ Can tolerate slow followers (except the sync one)      │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Multi-Leader Replication
 
 **When you need writes in multiple locations.**
 
+```mermaid
+flowchart LR
+    subgraph NYC["NYC Datacenter"]
+        Leader1["Leader 1<br/>(accepts writes)"]
+        Followers1["Follow ers"]
+        Leader1 --> Followers1
+    end
+    
+    subgraph London["London Datacenter"]
+        Leader2["Leader 2<br/>(accepts writes)"]
+        Followers2["Follow ers"]
+        Leader2 --> Followers2
+    end
+    
+    Leader1 <-->|"sync"| Leader2
+    
+    Uses["Use cases:<br/>- Multi-datacenter deployment<br/>- Offline-capable apps (each device is a leader)<br/>- Collaborative editing (Google Docs)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              MULTI-LEADER REPLICATION                        │
 │                                                              │
@@ -327,10 +571,27 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │  - Collaborative editing (Google Docs)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **The Conflict Problem**:
 
+```mermaid
+sequenceDiagram
+    participant NYC as NYC Leader
+    participant London as London Leader
+    
+    Note over NYC,London: Time 0: User record: {name: "Alice", title: "Engineer"}
+    NYC->>NYC: Time 1: UPDATE title = 'Senior Engineer'
+    London->>London: Time 1: UPDATE title = 'Staff Engineer'<br/>(same time!)
+    NYC->>London: Time 2: Sync
+    London->>NYC: Time 2: Sync
+    Note over NYC,London: CONFLICT!<br/>NYC has: 'Senior Engineer'<br/>London has: 'Staff Engineer'<br/>Which one wins?
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    WRITE CONFLICT                            │
 │                                                              │
@@ -349,6 +610,7 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │  CONFLICT! Which one wins?                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Conflict Resolution Strategies**:
 
@@ -390,7 +652,34 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 
 **No designated leader. Any node can accept writes.**
 
+```mermaid
+flowchart TD
+    Client["Client"]
+    
+    NodeA["Node A"]
+    NodeB["Node B"]
+    NodeC["Node C"]
+    NodeD["Node D"]
+    
+    Client -->|"writes/reads"| NodeA
+    Client -->|"writes/reads"| NodeB
+    Client -->|"writes/reads"| NodeC
+    Client -->|"writes/reads"| NodeD
+    
+    NodeA <--> NodeB
+    NodeA <--> NodeC
+    NodeA <--> NodeD
+    NodeB <--> NodeC
+    NodeB <--> NodeD
+    NodeC <--> NodeD
+    
+    Note["Client writes to multiple nodes simultaneously<br/>Client reads from multiple nodes simultaneously<br/>Uses quorum to determine success"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              LEADERLESS REPLICATION                          │
 │                                                              │
@@ -410,6 +699,7 @@ The tradeoff is **consistency**: How do you keep all copies in sync?
 │  Uses quorum to determine success                           │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Quorum Reads and Writes**:
 
@@ -462,7 +752,28 @@ Overlap:       {B} ← has latest value!
 
 **The delay between write on leader and availability on follower.**
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Leader
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+    
+    Note over Client,F2: REPLICATION LAG
+    Client->>Leader: T=0: Write
+    Leader->>Leader: T=1ms: Confirm write
+    Leader->>F1: T=5ms: Send to Follower 1
+    F1->>F1: T=10ms: Apply write (lag: 10ms)
+    Leader->>F2: T=50ms: Send to Follower 2<br/>(busy network)
+    F2->>F2: T=100ms: Apply write (lag: 100ms)
+    
+    Note over Client,F2: If client reads from Follower 2 at T=50ms:<br/>→ Gets STALE data (write not yet applied)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    REPLICATION LAG                           │
 │                                                              │
@@ -483,6 +794,7 @@ Overlap:       {B} ← has latest value!
 │  → Gets STALE data (write not yet applied)                  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Problems caused by replication lag**:
 
@@ -700,7 +1012,35 @@ T=350ms: Read repair triggered
 
 **Pattern 1: Single Leader with Read Replicas**
 
+```mermaid
+flowchart TD
+    subgraph App["APPLICATION"]
+        Writes["Writes"]
+        Reads["Reads"]
+        
+        Leader2["LEADER"]
+        
+        Replica1["Replica"]
+        Replica2["Replica"]
+        Replica3["Replica"]
+        
+        Writes --> Leader2
+        Leader2 -->|"Replication"| Replica1
+        Leader2 -->|"Replication"| Replica2
+        Leader2 -->|"Replication"| Replica3
+        
+        Replica1 --> Reads
+        Replica2 --> Reads
+        Replica3 --> Reads
+    end
+    
+    UseCase["Use case: Read-heavy workloads (90%+ reads)<br/>Example: Content sites, product catalogs"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         SINGLE LEADER + READ REPLICAS                        │
 │                                                              │
@@ -728,10 +1068,36 @@ T=350ms: Read repair triggered
 │  Example: Content sites, product catalogs                   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Pattern 2: Multi-Region Active-Passive**
 
+```mermaid
+flowchart LR
+    subgraph USEast["US-EAST (Active)"]
+        Leader3["LEADER"]
+        Replicas1["Replicas"]
+        Leader3 --> Replicas1
+    end
+    
+    subgraph USWest["US-WEST (Passive)"]
+        Standby["STANDBY"]
+        Replicas2["Replicas"]
+        Standby --> Replicas2
+    end
+    
+    Leader3 -->|"async"| Standby
+    
+    Normal["Normal: All traffic to US-EAST"]
+    Disaster["Disaster: Failover to US-WEST"]
+    
+    UseCase2["Use case: Disaster recovery<br/>RPO: Minutes (async replication lag)<br/>RTO: Minutes to hours (failover time)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         MULTI-REGION ACTIVE-PASSIVE                          │
 │                                                              │
@@ -754,10 +1120,33 @@ T=350ms: Read repair triggered
 │  RTO: Minutes to hours (failover time)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Pattern 3: Multi-Region Active-Active**
 
+```mermaid
+flowchart LR
+    subgraph USEast2["US-EAST"]
+        Leader4["LEADER"]
+        Replicas3["Replicas"]
+        Leader4 --> Replicas3
+    end
+    
+    subgraph EUWest["EU-WEST"]
+        Leader5["LEADER"]
+        Replicas4["Replicas"]
+        Leader5 --> Replicas4
+    end
+    
+    Leader4 <-->|"sync"| Leader5
+    
+    Notes["Both regions accept writes<br/>Conflict resolution required<br/><br/>Use case: Global applications, low latency everywhere<br/>Challenge: Conflict resolution, complexity"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         MULTI-REGION ACTIVE-ACTIVE                           │
 │                                                              │
@@ -779,6 +1168,7 @@ T=350ms: Read repair triggered
 │  Challenge: Conflict resolution, complexity                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

@@ -43,7 +43,28 @@ Option 4: "Hello WorldEveryone" (wrong merge)
 
 ### Where Conflicts Occur
 
+```mermaid
+flowchart TD
+    Conflicts["WHERE CONFLICTS HAPPEN"]
+    
+    ML["Multi-Leader Replication:<br/>- Two datacenters accept writes<br/>- Same record updated in both<br/>- Must reconcile when syncing"]
+    
+    LL["Leaderless Replication (Dynamo-style):<br/>- Writes go to multiple nodes<br/>- Reads from multiple nodes<br/>- Different nodes may have different values"]
+    
+    OF["Offline-First Applications:<br/>- Mobile app works offline<br/>- User makes changes locally<br/>- Syncs when back online (conflicts with server)"]
+    
+    CE["Collaborative Editing:<br/>- Multiple users editing same document<br/>- Network latency means updates cross<br/>- Must merge concurrent edits"]
+    
+    Conflicts --> ML
+    Conflicts --> LL
+    Conflicts --> OF
+    Conflicts --> CE
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WHERE CONFLICTS HAPPEN                          │
 │                                                              │
@@ -68,6 +89,8 @@ Option 4: "Hello WorldEveryone" (wrong merge)
 │  └── Must merge concurrent edits                            │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### What Breaks Without Proper Conflict Resolution
@@ -120,7 +143,30 @@ Both succeed. Customer withdrew $160 from $100 account!
 
 **Last-Write-Wins (Simple but Lossy)**
 
+```mermaid
+flowchart TD
+    LWW["LAST-WRITE-WINS (LWW)"]
+    
+    Analogy["Like a wiki where the last save overwrites everything"]
+    
+    T1["10:00 AM: Alice edits page, saves"]
+    T2["10:01 AM: Bob edits page (from 9:59 version), saves"]
+    
+    Result["Result: Alice's changes are LOST"]
+    
+    Props["Simple to implement<br/>Terrible for data integrity"]
+    
+    LWW --> Analogy
+    Analogy --> T1
+    T1 --> T2
+    T2 --> Result
+    Result --> Props
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              LAST-WRITE-WINS (LWW)                           │
 │                                                              │
@@ -136,10 +182,35 @@ Both succeed. Customer withdrew $160 from $100 account!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Conflict Detection + Manual Resolution**
 
+```mermaid
+flowchart TD
+    Detect["DETECT + MANUAL RESOLUTION"]
+    
+    Analogy2["Like Git merge conflicts"]
+    
+    T1_2["10:00 AM: Alice edits file, commits"]
+    T2_2["10:01 AM: Bob edits file (from old version), tries to push"]
+    
+    Conflict["Git says: 'CONFLICT! Please resolve manually'<br/><br/>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD<br/>Alice's version<br/>=======<br/>Bob's version<br/>&gt;&gt;&gt;&gt;&gt;&gt;&gt; bob's-branch"]
+    
+    Human["Human decides what the final version should be"]
+    
+    Detect --> Analogy2
+    Analogy2 --> T1_2
+    T1_2 --> T2_2
+    T2_2 --> Conflict
+    Conflict --> Human
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              DETECT + MANUAL RESOLUTION                      │
 │                                                              │
@@ -160,10 +231,39 @@ Both succeed. Customer withdrew $160 from $100 account!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Automatic Merge (CRDTs)**
 
+```mermaid
+flowchart TD
+    CRDT["AUTOMATIC MERGE (CRDTs)"]
+    
+    Analogy3["Like a shared shopping list where everyone can add items"]
+    
+    A1["Alice adds: 'Milk'"]
+    A2["Bob adds: 'Eggs'"]
+    A3["Carol adds: 'Bread'"]
+    
+    Result2["Even if they all add at the same time, offline,<br/>the final list is: ['Milk', 'Eggs', 'Bread']"]
+    
+    Benefit2["No conflicts because 'add to set' always merges cleanly<br/><br/>Design data structures that CANNOT conflict"]
+    
+    CRDT --> Analogy3
+    Analogy3 --> A1
+    Analogy3 --> A2
+    Analogy3 --> A3
+    A1 --> Result2
+    A2 --> Result2
+    A3 --> Result2
+    Result2 --> Benefit2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              AUTOMATIC MERGE (CRDTs)                         │
 │                                                              │
@@ -182,6 +282,8 @@ Both succeed. Customer withdrew $160 from $100 account!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -191,7 +293,34 @@ Both succeed. Customer withdrew $160 from $100 account!
 
 **Concept**: Attach a timestamp to each write. The write with the highest timestamp wins.
 
+```mermaid
+flowchart TD
+    LWW2["LAST-WRITE-WINS"]
+    
+    W1["Write 1: { value: 'A', timestamp: 1000 }"]
+    W2["Write 2: { value: 'B', timestamp: 1005 }"]
+    W3["Write 3: { value: 'C', timestamp: 1003 }"]
+    
+    Sort["Sorted by timestamp: Write 2 wins<br/>Final value: 'B'"]
+    
+    Problems["Problems:<br/>1. Clock skew: Node clocks may not agree<br/>2. Data loss: Concurrent writes are lost<br/>3. No causality: Later timestamp doesn't mean 'after'"]
+    
+    Mitigations["Mitigations:<br/>- Use logical clocks (Lamport timestamps)<br/>- Use hybrid logical clocks (HLC)<br/>- Accept data loss for simplicity"]
+    
+    LWW2 --> W1
+    LWW2 --> W2
+    LWW2 --> W3
+    W1 --> Sort
+    W2 --> Sort
+    W3 --> Sort
+    Sort --> Problems
+    Problems --> Mitigations
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  LAST-WRITE-WINS                             │
 │                                                              │
@@ -213,6 +342,8 @@ Both succeed. Customer withdrew $160 from $100 account!
 │  - Accept data loss for simplicity                          │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Implementation**:
@@ -243,7 +374,35 @@ public class LWWRegister<T> {
 
 **Concept**: Track the version at each node. Compare vectors to detect concurrent updates.
 
+```mermaid
+flowchart TD
+    VC["VECTOR CLOCKS"]
+    
+    Concept["Each node maintains a vector of counters:<br/>[Node_A_count, Node_B_count, Node_C_count]"]
+    
+    Init["Initial state at all nodes: [0, 0, 0]"]
+    
+    NA["Node A writes:<br/>A's vector: [1, 0, 0]"]
+    
+    NB["Node B writes (hasn't seen A's write):<br/>B's vector: [0, 1, 0]"]
+    
+    Compare["Comparing [1, 0, 0] and [0, 1, 0]:<br/>- Neither dominates the other<br/>- They are CONCURRENT (conflict!)"]
+    
+    IfSeen["If B had seen A's write first:<br/>B's vector would be: [1, 1, 0]<br/>[1, 1, 0] dominates [1, 0, 0] → No conflict, B is newer"]
+    
+    VC --> Concept
+    Concept --> Init
+    Init --> NA
+    Init --> NB
+    NA --> Compare
+    NB --> Compare
+    Compare --> IfSeen
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  VECTOR CLOCKS                               │
 │                                                              │
@@ -268,6 +427,8 @@ public class LWWRegister<T> {
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Comparison Rules**:
 
@@ -289,7 +450,35 @@ Examples:
 
 **G-Counter (Grow-only Counter)**:
 
+```mermaid
+flowchart TD
+    GC["G-COUNTER"]
+    
+    Concept2["Each node has its own counter. Total = sum of all."]
+    
+    Init2["Node A: 5<br/>Node B: 3<br/>Node C: 7<br/>Total: 15"]
+    
+    IncA["Node A increments:<br/>Node A: 6<br/>Total: 16"]
+    
+    IncB["Node B increments (concurrently):<br/>Node B: 4<br/>Total: 17"]
+    
+    Sync["After sync:<br/>All nodes have: {A: 6, B: 4, C: 7}<br/>Total: 17 ✓"]
+    
+    Benefit3["No conflicts because each node only increments its own!"]
+    
+    GC --> Concept2
+    Concept2 --> Init2
+    Init2 --> IncA
+    Init2 --> IncB
+    IncA --> Sync
+    IncB --> Sync
+    Sync --> Benefit3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    G-COUNTER                                 │
 │                                                              │
@@ -316,10 +505,33 @@ Examples:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **PN-Counter (Positive-Negative Counter)**:
 
+```mermaid
+flowchart TD
+    PNC["PN-COUNTER"]
+    
+    Concept3["Two G-Counters: one for increments, one for decrements"]
+    
+    State1["Increments: {A: 10, B: 5, C: 3} = 18<br/>Decrements: {A: 2, B: 1, C: 0} = 3<br/>Value: 18 - 3 = 15"]
+    
+    DecA["Node A decrements:<br/>Decrements: {A: 3, B: 1, C: 0} = 4<br/>Value: 18 - 4 = 14"]
+    
+    Benefit4["Works for counters that can go up AND down"]
+    
+    PNC --> Concept3
+    Concept3 --> State1
+    State1 --> DecA
+    DecA --> Benefit4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   PN-COUNTER                                 │
 │                                                              │
@@ -337,10 +549,34 @@ Examples:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **LWW-Element-Set (Last-Writer-Wins Set)**:
 
+```mermaid
+flowchart TD
+    LWWSet["LWW-ELEMENT-SET"]
+    
+    Concept4["Each element has add-timestamp and remove-timestamp"]
+    
+    Apple["Element 'apple':<br/>add_timestamp: 1000<br/>remove_timestamp: 1500<br/>Status: REMOVED (remove > add)"]
+    
+    Banana["Element 'banana':<br/>add_timestamp: 2000<br/>remove_timestamp: 1800<br/>Status: PRESENT (add > remove)"]
+    
+    Merge["Merge: Take max of each timestamp<br/><br/>Node A: apple(add:1000, rm:1500)<br/>Node B: apple(add:2000, rm:1500)<br/>Merged: apple(add:2000, rm:1500) → PRESENT"]
+    
+    LWWSet --> Concept4
+    Concept4 --> Apple
+    Concept4 --> Banana
+    Apple --> Merge
+    Banana --> Merge
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 LWW-ELEMENT-SET                              │
 │                                                              │
@@ -364,10 +600,39 @@ Examples:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **OR-Set (Observed-Remove Set)**:
 
+```mermaid
+flowchart TD
+    ORSet["OR-SET"]
+    
+    Concept5["Each add creates a unique tag. Remove removes specific tag."]
+    
+    AddA["Add 'apple' at Node A: apple-{tag1}"]
+    AddB["Add 'apple' at Node B: apple-{tag2}"]
+    
+    Set1["Set: { apple-{tag1}, apple-{tag2} }<br/>'apple' is present (has at least one tag)"]
+    
+    RemoveA["Remove 'apple' at Node A (removes tag1):<br/>Set: { apple-{tag2} }<br/>'apple' still present (tag2 remains)"]
+    
+    Benefit5["Only removes the adds you've observed<br/>Concurrent add + remove = add wins"]
+    
+    ORSet --> Concept5
+    Concept5 --> AddA
+    Concept5 --> AddB
+    AddA --> Set1
+    AddB --> Set1
+    Set1 --> RemoveA
+    RemoveA --> Benefit5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    OR-SET                                    │
 │                                                              │
@@ -388,12 +653,38 @@ Examples:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Application-Level Resolution
 
 **Concept**: Return all conflicting versions to the application. Let application logic decide.
 
+```mermaid
+flowchart TD
+    AppRes["APPLICATION-LEVEL RESOLUTION"]
+    
+    DB["Database stores multiple versions:<br/><br/>Key: 'shopping_cart_123'<br/>Versions:<br/>  [vector: [2,1,0], value: ['apple', 'banana']]<br/>  [vector: [1,2,0], value: ['apple', 'orange']]"]
+    
+    Read["Application reads: Gets BOTH versions"]
+    
+    Logic["Application logic:<br/>- Shopping cart: Union of items<br/>- Merged: ['apple', 'banana', 'orange']"]
+    
+    Write["Application writes back with new vector<br/>- Resolves conflict"]
+    
+    Note["Different data types need different merge logic"]
+    
+    AppRes --> DB
+    DB --> Read
+    Read --> Logic
+    Logic --> Write
+    Write --> Note
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           APPLICATION-LEVEL RESOLUTION                       │
 │                                                              │
@@ -416,6 +707,8 @@ Examples:
 │  Different data types need different merge logic            │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -570,7 +863,41 @@ Note: "apple" survives because laptop only removed tag3,
 
 ### Choosing a Strategy
 
+```mermaid
+flowchart TD
+    Q1_3["Is data loss acceptable?"]
+    Q1_Yes3["YES → Last-Write-Wins<br/>(simple, fast)"]
+    Q1_No3["NO → Continue"]
+    
+    Q2_3["Can you model data as a CRDT?"]
+    Q2_Yes3["Counters → G-Counter or PN-Counter<br/>Sets → OR-Set or LWW-Element-Set<br/>Registers → LWW-Register or MV-Register<br/>Maps → OR-Map<br/>Custom → Build custom CRDT"]
+    Q2_No3["NO → Continue"]
+    
+    Q3_3["Can application logic merge?"]
+    Q3_Yes3["YES → Application-level resolution<br/>(return conflicts, app merges)"]
+    Q3_No3["NO → Continue"]
+    
+    Q4_3["Can user resolve?"]
+    Q4_Yes3["YES → Manual resolution (like Git)"]
+    Q4_No3["NO → Reconsider architecture<br/>(maybe avoid multi-leader?)"]
+    
+    Q1_3 -->|"YES"| Q1_Yes3
+    Q1_3 -->|"NO"| Q1_No3
+    Q1_No3 --> Q2_3
+    Q2_3 -->|"YES"| Q2_Yes3
+    Q2_3 -->|"NO"| Q2_No3
+    Q2_No3 --> Q3_3
+    Q3_3 -->|"YES"| Q3_Yes3
+    Q3_3 -->|"NO"| Q3_No3
+    Q3_No3 --> Q4_3
+    Q4_3 -->|"YES"| Q4_Yes3
+    Q4_3 -->|"NO"| Q4_No3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           CONFLICT RESOLUTION DECISION TREE                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -598,6 +925,8 @@ Note: "apple" survives because laptop only removed tag3,
 │            (maybe avoid multi-leader?)                      │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -1124,7 +1453,28 @@ Solutions:
 
 ### CRDT Limitations
 
+```mermaid
+flowchart TD
+    Limits["CRDT LIMITATIONS"]
+    
+    L1["1. Not all operations are CRDT-compatible<br/>   - 'Set balance to X' is not (use delta instead)<br/>   - 'Delete if empty' is not"]
+    
+    L2["2. Space overhead<br/>   - Vector clocks grow with nodes<br/>   - Tombstones for deleted items"]
+    
+    L3["3. Eventual consistency only<br/>   - Can't provide strong consistency<br/>   - Temporary inconsistency during sync"]
+    
+    L4["4. Limited query capabilities<br/>   - Can't do 'read-modify-write' atomically<br/>   - Complex queries need application logic"]
+    
+    Limits --> L1
+    Limits --> L2
+    Limits --> L3
+    Limits --> L4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  CRDT LIMITATIONS                            │
 │                                                              │
@@ -1145,6 +1495,8 @@ Solutions:
 │     - Complex queries need application logic                │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

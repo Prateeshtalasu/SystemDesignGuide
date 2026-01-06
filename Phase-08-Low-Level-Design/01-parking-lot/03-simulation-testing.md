@@ -15,7 +15,33 @@ vehicleToTicket: {}
 
 **Step 1: Car "ABC-1234" enters via Entry Panel 1**
 
+```mermaid
+flowchart TD
+    A["EntryPanel.processEntry(Car('ABC-1234'))"]
+    B["ParkingLot.parkVehicle(car)"]
+    C{"vehicleToTicket.containsKey('ABC-1234')?"}
+    D["findAvailableSpot(car)"]
+    E["Floor 0: findAvailableSpot(car)"]
+    F["Search order: COMPACT → LARGE"]
+    G{"F0-C001.canFitVehicle(car)?"}
+    H["F0-C001.parkVehicle(car)"]
+    I["F0-C001.isAvailable = false<br/>F0-C001.parkedVehicle = car"]
+    J["Create ParkingTicket(car, F0-C001)"]
+    K["ticketId, entryTime, status = ACTIVE"]
+    L["activeTickets['TKT-xxx'] = ticket<br/>vehicleToTicket['ABC-1234'] = ticket"]
+    M["updateAllDisplayBoards()<br/>Floor 0 COMPACT: 5 → 4"]
+
+    A --> B
+    B --> C
+    C -->|false| D
+    D --> E --> F --> G
+    G -->|true| H --> I --> J --> K --> L --> M
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 EntryPanel.processEntry(Car("ABC-1234"))
     │
     └──► ParkingLot.parkVehicle(car)
@@ -48,6 +74,8 @@ EntryPanel.processEntry(Car("ABC-1234"))
                         │
                         └──► Floor 0 COMPACT: 5 → 4
 ```
+
+</details>
 
 **State After Step 1:**
 
@@ -112,7 +140,29 @@ EntryPanel.processEntry(Car("ABC-1234"))
 
 **Step 4: Car "ABC-1234" exits via Exit Panel 1**
 
+```mermaid
+flowchart TD
+    A["ExitPanel.processExit(ticket1)"]
+    B["ticket1.calculateFee()"]
+    C["Duration = 10:45 - 10:00 = 45 minutes<br/>Hours = ceil(45/60) = 1<br/>Rate = $2.00 (COMPACT)<br/>Fee = $2.00"]
+    D["paymentService.processPayment(ticket1, $2.00)"]
+    E["CardPayment.processPayment()"]
+    F["ticket1.markAsPaid($2.00)<br/>status = PAID<br/>exitTime = 10:45:00"]
+    G["parkingLot.releaseSpot(ticket1)"]
+    H["F0-C001.removeVehicle()<br/>F0-C001.isAvailable = true<br/>F0-C001.parkedVehicle = null"]
+    I["activeTickets.remove('TKT-xxx')<br/>vehicleToTicket.remove('ABC-1234')"]
+    J["updateAllDisplayBoards()<br/>Floor 0 COMPACT: 4 → 5"]
+
+    A --> B --> C --> D --> E --> F --> G
+    G --> H
+    G --> I
+    G --> J
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ExitPanel.processExit(ticket1)
     │
     ├──► ticket1.calculateFee()
@@ -145,6 +195,8 @@ ExitPanel.processExit(ticket1)
                         │
                         └──► Floor 0 COMPACT: 4 → 5
 ```
+
+</details>
 
 **State After Step 4:**
 
@@ -238,7 +290,26 @@ Return null (no ticket issued)
 
 **Without synchronization (PROBLEM):**
 
+```mermaid
+sequenceDiagram
+    participant A as Thread A (Entry Panel 1)
+    participant B as Thread B (Entry Panel 2)
+    participant S as ParkingLot
+
+    A->>S: Check F0-C001 available?
+    S-->>A: Yes
+    B->>S: Check F0-C001 available?
+    S-->>B: Yes (RACE!)
+    A->>S: Park in F0-C001
+    S-->>A: Success
+    B->>S: Park in F0-C001
+    S-->>B: COLLISION! Two cars, one spot
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Thread A (Entry Panel 1)          Thread B (Entry Panel 2)
 ─────────────────────────         ─────────────────────────
 Check F0-C001 available?
@@ -251,9 +322,36 @@ Park in F0-C001
                                       → COLLISION! Two cars, one spot
 ```
 
+</details>
+
 **With synchronization (SOLUTION):**
 
+```mermaid
+sequenceDiagram
+    participant A as Thread A (Entry Panel 1)
+    participant B as Thread B (Entry Panel 2)
+    participant S as ParkingLot
+
+    A->>S: Acquire lock on parkVehicle()
+    A->>S: Check F0-C001 available?
+    S-->>A: Yes
+    A->>S: Park in F0-C001
+    S-->>A: Success
+    A->>S: Release lock
+
+    B->>S: Acquire lock on parkVehicle()
+    B->>S: Check F0-C001 available?
+    S-->>B: No (already taken)
+    B->>S: Find next spot: F0-C002
+    B->>S: Park in F0-C002
+    S-->>B: Success
+    B->>S: Release lock
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Thread A (Entry Panel 1)          Thread B (Entry Panel 2)
 ─────────────────────────         ─────────────────────────
 Acquire lock on parkVehicle()
@@ -270,6 +368,8 @@ Release lock
                                       → Success
                                   Release lock
 ```
+
+</details>
 
 ---
 

@@ -342,7 +342,28 @@ public class ElevatorConfig {
 - Need to switch algorithms at runtime
 - Algorithms are interchangeable
 
+```mermaid
+classDiagram
+    class ElevatorController {
+      - scheduler
+    }
+
+    class SchedulingStrategy {
+      <<interface>>
+      + selectElevator()
+      + getName()
+    }
+
+    ElevatorController --> "uses" SchedulingStrategy
+    SchedulingStrategy <|.. FCFSScheduler
+    SchedulingStrategy <|.. SCANScheduler
+    SchedulingStrategy <|.. LOOKScheduler
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐
 │ ElevatorController  │
 │                     │
@@ -366,6 +387,8 @@ public class ElevatorConfig {
 │ + selectElevator │ │ + selectElevator│ │ + selectElevator│
 └──────────────────┘ └─────────────────┘ └────────────────┘
 ```
+
+</details>
 
 **Benefits:**
 - Easy to add new algorithms

@@ -39,7 +39,25 @@ That's a **1000x to 10000x improvement**.
 
 In the earliest databases, every query was a **full table scan**:
 
+```mermaid
+flowchart TD
+    Query["Query: Find user with email 'alice@example.com'"]
+    
+    Row1["Row 1: bob@example.com<br/>← Check. No match."]
+    Row2["Row 2: carol@example.com<br/>← Check. No match."]
+    Row3["Row 3: david@example.com<br/>← Check. No match."]
+    RowFound["Row 4,567,891: alice@example.com<br/>← Found it!"]
+    RowLast["Row 10,000,000: zach@example.com<br/>← Still checking..."]
+    
+    Time["Time: O(n) = 10 million comparisons"]
+    
+    Query --> Row1 --> Row2 --> Row3 --> RowFound --> RowLast --> Time
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Query: Find user with email 'alice@example.com'
 
 ┌─────────────────────────────────────────────────────────┐
@@ -56,6 +74,7 @@ Query: Find user with email 'alice@example.com'
 │  Time: O(n) = 10 million comparisons                    │
 └─────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Proper Indexing
 
@@ -100,7 +119,20 @@ Full table scan holds locks longer
 
 **Without Index = Unorganized Library**
 
+```mermaid
+flowchart TD
+    subgraph Unorganized["UNORGANIZED LIBRARY"]
+        Books["📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚<br/>📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚<br/>📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚📚"]
+        Task["Task: Find 'Database Design' by Alice Smith"]
+        Method["Method: Check every book, one by one"]
+        Time["Time: Hours (depends on how many books)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              UNORGANIZED LIBRARY                         │
 │                                                          │
@@ -114,10 +146,33 @@ Full table scan holds locks longer
 │  Time: Hours (depends on how many books)                 │
 └─────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **With Index = Library Card Catalog**
 
+```mermaid
+flowchart TD
+    subgraph Organized["ORGANIZED LIBRARY"]
+        subgraph Catalog["CARD CATALOG (Index by Author)"]
+            A["A: Adams → Shelf 1, Row 2"]
+            B["B: Brown → Shelf 3, Row 1"]
+            S["S: Smith, Alice → Shelf 7, Row 4"]
+            Dots["..."]
+        end
+        
+        Task2["Task: Find 'Database Design' by Alice Smith"]
+        Step1["1. Look up 'Smith, Alice' in card catalog"]
+        Step2["2. Go directly to Shelf 7, Row 4"]
+        Time2["Time: Seconds (regardless of library size)"]
+        
+        Task2 --> Step1 --> Step2 --> Time2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              ORGANIZED LIBRARY                           │
 │                                                          │
@@ -139,6 +194,7 @@ Full table scan holds locks longer
 │  Time: Seconds (regardless of library size)             │
 └─────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -261,6 +317,25 @@ hash("bob@example.com") = 3
 hash("carol@example.com") = 7  ← Collision!
 
 Hash Table:
+```mermaid
+flowchart TD
+    subgraph HashTable["Hash Index"]
+        Bucket0["Bucket 0: (empty)"]
+        Bucket1["Bucket 1: (empty)"]
+        Bucket2["Bucket 2: (empty)"]
+        Bucket3["Bucket 3: bob@example.com → row5"]
+        Bucket4["Bucket 4: (empty)"]
+        Bucket5["Bucket 5: (empty)"]
+        Bucket6["Bucket 6: (empty)"]
+        Bucket7["Bucket 7: alice@... → row1<br/>carol@... → row8<br/>(Collision handled)"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
+Hash Table:
 ┌───────┬─────────────────────────┐
 │ Bucket│ Values                  │
 ├───────┼─────────────────────────┤
@@ -274,6 +349,8 @@ Hash Table:
 │   7   │ alice@... → row1        │
 │       │ carol@... → row8        │  ← Collision handled
 └───────┴─────────────────────────┘
+```
+</details>
 ```
 
 **Characteristics**:
@@ -618,7 +695,44 @@ Time: ~100ms for 10 million rows (very fast for analytics)
 
 ### Index Selection Strategy
 
+```mermaid
+flowchart TD
+    Q1["1. Is this column in WHERE clauses frequently?"]
+    Q1No["Don't index (indexes have write cost)"]
+    Q2["2. What type of queries?"]
+    Q2Equality["Equality only (=)<br/>→ Consider Hash index"]
+    Q2Range["Range queries (<, >, BETWEEN)<br/>→ B-Tree index"]
+    Q2Both["Both<br/>→ B-Tree index"]
+    Q3["3. Multiple columns in WHERE?"]
+    Q3Yes["Composite index (order matters!)<br/>Put equality columns first, range last"]
+    Q4["4. Query selects few columns?"]
+    Q4Yes["Consider covering index"]
+    Q5["5. Low cardinality column (few distinct values)?"]
+    Q5Yes["Consider bitmap index (OLAP only)"]
+    Q6["6. Full-text search needed?"]
+    Q6Yes["Full-text index or Elasticsearch"]
+    
+    Q1 -->|NO| Q1No
+    Q1 -->|YES| Q2
+    Q2 -->|Equality only| Q2Equality
+    Q2 -->|Range queries| Q2Range
+    Q2 -->|Both| Q2Both
+    Q2Equality --> Q3
+    Q2Range --> Q3
+    Q2Both --> Q3
+    Q3 -->|YES| Q3Yes
+    Q3Yes --> Q4
+    Q4 -->|YES| Q4Yes
+    Q4Yes --> Q5
+    Q5 -->|YES| Q5Yes
+    Q5Yes --> Q6
+    Q6 -->|YES| Q6Yes
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              INDEX SELECTION DECISION TREE                   │
 ├─────────────────────────────────────────────────────────────┤
@@ -647,6 +761,7 @@ Time: ~100ms for 10 million rows (very fast for analytics)
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Production Patterns
 

@@ -139,7 +139,60 @@ if (ticket != null) {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class Vehicle {
+      <<abstract>>
+    }
+    class Motorcycle
+    class Car
+    class Truck
+
+    class ParkingSpot {
+      <<abstract>>
+    }
+    class CompactSpot
+    class LargeSpot
+    class HandicappedSpot
+
+    class ParkingTicket
+    class ParkingFloor
+    class ParkingLot {
+      <<Singleton>>
+    }
+    class EntryPanel
+    class ExitPanel
+    class DisplayBoard
+    class PaymentService
+    class CashPayment
+    class CardPayment
+
+    Vehicle <|-- Motorcycle
+    Vehicle <|-- Car
+    Vehicle <|-- Truck
+
+    ParkingSpot <|-- CompactSpot
+    ParkingSpot <|-- LargeSpot
+    ParkingSpot <|-- HandicappedSpot
+
+    ParkingTicket --> Vehicle
+    ParkingTicket --> ParkingSpot
+
+    ParkingLot "1" o-- "*" ParkingFloor
+    ParkingFloor "1" o-- "*" ParkingSpot
+    ParkingFloor "1" o-- "1" DisplayBoard
+
+    ParkingLot "1" o-- "*" EntryPanel
+    ParkingLot "1" o-- "*" ExitPanel
+
+    PaymentService --> CashPayment
+    PaymentService --> CardPayment
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              PARKING LOT SYSTEM                                  │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -179,6 +232,8 @@ if (ticket != null) {
 │                                                                                │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Relationships Summary
 

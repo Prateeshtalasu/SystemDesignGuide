@@ -29,7 +29,19 @@ REST APIs are resource-centric. Each endpoint returns a fixed structure. This cr
 
 ### What Systems Looked Like Before GraphQL
 
+```mermaid
+flowchart TD
+    Need["Mobile App needs:<br/>User name and avatar for a list"]
+    REST["REST Response from GET /users/123:<br/>{<br/>  'id': 123,<br/>  'name': 'Alice' ✓ Need<br/>  'email': 'alice@example.com' ✗ Don't need<br/>  'avatar': 'https://...' ✓ Need<br/>  'address': {...} ✗ Don't need<br/>  'preferences': {...} ✗ Don't need<br/>  'createdAt': '2024-01-01' ✗ Don't need<br/>  'lastLogin': '2024-12-01' ✗ Don't need<br/>}"]
+    Problem["Problem:<br/>80% of response data is wasted bandwidth<br/>Especially painful on mobile networks"]
+    
+    Need --> REST --> Problem
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REST API OVER-FETCHING                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -55,8 +67,34 @@ REST Response from GET /users/123:
 Problem: 80% of response data is wasted bandwidth
          Especially painful on mobile networks
 ```
+</details>
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client: Web App needs: User with their posts<br/>and each post's comments
+    
+    Client->>Server: Request 1: GET /users/123
+    Server->>Client: Response: {id: 123, name: "Alice", ...}
+    
+    Client->>Server: Request 2: GET /users/123/posts
+    Server->>Client: Response: [{id: 1, title: "Post 1"}, {id: 2, title: "Post 2"}]
+    
+    Client->>Server: Request 3: GET /posts/1/comments
+    Server->>Client: Response: [{id: 1, text: "Comment 1"}, ...]
+    
+    Client->>Server: Request 4: GET /posts/2/comments
+    Server->>Client: Response: [{id: 2, text: "Comment 2"}, ...]
+    
+    Note over Client,Server: Problem:<br/>4 round trips to get one screen's data<br/>N+1 problem: 1 user + N posts + N comment requests<br/>Slow, especially on high-latency networks
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REST API UNDER-FETCHING                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -79,6 +117,7 @@ Problem: 4 round trips to get one screen's data
          N+1 problem: 1 user + N posts + N comment requests
          Slow, especially on high-latency networks
 ```
+</details>
 
 ### What Breaks Without GraphQL
 
@@ -119,7 +158,26 @@ Shopify's merchants have vastly different needs. GraphQL lets each merchant quer
 - One order can combine ingredients from different sections
 - No waste, no extra trips
 
+```mermaid
+flowchart TD
+    subgraph REST["REST (Multiple Endpoints, Fixed Structure)"]
+        R1["GET /users/123<br/>→ {id, name, email, avatar, address, ...}"]
+        R2["GET /users/123/posts<br/>→ [{id, title, body, createdAt, ...}, ...]"]
+        R3["GET /posts/1/comments<br/>→ [{id, text, author, ...}, ...]"]
+        R1 --> R2 --> R3
+        NoteR["3 requests, lots of unused data"]
+    end
+    
+    subgraph GraphQL["GraphQL (One Endpoint, Flexible Structure)"]
+        G1["POST /graphql<br/>{<br/>  user(id: 123) {<br/>    name<br/>    avatar<br/>    posts {<br/>      title<br/>      comments {<br/>        text<br/>      }<br/>    }<br/>  }<br/>}"]
+        NoteG["1 request, exactly the data needed"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REST vs GRAPHQL                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -150,6 +208,7 @@ POST /graphql
 
 1 request, exactly the data needed
 ```
+</details>
 
 ### The Key Insight
 
@@ -163,7 +222,24 @@ GraphQL inverts the control:
 
 ### GraphQL Architecture
 
+```mermaid
+flowchart TD
+    Client["Client<br/>(Web/Mobile)"]
+    Server["GraphQL Server<br/>┌─────────────┐<br/>│   Schema    │ ← Type definitions<br/>└─────────────┘<br/>┌─────────────┐<br/>│  Resolvers  │ ← Data fetching logic<br/>└─────────────┘<br/>┌─────────────┐<br/>│ Validation  │ ← Query validation<br/>└─────────────┘<br/>┌─────────────┐<br/>│ Execution   │ ← Query execution<br/>└─────────────┘"]
+    DB["Database"]
+    REST["REST API"]
+    Service["Service"]
+    
+    Client -->|"GraphQL Query<br/>POST /graphql"| Server
+    Server --> DB
+    Server --> REST
+    Server --> Service
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         GRAPHQL ARCHITECTURE                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -200,6 +276,7 @@ GraphQL inverts the control:
 │   Database    │            │  REST API     │            │   Service     │
 └───────────────┘            └───────────────┘            └───────────────┘
 ```
+</details>
 
 ### GraphQL Schema
 
@@ -296,7 +373,20 @@ scalar URL
 
 ### Query Execution Flow
 
+```mermaid
+flowchart TD
+    Step1["1. CLIENT SENDS QUERY:<br/>query {<br/>  user(id: '123') {<br/>    name<br/>    posts {<br/>      title<br/>    }<br/>  }<br/>}"]
+    Step2["2. PARSE & VALIDATE:<br/>- Parse query into AST<br/>- Validate against schema<br/>- Check field exists, types match"]
+    Step3["3. EXECUTE RESOLVERS:<br/>Query.user(id: '123')<br/>  ↓<br/>User.name → 'Alice'<br/>User.posts → [Post{id:1}, Post{id:2}]<br/>  ↓<br/>Post.title → ['First Post', 'Second Post']"]
+    Step4["4. BUILD RESPONSE:<br/>{<br/>  'data': {<br/>    'user': {<br/>      'name': 'Alice',<br/>      'posts': [<br/>        {'title': 'First Post'},<br/>        {'title': 'Second Post'}<br/>      ]<br/>    }<br/>  }<br/>}"]
+    
+    Step1 --> Step2 --> Step3 --> Step4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    GRAPHQL QUERY EXECUTION                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -343,6 +433,7 @@ scalar URL
      }
    }
 ```
+</details>
 
 ### Resolvers
 
@@ -425,7 +516,36 @@ public class PostResolver implements GraphQLResolver<Post> {
 
 ### The N+1 Problem Explained
 
+```mermaid
+flowchart TD
+    Query["Query:<br/>{<br/>  posts {<br/>    title<br/>    author {<br/>      name<br/>    }<br/>  }<br/>}"]
+    
+    subgraph Without["Without optimization"]
+        W1["1. SELECT * FROM posts<br/>(1 query)"]
+        W2["2. SELECT * FROM users WHERE id = 1<br/>(Post 1's author)"]
+        W3["3. SELECT * FROM users WHERE id = 2<br/>(Post 2's author)"]
+        W4["4. SELECT * FROM users WHERE id = 1<br/>(Post 3's author, duplicate!)"]
+        W5["5. SELECT * FROM users WHERE id = 3<br/>(Post 4's author)"]
+        W6["... N more queries"]
+        WTotal["Total: 1 + N queries<br/>(could be 1 + 100 = 101 queries!)"]
+        W1 --> W2 --> W3 --> W4 --> W5 --> W6 --> WTotal
+    end
+    
+    subgraph With["With DataLoader"]
+        D1["1. SELECT * FROM posts<br/>(1 query)"]
+        D2["2. SELECT * FROM users WHERE id IN (1, 2, 3)<br/>(1 batched query)"]
+        DTotal["Total: 2 queries<br/>(regardless of N)"]
+        D1 --> D2 --> DTotal
+    end
+    
+    Query --> Without
+    Query --> With
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    N+1 PROBLEM IN GRAPHQL                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -458,6 +578,7 @@ With DataLoader:
 
 Total: 2 queries (regardless of N)
 ```
+</details>
 
 ### DataLoader Implementation
 
@@ -526,7 +647,20 @@ public class PostResolver implements GraphQLResolver<Post> {
 
 ### DataLoader Flow
 
+```mermaid
+flowchart TD
+    Step1["1. Resolve posts<br/>→ [Post1, Post2, Post3, Post4]"]
+    Step2["2. For each post, resolve author:<br/>- Post1.author → userLoader.load('user1') [queued]<br/>- Post2.author → userLoader.load('user2') [queued]<br/>- Post3.author → userLoader.load('user1') [queued, same as Post1]<br/>- Post4.author → userLoader.load('user3') [queued]"]
+    Step3["3. End of execution tick, DataLoader dispatches:<br/>- Batch: ['user1', 'user2', 'user3'] (deduplicated)<br/>- Query: SELECT * FROM users WHERE id IN ('user1', 'user2', 'user3')"]
+    Step4["4. DataLoader returns results:<br/>- Post1.author → User1 (from cache)<br/>- Post2.author → User2<br/>- Post3.author → User1 (from cache, same as Post1)<br/>- Post4.author → User3"]
+    
+    Step1 --> Step2 --> Step3 --> Step4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    DATALOADER BATCHING                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -551,6 +685,7 @@ Query Execution:
    - Post3.author → User1 (from cache, same as Post1)
    - Post4.author → User3
 ```
+</details>
 
 ---
 
@@ -695,7 +830,25 @@ subscription OnNewPost {
 
 ### Request/Response Flow
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as GraphQL Server
+    participant DB as Database
+    
+    Client->>Server: POST /graphql<br/>{<br/>  "query": "query {<br/>    user(id: '123') {<br/>      username<br/>      posts { title }<br/>    }<br/>  }"<br/>}
+    Note over Server: 1. Parse query<br/>2. Validate against schema<br/>3. Execute resolvers:
+    Server->>DB: Query.user("123")<br/>SELECT * FROM users...
+    DB->>Server: User data
+    Server->>DB: User.posts (via DataLoader)<br/>SELECT * FROM posts...
+    DB->>Server: Posts data
+    Server->>Client: {<br/>  "data": {<br/>    "user": {<br/>      "username": "alice",<br/>      "posts": [<br/>        {"title": "Post 1"},<br/>        {"title": "Post 2"}<br/>      ]<br/>    }<br/>  }<br/>}
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    GRAPHQL REQUEST FLOW                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -740,6 +893,7 @@ Client                      GraphQL Server                    Database
    │  }                           │                              │
    │  <────────────────────────────                              │
 ```
+</details>
 
 ---
 
@@ -926,7 +1080,24 @@ app.use('/graphql', expressMiddleware(server, {
 
 For large systems, a single GraphQL server becomes a bottleneck. Federation allows multiple services to contribute to one graph.
 
+```mermaid
+flowchart TD
+    Client["Client"]
+    Gateway["Gateway<br/>(Apollo Router)"]
+    Service1["User Service<br/>(GraphQL)"]
+    Service2["Post Service<br/>(GraphQL)"]
+    Service3["Comment Service<br/>(GraphQL)"]
+    
+    Client --> Gateway
+    Gateway --> Service1
+    Gateway --> Service2
+    Gateway --> Service3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    GRAPHQL FEDERATION                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -943,19 +1114,17 @@ For large systems, a single GraphQL server becomes a bottleneck. Federation allo
         ┌──────────────────────────────┼──────────────────────────────┐
         │                              │                              │
         ▼                              ▼                              ▼
-┌───────────────┐            ┌───────────────┐            ┌───────────────┐
-│ Users Subgraph│            │ Posts Subgraph│            │Reviews Subgraph
-│               │            │               │            │               │
-│ type User     │            │ type Post     │            │ type Review   │
-│   @key(id)    │            │   @key(id)    │            │   @key(id)    │
-│               │            │   author: User│            │   product: ..│
-└───────────────┘            └───────────────┘            └───────────────┘
-
-Each subgraph:
-- Owns specific types
-- Can extend types from other subgraphs
-- Runs independently
-- Gateway composes into unified schema
+```
+</details>
+    UserSubgraph["Users Subgraph<br/>type User<br/>  @key(id)"]
+    PostSubgraph["Posts Subgraph<br/>type Post<br/>  @key(id)<br/>  author: User"]
+    ReviewSubgraph["Reviews Subgraph<br/>type Review<br/>  @key(id)<br/>  product: ..."]
+    
+    Gateway --> UserSubgraph
+    Gateway --> PostSubgraph
+    Gateway --> ReviewSubgraph
+    
+    Note1["Each subgraph:<br/>- Owns specific types<br/>- Can extend types from other subgraphs<br/>- Runs independently<br/>- Gateway composes into unified schema"]
 ```
 
 ### Federation Schema Example

@@ -266,7 +266,72 @@ CREATE INDEX idx_jobs_video ON processing_jobs(video_id);
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string user_id
+        string email
+        string username
+    }
+    channels {
+        int id PK
+        int user_id FK
+        string name
+        int subscriber_count
+    }
+    videos {
+        int id PK
+        string video_id
+        int channel_id FK
+        string title
+        int duration_seconds
+        int view_count
+        string status
+    }
+    video_encodings {
+        int id PK
+        int video_id FK
+        string resolution
+        string codec
+        string storage_path
+    }
+    video_thumbs {
+        int id PK
+        int video_id FK
+        int timestamp_sec
+        string url
+        int size
+    }
+    processing_jobs {
+        int id PK
+        int video_id FK
+        string job_type
+        string status
+        int progress
+    }
+    
+    users ||--o{ channels : "owns"
+    channels ||--o{ videos : "has"
+    videos ||--o{ video_encodings : "has"
+    videos ||--o{ video_thumbs : "has"
+    videos ||--o{ processing_jobs : "has"
 ```
+
+**Cassandra (Time-Series):**
+- `watch_history`: (user_id, watched_at, video_id) → watch details
+- `watch_progress`: (user_id, video_id) → position, duration
+
+**Object Storage (S3/GCS):**
+- `/originals/{video_id}/original.mp4`
+- `/encoded/{video_id}/720p/segment_0.ts`
+- `/encoded/{video_id}/720p/playlist.m3u8`
+- `/thumbnails/{video_id}/thumb_0.jpg`
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐       ┌─────────────────────┐
 │       users         │       │      channels       │
 ├─────────────────────┤       ├─────────────────────┤
@@ -316,6 +381,10 @@ CREATE INDEX idx_jobs_video ON processing_jobs(video_id);
 │ /encoded/{video_id}/720p/segment_0.ts                              │
 │ /encoded/{video_id}/720p/playlist.m3u8                             │
 │ /thumbnails/{video_id}/thumb_0.jpg                                 │
+```
+
+</details>
+```
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -336,7 +405,42 @@ CREATE INDEX idx_jobs_video ON processing_jobs(video_id);
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Mobile Apps, Web Browsers, Smart TVs"]
+    Clients --> CDN
+    Clients --> APIGateway
+    Clients --> UploadGateway
+    CDN["CDN (Edge)"]
+    APIGateway["API Gateway"]
+    UploadGateway["Upload Gateway"]
+    CDN --> StreamingLayer
+    APIGateway --> StreamingLayer
+    UploadGateway --> UploadLayer
+    subgraph StreamingLayer["STREAMING LAYER"]
+        StreamingService["Streaming Service"]
+    end
+    subgraph UploadLayer["UPLOAD LAYER"]
+        UploadService["Upload Service"]
+    end
+    StreamingLayer --> MetadataService
+    StreamingLayer --> SearchService
+    UploadLayer --> ProcessingService
+    MetadataService["Metadata Service<br/>- Video info"]
+    SearchService["Search Service<br/>- Elasticsearch"]
+    ProcessingService["Processing Service<br/>- Transcoding"]
+    MetadataService --> PostgreSQL
+    SearchService --> Elasticsearch
+    ProcessingService --> Kafka
+    PostgreSQL["PostgreSQL"]
+    Elasticsearch["Elasticsearch"]
+    Kafka["Kafka"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Mobile Apps, Web Browsers, Smart TVs)                           │
@@ -348,6 +452,10 @@ CREATE INDEX idx_jobs_video ON processing_jobs(video_id);
             ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
             │    CDN      │     │ API Gateway │     │   Upload    │
             │   (Edge)    │     │             │     │   Gateway   │
+```
+
+</details>
+```
             └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
                    │                   │                   │
                    │                   │                   │

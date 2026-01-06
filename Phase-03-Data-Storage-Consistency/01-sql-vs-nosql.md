@@ -32,7 +32,22 @@ Imagine you're building an e-commerce platform. You need to store:
 
 In the 1970s-2000s, **relational databases** (SQL) were the only serious option:
 
+```mermaid
+flowchart TD
+    subgraph SQLDB["SINGLE SQL DATABASE"]
+        Users["Users Table"]
+        Products["Products Table"]
+        Orders["Orders Table"]
+        ActivityLogs["Activity Logs Table<br/>(100M rows/day)"]
+        
+        Note1["All data in rigid tables with strict schemas<br/>All relationships enforced by the database<br/>All queries use SQL"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    SINGLE SQL DATABASE                       │
 │                                                              │
@@ -47,6 +62,7 @@ In the 1970s-2000s, **relational databases** (SQL) were the only serious option:
 │  All queries use SQL                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Understanding the Difference
 
@@ -113,7 +129,24 @@ Started with Oracle. When they moved to AWS, they adopted Cassandra for user dat
 
 **SQL Database = Corporate Filing Cabinet**
 
+```mermaid
+flowchart TD
+    subgraph FilingCabinet["CORPORATE FILING CABINET"]
+        subgraph EmployeeFiles["EMPLOYEE FILES (all identical folders)"]
+            File1["ID: 1<br/>Name<br/>Dept<br/>Salary"]
+            File2["ID: 2<br/>Name<br/>Dept<br/>Salary"]
+            File3["ID: 3<br/>Name<br/>Dept<br/>Salary"]
+            File4["ID: 4<br/>Name<br/>Dept<br/>Salary"]
+        end
+        
+        Rules["Rules:<br/>- Every folder MUST have the same sections<br/>- Can't add a new section without updating ALL folders<br/>- Folders are cross-referenced (Dept links to Dept table)<br/>- A librarian ensures everything stays consistent"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  CORPORATE FILING CABINET                    │
 │                                                              │
@@ -134,10 +167,25 @@ Started with Oracle. When they moved to AWS, they adopted Cassandra for user dat
 │  - A librarian ensures everything stays consistent           │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **NoSQL Database = Flexible Storage Boxes**
 
+```mermaid
+flowchart LR
+    subgraph StorageBoxes["FLEXIBLE STORAGE BOXES"]
+        Box1["Employee 1<br/>name: Alice<br/>dept: Eng<br/>skills: [...]"]
+        Box2["Employee 2<br/>name: Bob<br/>dept: Sales<br/>region: West<br/>quota: 100K"]
+        Box3["Employee 3<br/>name: Carol<br/>role: CTO<br/>reports: []"]
+        
+        Rules["Rules:<br/>- Each box can have different contents<br/>- Add new fields anytime, no migration needed<br/>- No librarian checking consistency (your responsibility)<br/>- Boxes are self-contained (no cross-references)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  FLEXIBLE STORAGE BOXES                      │
 │                                                              │
@@ -157,6 +205,7 @@ Started with Oracle. When they moved to AWS, they adopted Cassandra for user dat
 │  - Boxes are self-contained (no cross-references)            │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -178,7 +227,19 @@ This analogy will be referenced throughout. Remember:
 
 **Table (Relation)**: A 2D grid of rows and columns
 
+```mermaid
+flowchart LR
+    subgraph UsersTable["users table"]
+        Row1["id: 1<br/>name: Alice<br/>email: alice@example.com<br/>created_at: 2024-01-15"]
+        Row2["id: 2<br/>name: Bob<br/>email: bob@example.com<br/>created_at: 2024-01-16"]
+        Row3["id: 3<br/>name: Carol<br/>email: carol@example.com<br/>created_at: 2024-01-17"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 users table:
 ┌────────┬───────────┬─────────────────────┬────────────┐
 │ id     │ name      │ email               │ created_at │
@@ -188,12 +249,25 @@ users table:
 │ 3      │ Carol     │ carol@example.com   │ 2024-01-17 │
 └────────┴───────────┴─────────────────────┴────────────┘
 ```
+</details>
 
 **Primary Key**: Unique identifier for each row (e.g., `id`)
 
 **Foreign Key**: Reference to another table's primary key
 
+```mermaid
+flowchart LR
+    subgraph OrdersTable["orders table"]
+        Order1["id: 101<br/>user_id: 1 (references users.id)<br/>product_id: 50<br/>amount: 29.99"]
+        Order2["id: 102<br/>user_id: 1<br/>product_id: 51<br/>amount: 49.99"]
+        Order3["id: 103<br/>user_id: 2<br/>product_id: 50<br/>amount: 29.99"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 orders table:
 ┌────────┬─────────┬────────────┬─────────┐
 │ id     │ user_id │ product_id │ amount  │
@@ -203,6 +277,7 @@ orders table:
 │ 103    │ 2       │ 50         │ 29.99   │
 └────────┴─────────┴────────────┴─────────┘
 ```
+</details>
 
 **JOIN**: Combining data from multiple tables
 
@@ -682,7 +757,23 @@ async function transfer(fromId, toId, amount) {
 ### Real Systems at Real Companies
 
 **Uber**:
+```mermaid
+flowchart TD
+    subgraph UberStack["UBER'S DATA STACK"]
+        UserProfiles["User Profiles & Auth<br/>→ PostgreSQL<br/>(ACID, relationships)"]
+        TripData["Trip Data<br/>→ Cassandra<br/>(high write volume)"]
+        RealTimeLocation["Real-time Location<br/>→ Redis<br/>(sub-millisecond reads)"]
+        Search["Search (drivers nearby)<br/>→ Elasticsearch"]
+        Analytics["Analytics<br/>→ Apache Hive<br/>(data warehouse)"]
+        
+        Why["Why multiple databases?<br/>- Each optimized for its specific access pattern<br/>- No single database does everything well"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    UBER'S DATA STACK                         │
 │                                                              │
@@ -697,9 +788,26 @@ async function transfer(fromId, toId, amount) {
 │  - No single database does everything well                  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Netflix**:
+```mermaid
+flowchart TD
+    subgraph NetflixStack["NETFLIX'S DATA STACK"]
+        UserAccounts["User Accounts & Billing<br/>→ MySQL<br/>(transactions, ACID)"]
+        ViewingHistory["Viewing History<br/>→ Cassandra<br/>(billions of records)"]
+        Personalization["Personalization<br/>→ Cassandra + custom ML stores"]
+        SessionData["Session Data<br/>→ Memcached/EVCache"]
+        Search2["Search<br/>→ Elasticsearch"]
+        
+        Scale["Scale: 200M+ subscribers, 1B+ hours watched/week"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   NETFLIX'S DATA STACK                       │
 │                                                              │
@@ -712,9 +820,26 @@ async function transfer(fromId, toId, amount) {
 │  Scale: 200M+ subscribers, 1B+ hours watched/week           │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Instagram**:
+```mermaid
+flowchart TD
+    subgraph InstagramStack["INSTAGRAM'S DATA STACK"]
+        UserData["User Data & Relationships<br/>→ PostgreSQL (sharded)"]
+        PhotosMetadata["Photos Metadata<br/>→ PostgreSQL"]
+        FeedGeneration["Feed Generation<br/>→ Cassandra"]
+        Caching["Caching<br/>→ Memcached + Redis"]
+        Search3["Search<br/>→ Elasticsearch"]
+        
+        Note["Note: They pushed PostgreSQL very far before adding NoSQL"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  INSTAGRAM'S DATA STACK                      │
 │                                                              │
@@ -727,12 +852,29 @@ async function transfer(fromId, toId, amount) {
 │  Note: They pushed PostgreSQL very far before adding NoSQL  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Polyglot Persistence Pattern
 
 **Definition**: Using multiple database types, each for what it does best.
 
+```mermaid
+flowchart TD
+    App["Application"]
+    
+    PostgreSQL["PostgreSQL<br/>Users<br/>Orders<br/>Payments<br/>(ACID, relations)"]
+    MongoDB["MongoDB<br/>Products<br/>Catalogs<br/>Content<br/>(Flexible, scalable)"]
+    Redis["Redis<br/>Sessions<br/>Cache<br/>Leaderboard<br/>(Fast, volatile)"]
+    
+    App --> PostgreSQL
+    App --> MongoDB
+    App --> Redis
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 POLYGLOT PERSISTENCE                         │
 │                                                              │
@@ -756,10 +898,44 @@ async function transfer(fromId, toId, amount) {
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Decision Framework (How to Choose)
 
+```mermaid
+flowchart TD
+    Q1["1. Do you need ACID transactions?"]
+    Q1Yes["SQL (PostgreSQL, MySQL)<br/>Examples: payments, inventory, user accounts"]
+    Q2["2. Is your data highly relational (many JOINs)?"]
+    Q2Yes["SQL<br/>Examples: ERP, CRM, e-commerce orders"]
+    Q3["3. Do you need flexible/evolving schema?"]
+    Q3Yes["Document DB (MongoDB)<br/>Examples: product catalogs, CMS, user profiles"]
+    Q4["4. Is it simple key-value access?"]
+    Q4Yes["Key-Value (Redis, DynamoDB)<br/>Examples: sessions, cache, feature flags"]
+    Q5["5. Is it time-series or high write volume?"]
+    Q5Yes["Wide-Column (Cassandra, HBase)<br/>Examples: logs, metrics, IoT, activity feeds"]
+    Q6["6. Is it about relationships/connections?"]
+    Q6Yes["Graph DB (Neo4j)<br/>Examples: social networks, recommendations"]
+    Default["Start with SQL (safest default)"]
+    
+    Q1 -->|YES| Q1Yes
+    Q1 -->|NO| Q2
+    Q2 -->|YES| Q2Yes
+    Q2 -->|NO| Q3
+    Q3 -->|YES| Q3Yes
+    Q3 -->|NO| Q4
+    Q4 -->|YES| Q4Yes
+    Q4 -->|NO| Q5
+    Q5 -->|YES| Q5Yes
+    Q5 -->|NO| Q6
+    Q6 -->|YES| Q6Yes
+    Q6 -->|NO| Default
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              DATABASE SELECTION DECISION TREE                │
 ├─────────────────────────────────────────────────────────────┤
@@ -802,6 +978,7 @@ async function transfer(fromId, toId, amount) {
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

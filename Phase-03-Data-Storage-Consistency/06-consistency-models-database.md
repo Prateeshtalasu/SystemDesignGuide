@@ -35,7 +35,35 @@ What happens?
 
 ### Different Applications, Different Needs
 
+```mermaid
+flowchart TD
+    subgraph Strong["STRONG CONSISTENCY REQUIRED"]
+        S1["Bank account balances"]
+        S2["Inventory counts (for purchase)"]
+        S3["Seat reservations"]
+        S4["Auction bids"]
+        S5["User authentication state"]
+    end
+    
+    subgraph Eventual["EVENTUAL CONSISTENCY ACCEPTABLE"]
+        E1["Social media likes/views"]
+        E2["Product recommendations"]
+        E3["News feed content"]
+        E4["Analytics dashboards"]
+        E5["Search results"]
+    end
+    
+    subgraph Context["DEPENDS ON CONTEXT"]
+        C1["Shopping cart<br/>(eventual OK, but user expects to see<br/>their own additions immediately)"]
+        C2["Comments<br/>(eventual OK between users, but author<br/>should see their comment immediately)"]
+        C3["Profile updates<br/>(eventual OK for others, immediate<br/>for the user who made the change)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           CONSISTENCY REQUIREMENTS BY USE CASE               │
 ├─────────────────────────────────────────────────────────────┤
@@ -64,6 +92,7 @@ What happens?
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Understanding Consistency
 
@@ -108,7 +137,23 @@ Same transaction, two different values!
 ### The Newspaper Analogy (Revisited)
 
 **Strong Consistency = Live News Broadcast**
+```mermaid
+flowchart LR
+    Event["Event happens"]
+    Broadcast["Immediately on everyone's TV"]
+    
+    Event --> Broadcast
+    
+    Everyone["Everyone sees the same thing at the same time"]
+    But["But: Broadcast must wait for confirmation<br/>If signal is lost, no one sees anything"]
+    
+    Tradeoff["Trade-off: Accurate but slow, can be unavailable"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   LIVE NEWS BROADCAST                        │
 │                                                              │
@@ -121,9 +166,32 @@ Same transaction, two different values!
 │  Trade-off: Accurate but slow, can be unavailable          │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Eventual Consistency = Newspaper Distribution**
+```mermaid
+flowchart TD
+    Event2["Event happens"]
+    Printed["Printed"]
+    Distributed["Distributed over hours"]
+    
+    NYC["NYC gets paper at 6 AM"]
+    LA["LA gets paper at 9 AM"]
+    Eventually["Eventually everyone has the same news"]
+    
+    Event2 --> Printed --> Distributed
+    Distributed --> NYC
+    Distributed --> LA
+    NYC --> Eventually
+    LA --> Eventually
+    
+    Tradeoff2["Trade-off: Fast distribution, always available<br/>But: Different people see different news for a while"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  NEWSPAPER DISTRIBUTION                      │
 │                                                              │
@@ -138,9 +206,25 @@ Same transaction, two different values!
 │             for a while                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Causal Consistency = News with Context**
+```mermaid
+flowchart TD
+    StoryA["Story A: 'Company announces product'"]
+    StoryB["Story B: 'Product receives award'<br/>(caused by A)"]
+    
+    StoryA -->|"causes"| StoryB
+    
+    Guarantee["Causal guarantee: If you see B, you MUST have seen A<br/>You can't read about the award without knowing the product"]
+    
+    Unrelated["Unrelated stories can arrive in any order"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   NEWS WITH CONTEXT                          │
 │                                                              │
@@ -153,6 +237,7 @@ Same transaction, two different values!
 │  Unrelated stories can arrive in any order                  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -164,7 +249,25 @@ Same transaction, two different values!
 
 **How databases implement it**:
 
+```mermaid
+flowchart TD
+    subgraph Approach1["Approach 1: Single Leader"]
+        A1["All reads and writes go through ONE node<br/>That node orders all operations<br/>Simple but: Single point of failure"]
+    end
+    
+    subgraph Approach2["Approach 2: Consensus (Paxos/Raft)"]
+        A2["Multiple nodes agree on order of operations<br/>Majority must acknowledge before commit<br/>Survives minority failures<br/>But: Latency of consensus rounds"]
+    end
+    
+    subgraph Approach3["Approach 3: Synchronized Clocks (Spanner)"]
+        A3["Use GPS + atomic clocks for global time<br/>Assign timestamps with bounded uncertainty<br/>Wait out uncertainty before committing<br/>Enables global ordering without consensus per op"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            LINEARIZABILITY IMPLEMENTATION                    │
 │                                                              │
@@ -193,6 +296,7 @@ Same transaction, two different values!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Cost of linearizability**:
 
@@ -217,7 +321,30 @@ Global (US to Asia):
 
 **How databases implement it**:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NodeA
+    participant NodeB
+    participant NodeC
+    
+    Note over Client,NodeC: EVENTUAL CONSISTENCY IMPLEMENTATION
+    Note over Client,NodeC: Write path:<br/>1. Client writes to any node<br/>2. Node acknowledges immediately<br/>3. Node asynchronously replicates to others
+    
+    Client->>NodeA: T=0: Write "X=1"
+    NodeA->>Client: T=1ms: Acknowledge (fast!)
+    NodeA->>NodeB: T=5ms: Send to Node B
+    NodeB->>NodeB: T=10ms: Apply update
+    NodeB->>NodeC: T=15ms: Send to Node C
+    NodeC->>NodeC: T=20ms: Apply update
+    
+    Note over Client,NodeC: If client reads from Node C at T=8ms:<br/>→ Gets old value (stale read)<br/><br/>Convergence mechanisms:<br/>- Anti-entropy: Periodic sync between nodes<br/>- Read repair: Fix stale data on read<br/>- Merkle trees: Efficient detection of differences
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            EVENTUAL CONSISTENCY IMPLEMENTATION               │
 │                                                              │
@@ -244,6 +371,7 @@ Global (US to Asia):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Causal Consistency
 
@@ -253,7 +381,24 @@ Global (US to Asia):
 - If A reads X, then writes Y, the write to Y depends on the read of X
 - If A writes X, and B reads X then writes Y, B's write depends on A's write
 
+```mermaid
+flowchart TD
+    Alice["Alice posts:<br/>'I got the job!'"]
+    Bob["Bob (seeing Alice's post)<br/>comments: 'Congratulations!'"]
+    
+    Alice -->|"causes"| Bob
+    
+    Causal["Causal relationship: Bob's comment DEPENDS ON Alice's post"]
+    
+    Guarantee["Causal guarantee:<br/>Anyone who sees Bob's comment MUST also see Alice's post"]
+    
+    Without["Without causal consistency:<br/>Carol might see: 'Congratulations!' (but no post)<br/>Carol: 'Congratulations for what??'"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            CAUSAL CONSISTENCY EXAMPLE                        │
 │                                                              │
@@ -271,10 +416,31 @@ Global (US to Asia):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Implementation using vector clocks**:
 
+```mermaid
+sequenceDiagram
+    participant NodeA
+    participant NodeB
+    participant NodeC
+    
+    Note over NodeA,NodeC: VECTOR CLOCK IMPLEMENTATION<br/>Each node maintains a vector of logical clocks:<br/>[Node_A_time, Node_B_time, Node_C_time]
+    
+    NodeA->>NodeA: Writes "X=1"<br/>Vector: [1, 0, 0]
+    NodeA->>NodeB: Sends "X=1" with vector [1, 0, 0]
+    NodeB->>NodeB: Reads "X=1", then writes "Y=2"<br/>Vector: [1, 1, 0] ← Includes A's clock (causal dep)
+    NodeB->>NodeC: Sends "Y=2" with vector [1, 1, 0]
+    NodeC->>NodeC: Checks: Do I have A's clock >= 1?<br/>If not, C must wait for A's update before applying Y
+    
+    Note over NodeA,NodeC: This ensures causal order is preserved
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            VECTOR CLOCK IMPLEMENTATION                       │
 │                                                              │
@@ -295,6 +461,7 @@ Global (US to Asia):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Read-Your-Writes Consistency
 
@@ -302,7 +469,25 @@ Global (US to Asia):
 
 **Implementation strategies**:
 
+```mermaid
+flowchart TD
+    subgraph Strategy1["Strategy 1: Sticky Sessions"]
+        S1["Route all requests from a user to the same node<br/>User writes to Node A, reads from Node A<br/>Simple but: Limits load balancing"]
+    end
+    
+    subgraph Strategy2["Strategy 2: Version Tracking"]
+        S2["After write, return version token to client<br/>Client includes token in read requests<br/>Server ensures read from replica with >= version"]
+    end
+    
+    subgraph Strategy3["Strategy 3: Read from Primary After Write"]
+        S3["After write, read from primary for N seconds<br/>After N seconds, replicas should be caught up<br/>Fall back to replica reads"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         READ-YOUR-WRITES IMPLEMENTATION                      │
 │                                                              │
@@ -329,12 +514,35 @@ Global (US to Asia):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Tunable Consistency (Cassandra Style)
 
 **Definition**: Let the application choose consistency level per operation.
 
+```mermaid
+flowchart TD
+    Config["Configuration: N=3 replicas"]
+    
+    subgraph Write["Write Consistency Levels"]
+        W1["ONE: Write to 1 replica, return success<br/>Fastest, but might lose data"]
+        W2["QUORUM: Write to majority (2 of 3), return success<br/>Balanced speed and durability"]
+        W3["ALL: Write to all 3 replicas, return success<br/>Slowest, highest durability<br/>Fails if any replica is down"]
+    end
+    
+    subgraph Read["Read Consistency Levels"]
+        R1["ONE: Read from 1 replica<br/>Fastest, might be stale"]
+        R2["QUORUM: Read from majority, return latest<br/>Balanced speed and freshness"]
+        R3["ALL: Read from all, return latest<br/>Slowest, guaranteed fresh"]
+    end
+    
+    Formula["Strong Consistency Formula:<br/>W + R > N → At least one node in read set has latest<br/><br/>Example: N=3, W=2, R=2<br/>W + R = 4 > 3 = N ✓ Strong consistency<br/><br/>Example: N=3, W=1, R=1<br/>W + R = 2 ≤ 3 = N ✗ Eventual consistency"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            CASSANDRA CONSISTENCY LEVELS                      │
 │                                                              │
@@ -376,6 +584,7 @@ Global (US to Asia):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -555,7 +764,34 @@ Why LOCAL_ONE reads:
 
 ### Decision Framework
 
+```mermaid
+flowchart TD
+    Q1["Question 1: Is this financial/transactional data?"]
+    Q1_Yes["YES → Strong consistency (linearizable)<br/>Examples: payments, inventory for purchase"]
+    Q1_No["NO → Continue to Question 2"]
+    
+    Q2["Question 2: Does the user who wrote need to see it?"]
+    Q2_Yes["YES → Read-your-writes consistency<br/>Examples: user profile, posts, settings"]
+    Q2_No["NO → Continue to Question 3"]
+    
+    Q3["Question 3: Is ordering between related items important?"]
+    Q3_Yes["YES → Causal consistency<br/>Examples: comments on posts, chat messages"]
+    Q3_No["NO → Eventual consistency<br/>Examples: analytics, recommendations, counters"]
+    
+    Q1 -->|"YES"| Q1_Yes
+    Q1 -->|"NO"| Q1_No
+    Q1_No --> Q2
+    Q2 -->|"YES"| Q2_Yes
+    Q2 -->|"NO"| Q2_No
+    Q2_No --> Q3
+    Q3 -->|"YES"| Q3_Yes
+    Q3 -->|"NO"| Q3_No
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         CONSISTENCY LEVEL DECISION FRAMEWORK                 │
 ├─────────────────────────────────────────────────────────────┤
@@ -581,6 +817,7 @@ Why LOCAL_ONE reads:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

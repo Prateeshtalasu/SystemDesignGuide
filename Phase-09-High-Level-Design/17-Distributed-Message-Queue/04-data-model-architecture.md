@@ -4,7 +4,51 @@
 
 ### System Overview
 
+```mermaid
+flowchart TB
+    Producers["Producers<br/>Producer 1, Producer 2, Producer N"]
+    Producers --> MetadataCache
+    MetadataCache["Metadata Cache<br/>Topic/Partition info"]
+    MetadataCache --> Broker1
+    MetadataCache --> Broker2
+    MetadataCache --> Broker3
+    MetadataCache --> BrokerN
+    Broker1["Broker 1"]
+    Broker2["Broker 2"]
+    Broker3["Broker 3"]
+    BrokerN["Broker N"]
+    Broker1 <-->|"Replication"| Broker2
+    Broker2 <-->|"Replication"| Broker3
+    Broker3 <-->|"Replication"| BrokerN
+    Broker1 --> Disk1
+    Broker2 --> Disk2
+    Broker3 --> Disk3
+    BrokerN --> DiskN
+    Disk1["Disk (Logs)"]
+    Disk2["Disk (Logs)"]
+    Disk3["Disk (Logs)"]
+    DiskN["Disk (Logs)"]
+    Broker1 --> GroupA
+    Broker2 --> GroupA
+    Broker3 --> GroupB
+    BrokerN --> GroupB
+    GroupA["Group A"]
+    GroupB["Group B"]
+    GroupA --> Consumers
+    GroupB --> Consumers
+    Consumers["Consumers"]
+    ControllerLeader["Controller (Leader)"]
+    ControllerFollower1["Controller (Follower)"]
+    ControllerFollower2["Controller (Follower)"]
+    ControllerLeader <-->|"Raft"| ControllerFollower1
+    ControllerLeader <-->|"Raft"| ControllerFollower2
+    ControllerFollower1 <-->|"Raft"| ControllerFollower2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                    Distributed Message Queue Architecture                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -52,6 +96,9 @@
 │  └────────────┘  └────────────┘  └────────────┘                                 │
 │                                                                                   │
 └─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

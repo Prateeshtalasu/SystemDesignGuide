@@ -687,7 +687,44 @@ Estimated 10-15% of pastes are duplicates (common error messages, boilerplate co
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string username
+        string email
+        string tier
+    }
+    api_keys {
+        int id PK
+        int user_id FK
+        string key_hash
+        int requests_per_hour
+    }
+    pastes {
+        string id PK
+        string storage_key
+        string content_hash
+        int user_id FK
+        string visibility
+        string syntax
+        timestamp expires_at
+    }
+    object_storage {
+        string path
+        string content
+    }
+    
+    users ||--o{ api_keys : "has"
+    users ||--o{ pastes : "creates"
+    api_keys ||--o{ pastes : "used_by"
+    pastes ||--|| object_storage : "stored_in"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐       ┌─────────────────┐
 │     users       │       │    api_keys     │
 ├─────────────────┤       ├─────────────────┤
@@ -720,6 +757,9 @@ Estimated 10-15% of pastes are duplicates (common error messages, boilerplate co
                                           │ pastes/2024/01/...  │
                                           │ deduplicated/...    │
                                           └─────────────────────┘
+```
+
+</details>
 ```
 
 ---

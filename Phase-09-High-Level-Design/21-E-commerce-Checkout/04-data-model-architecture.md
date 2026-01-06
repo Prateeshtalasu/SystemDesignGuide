@@ -338,7 +338,38 @@ CREATE INDEX idx_payments_gateway ON payments(gateway_transaction_id);
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web Browser, Mobile App"]
+    Clients --> APIGateway
+    APIGateway["API GATEWAY<br/>Load Balancer, Rate Limiting"]
+    APIGateway --> CartService
+    APIGateway --> CheckoutService
+    APIGateway --> OrderService
+    CartService["Cart Service<br/>- Add/remove items<br/>- Update quantities<br/>- Calculate totals"]
+    CheckoutService["Checkout Service<br/>- Start checkout<br/>- Validate cart<br/>- Reserve inventory"]
+    OrderService["Order Service<br/>- Create order<br/>- Get order<br/>- Cancel order"]
+    CartService --> InventoryService
+    CheckoutService --> PaymentService
+    OrderService --> ShippingService
+    InventoryService["Inventory Service<br/>- Check availability<br/>- Reserve inventory<br/>- Release reservation"]
+    PaymentService["Payment Service<br/>- Process payment<br/>- Handle failures<br/>- Refund"]
+    ShippingService["Shipping Service<br/>- Calculate cost<br/>- Validate address<br/>- Get options"]
+    InventoryService --> DataLayer
+    PaymentService --> DataLayer
+    ShippingService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis (Cart Cache)"]
+        PostgreSQL["PostgreSQL (Orders/Inventory)"]
+        Kafka["Kafka (Events)"]
+        PaymentGateway["Payment Gateway"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Web Browser, Mobile App)                                        │
@@ -384,6 +415,9 @@ CREATE INDEX idx_payments_gateway ON payments(gateway_transaction_id);
 │  │              │  │   Inventory)  │  │              │  │              │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘          │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

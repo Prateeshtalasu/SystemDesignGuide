@@ -546,6 +546,24 @@ GetItemRequest request = GetItemRequest.builder()
 ### Choosing the Right Model
 
 ```
+```mermaid
+flowchart TD
+    Start["Is this financial/critical data?"]
+    Strong["Use STRONG consistency<br>(bank transfers, inventory counts)"]
+    Tolerate["Can users tolerate stale data?"]
+    RYW["Use READ-YOUR-WRITES<br>(user's own posts, settings)"]
+    Eventual["Use EVENTUAL consistency<br>(likes, views, recommendations)"]
+    
+    Start -->|YES| Strong
+    Start -->|NO| Tolerate
+    Tolerate -->|NO| RYW
+    Tolerate -->|YES| Eventual
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 CONSISTENCY DECISION TREE                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -562,6 +580,8 @@ GetItemRequest request = GetItemRequest.builder()
 │                     (likes, views, recommendations)         │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Real Production Patterns
@@ -1153,6 +1173,23 @@ Consistency models define what values reads can return given the writes that hav
 ## Quick Reference Card
 
 ```
+```mermaid
+graph TD
+    subgraph "CONSISTENCY MODELS CHEAT SHEET"
+        Strong["STRONG (Linearizable)<br>✓ All reads see latest write<br>✓ Easy to reason about<br>✗ High latency (coordination required)<br>✗ Lower availability during partitions<br>→ Use for: payments, inventory, unique constraints"]
+        Eventual["EVENTUAL<br>✓ Low latency (no coordination)<br>✓ High availability<br>✗ Stale reads possible<br>✗ Conflicts need resolution<br>→ Use for: feeds, counters, caches, recommendations"]
+        Causal["CAUSAL<br>✓ Related operations ordered correctly<br>✓ Better than eventual, cheaper than strong<br>✗ Complex to implement<br>→ Use for: collaborative editing, chat"]
+        RYW["READ-YOUR-WRITES<br>✓ Users see their own changes<br>✓ Good UX without full strong consistency<br>→ Use for: any user-facing write operation"]
+        Conflict["CONFLICT RESOLUTION<br>LWW: Last-write-wins (simple, may lose data)<br>CRDT: Automatic merge (complex, no data loss)<br>App-level: Store conflicts, let app resolve"]
+        
+        Strong --> Eventual --> Causal --> RYW --> Conflict
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONSISTENCY MODELS CHEAT SHEET                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -1186,5 +1223,7 @@ Consistency models define what values reads can return given the writes that hav
 │   CRDT: Automatic merge (complex, no data loss)             │
 │   App-level: Store conflicts, let app resolve               │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 

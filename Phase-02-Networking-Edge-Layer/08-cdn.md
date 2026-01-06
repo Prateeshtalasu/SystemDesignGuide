@@ -24,7 +24,24 @@ Your server is in one location. Your users are everywhere. Physics is unforgivin
 
 ### What Systems Looked Like Before CDNs
 
+```mermaid
+flowchart TD
+    Origin["Origin Server<br/>(New York)"]
+    UserNYC["User in NYC<br/>Latency: 20ms"]
+    UserLondon["User in London<br/>Latency: 75ms"]
+    UserSydney["User in Sydney<br/>Latency: 200ms"]
+    
+    Origin --> UserNYC
+    Origin --> UserLondon
+    Origin --> UserSydney
+    
+    Note1["Every request travels to NYC:<br/>- NYC user: Fast (20ms)<br/>- London user: Slow (75ms × 2 = 150ms round trip)<br/>- Sydney user: Very slow (200ms × 2 = 400ms round trip)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SINGLE ORIGIN SERVER                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -45,6 +62,7 @@ Every request travels to NYC:
 - London user: Slow (75ms × 2 = 150ms round trip)
 - Sydney user: Very slow (200ms × 2 = 400ms round trip)
 ```
+</details>
 
 ### What Breaks Without CDN
 
@@ -87,7 +105,28 @@ Imagine a library system:
 - Rare books only at main library (dynamic content)
 - Users go to nearest branch (edge routing)
 
+```mermaid
+flowchart TD
+    Main["Main Library<br/>(Origin)"]
+    NYC["NYC Branch<br/>(Edge Server)"]
+    London["London Branch<br/>(Edge Server)"]
+    Sydney["Sydney Branch<br/>(Edge Server)"]
+    UsersNYC["NYC Users: 5ms<br/>(local branch)"]
+    UsersLondon["London Users: 5ms<br/>(local branch)"]
+    UsersSydney["Sydney Users: 5ms<br/>(local branch)"]
+    
+    Main --> NYC
+    Main --> London
+    Main --> Sydney
+    NYC --> UsersNYC
+    London --> UsersLondon
+    Sydney --> UsersSydney
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CDN AS LIBRARY BRANCHES                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -109,6 +148,7 @@ Imagine a library system:
            NYC Users: 5ms      London Users: 5ms   Sydney Users: 5ms
            (local branch)      (local branch)      (local branch)
 ```
+</details>
 
 ### The Key Insight
 
@@ -124,7 +164,26 @@ CDN = **Cache + Geographic Distribution + Smart Routing**
 
 ### CDN Architecture
 
+```mermaid
+flowchart TD
+    Origin["Origin Server<br/>(Your Server)"]
+    Control["CDN Control Plane<br/>(Configuration, Routing)"]
+    PoPNYC["PoP (New York)<br/>Edge Server<br/>Edge Server<br/>Edge Server"]
+    PoPLondon["PoP (London)<br/>Edge Server<br/>Edge Server<br/>Edge Server"]
+    PoPTokyo["PoP (Tokyo)<br/>Edge Server<br/>Edge Server<br/>Edge Server"]
+    
+    Origin --> Control
+    Control --> PoPNYC
+    Control --> PoPLondon
+    Control --> PoPTokyo
+    
+    Note1["PoP = Point of Presence (data center with edge servers)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         CDN ARCHITECTURE                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -157,10 +216,38 @@ CDN = **Cache + Geographic Distribution + Smart Routing**
 
 PoP = Point of Presence (data center with edge servers)
 ```
+</details>
 
 ### CDN Request Flow
 
+```mermaid
+sequenceDiagram
+    participant User as User in London
+    participant Edge as CDN Edge (London)
+    participant Origin as Origin (NYC)
+    
+    Note over User,Origin: Cache HIT Scenario
+    User->>Edge: 1. DNS: cdn.example.com
+    Edge->>User: IP: 203.0.113.50 (London)
+    User->>Edge: 2. GET /images/logo.png
+    Note over Edge: [Cache HIT]<br/>(Content in cache)
+    Edge->>User: 3. 200 OK + logo.png
+    Note over User: Total latency: ~10ms
+    
+    Note over User,Origin: Cache MISS Scenario
+    User->>Edge: GET /api/user/123
+    Note over Edge: [Cache MISS]
+    Edge->>Origin: 3. GET /api/user/123
+    Origin->>Edge: 4. 200 OK + user data
+    Note over Edge: [Store in cache?<br/>Depends on headers]
+    Edge->>User: 5. 200 OK + user data
+    Note over User: Total latency: ~80ms<br/>(Still faster than direct 150ms to origin)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         CDN REQUEST FLOW                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -206,6 +293,7 @@ User in London                CDN Edge (London)              Origin (NYC)
       │  (Still faster than direct   │                            │
       │   150ms to origin)           │                            │
 ```
+</details>
 
 ### How CDN Routing Works
 
@@ -213,7 +301,23 @@ CDNs use multiple techniques to route users to the optimal edge server:
 
 #### 1. DNS-Based Routing
 
+```mermaid
+sequenceDiagram
+    participant User as User (London)
+    participant DNS as CDN DNS
+    participant Edge as Edge Servers
+    
+    User->>DNS: Query: cdn.example.com
+    Note over DNS: [CDN DNS sees:<br/>- Resolver IP (London)<br/>- EDNS Client Subnet]
+    DNS->>User: Response: 203.0.113.50<br/>(← London Edge IP)
+    
+    Note over User,Edge: CDN DNS considers:<br/>- Geographic location of resolver/client<br/>- Edge server health and capacity<br/>- Current load on each edge<br/>- Network conditions
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         DNS-BASED CDN ROUTING                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -237,10 +341,34 @@ CDN DNS considers:
 - Current load on each edge
 - Network conditions
 ```
+</details>
 
 #### 2. Anycast Routing
 
+```mermaid
+flowchart TD
+    IP["IP: 203.0.113.50<br/>(Same IP advertised from multiple locations)"]
+    NYC["NYC announces<br/>203.0.113.50"]
+    London["London announces<br/>203.0.113.50"]
+    Tokyo["Tokyo announces<br/>203.0.113.50"]
+    UsersNYC["NYC Users<br/>route here"]
+    UsersLondon["London Users<br/>route here"]
+    UsersTokyo["Tokyo Users<br/>route here"]
+    
+    IP --> NYC
+    IP --> London
+    IP --> Tokyo
+    NYC --> UsersNYC
+    London --> UsersLondon
+    Tokyo --> UsersTokyo
+    
+    Note1["BGP routing automatically sends packets to nearest location<br/>announcing the same IP address."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         ANYCAST ROUTING                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -262,12 +390,28 @@ Same IP advertised from multiple locations:
 BGP routing automatically sends packets to nearest location
 announcing the same IP address.
 ```
+</details>
 
 ### Push vs Pull CDN
 
 #### Pull CDN (Most Common)
 
+```mermaid
+flowchart LR
+    User1["User"] -->|"1. Request content"| Edge1["Edge<br/>(cache miss)"]
+    Edge1 -->|"3. Fetch from origin"| Origin["Origin"]
+    Origin -->|"4. Return content"| Edge1
+    Edge1 -->|"Cache content"| Cache["[Cache content]"]
+    Cache --> Edge2["Edge<br/>(cache hit)"]
+    Edge2 -->|"5. Serve from cache"| User2["User"]
+    
+    Note1["Pros:<br/>- Simple setup (just point DNS to CDN)<br/>- Only caches what's actually requested<br/>- Automatic cache population<br/><br/>Cons:<br/>- First request always goes to origin<br/>- Cache stampede possible"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         PULL CDN                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -295,10 +439,24 @@ Cons:
 - First request always goes to origin
 - Cache stampede possible
 ```
+</details>
 
 #### Push CDN
 
+```mermaid
+flowchart LR
+    You["You"] -->|"1. Upload content"| API["CDN API"]
+    API -->|"2. Distribute to all edges"| Edges["All Edge Servers<br/>[Pre-populated]"]
+    User["User"] -->|"3. Request content"| Edge["Edge<br/>(cache hit immediately)"]
+    Edges --> Edge
+    
+    Note1["Pros:<br/>- No cache miss on first request<br/>- Predictable performance<br/>- Good for large files (videos)<br/><br/>Cons:<br/>- More complex setup<br/>- Must manage uploads<br/>- May cache content never requested"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         PUSH CDN                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -323,6 +481,7 @@ Cons:
 - Must manage uploads
 - May cache content never requested
 ```
+</details>
 
 ### Cache Invalidation
 

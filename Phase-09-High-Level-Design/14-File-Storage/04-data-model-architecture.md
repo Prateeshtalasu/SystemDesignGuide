@@ -4,7 +4,48 @@
 
 ### System Overview
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Desktop Client, Mobile App, Web Client, API Consumers"]
+    Clients --> LoadBalancer
+    LoadBalancer["Load Balancer (CloudFlare)"]
+    LoadBalancer --> APIGateway
+    LoadBalancer --> UploadService
+    LoadBalancer --> DownloadService
+    APIGateway["API Gateway"]
+    UploadService["Upload Service"]
+    DownloadService["Download Service"]
+    APIGateway --> ServiceMesh
+    UploadService --> ServiceMesh
+    DownloadService --> ServiceMesh
+    ServiceMesh["Service Mesh (Istio)"]
+    ServiceMesh --> MetadataService
+    ServiceMesh --> SyncService
+    ServiceMesh --> SharingService
+    MetadataService["Metadata Service"]
+    SyncService["Sync Service"]
+    SharingService["Sharing Service"]
+    MetadataService --> SearchService
+    SyncService --> VersionService
+    SharingService --> NotificationService
+    SearchService["Search Service"]
+    VersionService["Version Service"]
+    NotificationService["Notification Service"]
+    SearchService --> DataLayer
+    VersionService --> DataLayer
+    NotificationService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        PostgreSQL["PostgreSQL (Sharded)"]
+        Redis["Redis Cluster"]
+        Kafka["Kafka Cluster"]
+        Elasticsearch["Elasticsearch Cluster"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           File Storage System Architecture                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -48,6 +89,10 @@
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐          │          │
 │  │  │PostgreSQL│  │  Redis   │  │  Kafka   │  │Elasticsrch│          │          │
 │  │  │ (Sharded)│  │ Cluster  │  │ Cluster  │  │  Cluster │          │          │
+```
+
+</details>
+```
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘          │          │
 │  │                                                                    │          │
 │  └────────────────────────────────────────────────────────────────────┘          │

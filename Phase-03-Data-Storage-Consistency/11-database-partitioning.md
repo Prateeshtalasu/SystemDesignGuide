@@ -40,7 +40,25 @@ Problems:
 
 ### The Key Insight
 
+```mermaid
+flowchart TD
+    Why["WHY PARTITIONING HELPS"]
+    
+    Instead["Instead of:<br/>HUGE TABLE (10 billion rows)<br/>Every query scans everything"]
+    
+    Partition["Partition into:<br/>Jan 2024 | Feb 2024 | Mar 2024 | Apr 2024 | May 2024 ..."]
+    
+    Query["Query for March 2024 data:<br/>- Only scans March partition<br/>- 99% of data never touched<br/>- Query is 100x faster"]
+    
+    Why --> Instead
+    Instead --> Partition
+    Partition --> Query
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WHY PARTITIONING HELPS                          │
 │                                                              │
@@ -63,6 +81,8 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Real Examples
 
@@ -82,7 +102,19 @@ Problems:
 
 **Unpartitioned Table = One Giant Drawer**
 
+```mermaid
+flowchart TD
+    Drawer["ONE GIANT DRAWER"]
+    
+    Content["All documents from 2015-2024 mixed together<br/>Finding March 2024 invoice: Search through all<br/>100,000 documents"]
+    
+    Drawer --> Content
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  ONE GIANT DRAWER                            │
 │                                                              │
@@ -94,10 +126,32 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Partitioned Table = Organized Filing Cabinet**
 
+```mermaid
+flowchart TD
+    Cabinet["ORGANIZED FILING CABINET"]
+    
+    subgraph Years["Years"]
+        Y2021["2021<br/>Jan, Feb, ..."]
+        Y2022["2022<br/>Jan, Feb, ..."]
+        Y2023["2023<br/>Jan, Feb, ..."]
+        Y2024["2024<br/>Jan, Feb, Mar ← Here!"]
+    end
+    
+    Finding["Finding March 2024 invoice: Go directly to 2024 → March<br/>Only search 1,000 documents"]
+    
+    Cabinet --> Years
+    Years --> Finding
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              ORGANIZED FILING CABINET                        │
 │                                                              │
@@ -118,6 +172,8 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -127,7 +183,25 @@ Problems:
 
 **Concept**: Split table by columns. Keep frequently accessed columns together.
 
+```mermaid
+flowchart LR
+    Original["Original table: users<br/>id | name | email | bio | avatar_blob (5MB each) | settings (JSON)"]
+    
+    subgraph Partitioned["Vertically partition into"]
+        Core["users_core<br/>id | name | email<br/>(Fast queries)"]
+        Profile["users_profile<br/>id | bio | avatar_blob<br/>(Only loaded when needed)"]
+    end
+    
+    Benefits["Benefits:<br/>- Core table fits in memory<br/>- Queries on name/email are fast<br/>- Avatar only loaded when viewing profile"]
+    
+    Original --> Partitioned
+    Partitioned --> Benefits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                VERTICAL PARTITIONING                         │
 │                                                              │
@@ -155,12 +229,36 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Horizontal Partitioning (Range)
 
 **Concept**: Split table by rows based on value ranges.
 
+```mermaid
+flowchart TD
+    Range["RANGE PARTITIONING<br/>Partition by: created_at (date)"]
+    
+    P1["Partition 1: created_at < '2023-01-01'<br/>(Historical data, rarely accessed)"]
+    P2["Partition 2: '2023-01-01' <= created_at < '2024-01'<br/>(Last year's data)"]
+    P3["Partition 3: '2024-01-01' <= created_at < '2024-04'<br/>(Q1 2024)"]
+    P4["Partition 4: '2024-04-01' <= created_at<br/>(Current quarter, most accessed)"]
+    
+    Query["Query: WHERE created_at >= '2024-03-01'<br/>→ Only scans Partition 3 and 4"]
+    
+    Range --> P1
+    Range --> P2
+    Range --> P3
+    Range --> P4
+    P3 --> Query
+    P4 --> Query
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              RANGE PARTITIONING                              │
 │                                                              │
@@ -185,12 +283,35 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Horizontal Partitioning (List)
 
 **Concept**: Split table by discrete values.
 
+```mermaid
+flowchart TD
+    List["LIST PARTITIONING<br/>Partition by: country"]
+    
+    NA["Partition 'north_america': country IN ('US', 'CA')"]
+    EU["Partition 'europe': country IN ('UK', 'DE', 'FR')"]
+    Asia["Partition 'asia': country IN ('JP', 'CN', 'IN')"]
+    Other["Partition 'other': DEFAULT"]
+    
+    Query2["Query: WHERE country = 'US'<br/>→ Only scans 'north_america' partition"]
+    
+    List --> NA
+    List --> EU
+    List --> Asia
+    List --> Other
+    NA --> Query2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │               LIST PARTITIONING                              │
 │                                                              │
@@ -211,12 +332,37 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Horizontal Partitioning (Hash)
 
 **Concept**: Split table by hash of partition key for even distribution.
 
+```mermaid
+flowchart TD
+    Hash["HASH PARTITIONING<br/>Partition by: hash(user_id) % 4"]
+    
+    subgraph Partitions["Partitions"]
+        P0["Partition 0<br/>hash % 4 = 0"]
+        P1["Partition 1<br/>hash % 4 = 1"]
+        P2["Partition 2<br/>hash % 4 = 2"]
+        P3["Partition 3<br/>hash % 4 = 3"]
+    end
+    
+    Benefits2["Benefits:<br/>- Even data distribution<br/>- No hot partitions (usually)"]
+    
+    Drawbacks["Drawbacks:<br/>- Range queries scan all partitions<br/>- Adding partitions requires rehashing"]
+    
+    Hash --> Partitions
+    Partitions --> Benefits2
+    Partitions --> Drawbacks
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                HASH PARTITIONING                             │
 │                                                              │
@@ -240,6 +386,8 @@ Problems:
 │  - Adding partitions requires rehashing                     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Composite Partitioning

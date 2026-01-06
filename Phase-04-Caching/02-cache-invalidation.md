@@ -52,7 +52,27 @@ This quote exists because cache invalidation involves:
 
 ### What Systems Looked Like Before Proper Invalidation
 
+```mermaid
+gantt
+    title NAIVE APPROACH: JUST USE TTL Timeline
+    dateFormat X
+    axisFormat %Mm
+    
+    section Cache Lifecycle
+    Data cached (price = $99.99) :0, 60
+    Price changed to $79.99 in DB :30, 0
+    User sees $99.99 (stale!) :31, 0
+    User sees $99.99 (still stale!) :45, 0
+    Cache expires (TTL = 1 hour) :60, 0
+    User sees $79.99 (finally correct) :61, 0
+    
+    Note: Problem: 30 minutes of serving wrong price!
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NAIVE APPROACH: JUST USE TTL                          │
 │                                                                          │
@@ -68,6 +88,8 @@ This quote exists because cache invalidation involves:
 │   │                                                                      │
 │   Problem: 30 minutes of serving wrong price!                           │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### What Breaks Without Proper Invalidation?
@@ -100,7 +122,31 @@ This quote exists because cache invalidation involves:
 
 Imagine you're a librarian with a card catalog (cache) and a master database (actual book locations).
 
+```mermaid
+flowchart TD
+    Catalog["THE LIBRARY CATALOG PROBLEM"]
+    
+    subgraph Card["Card Catalog (Cache)"]
+        HP1["Harry Potter → Shelf A, Row 3"]
+        LOTR1["Lord of the Rings → Shelf B, Row 7"]
+    end
+    
+    subgraph Actual["Actual Library (Database)"]
+        HP2["Harry Potter → Shelf C, Row 1 (MOVED!)"]
+        LOTR2["Lord of the Rings → Shelf B, Row 7"]
+    end
+    
+    Patron["Patron uses card catalog → Goes to Shelf A, Row 3 → Book not there!"]
+    
+    Catalog --> Card
+    Catalog --> Actual
+    Card --> Patron
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE LIBRARY CATALOG PROBLEM                           │
 │                                                                          │
@@ -118,6 +164,8 @@ Imagine you're a librarian with a card catalog (cache) and a master database (ac
 │                                                                          │
 │   Patron uses card catalog → Goes to Shelf A, Row 3 → Book not there!  │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Invalidation strategies are like different ways to keep the catalog updated**:
@@ -140,7 +188,28 @@ Imagine you're a librarian with a card catalog (cache) and a master database (ac
 
 ### The Three Core Invalidation Strategies
 
+```mermaid
+flowchart LR
+    Strategies["INVALIDATION STRATEGIES"]
+    
+    TTL["TTL-Based<br/>Trigger: Time passes<br/>Staleness: Up to TTL<br/>Complexity: Low"]
+    
+    Event["Event-Based<br/>Trigger: Data changes<br/>Staleness: Seconds<br/>Complexity: Medium-High"]
+    
+    Version["Version-Based<br/>Trigger: Version mismatch<br/>Staleness: Seconds<br/>Complexity: Medium"]
+    
+    Hybrid["Hybrid<br/>Trigger: Both<br/>Staleness: Minimal<br/>Complexity: High"]
+    
+    Strategies --> TTL
+    Strategies --> Event
+    Strategies --> Version
+    Strategies --> Hybrid
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    INVALIDATION STRATEGIES                               │
 │                                                                          │
@@ -152,6 +221,8 @@ Imagine you're a librarian with a card catalog (cache) and a master database (ac
 │   Hybrid           │ Both              │ Minimal      │ High            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -159,7 +230,21 @@ Imagine you're a librarian with a card catalog (cache) and a master database (ac
 
 **The Concept**: Every cached item has an expiration time. After that time, the item is automatically removed or marked stale.
 
+```mermaid
+flowchart TD
+    TTL["TTL-BASED INVALIDATION"]
+    
+    Entry["Cache Entry:<br/>Key: 'product:123'<br/>Value: {'name': 'Keyboard', 'price': 99.99}<br/>Created: 10:00:00<br/>TTL: 300 seconds (5 minutes)<br/>Expires: 10:05:00"]
+    
+    Timeline["Timeline:<br/>10:00:00 Entry created<br/>10:03:00 Read → Returns cached value<br/>10:05:00 Entry expires<br/>10:05:01 Read → Cache miss → Fetch from DB → Re-cache"]
+    
+    TTL --> Entry --> Timeline
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TTL-BASED INVALIDATION                                │
 │                                                                          │
@@ -178,6 +263,8 @@ Imagine you're a librarian with a card catalog (cache) and a master database (ac
 │   10:05:00  Entry expires                                               │
 │   10:05:01  Read → Cache miss → Fetch from DB → Re-cache               │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **TTL Variants**:
@@ -220,7 +307,26 @@ if (product.getViewCount() > 10000) {
 
 **The Concept**: When data changes in the database, an event is published. Cache listeners receive the event and invalidate the affected cache entries.
 
+```mermaid
+flowchart TD
+    App["Application<br/>(writes)"]
+    DB["Database"]
+    Bus["Message Bus<br/>(Kafka/Redis)"]
+    C1["Cache Server 1"]
+    C2["Cache Server 2"]
+    C3["Cache Server 3"]
+    
+    App -->|1. UPDATE product SET price = 79.99 WHERE id = 123| DB
+    DB -->|2. Publish event| Bus
+    Bus -->|3. DELETE product:123| C1
+    Bus -->|3. DELETE product:123| C2
+    Bus -->|3. DELETE product:123| C3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    EVENT-BASED INVALIDATION                              │
 │                                                                          │
@@ -252,6 +358,8 @@ if (product.getViewCount() > 10000) {
 │                product:123                  product:123           product:123
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Event Sources**:
 
@@ -265,7 +373,29 @@ if (product.getViewCount() > 10000) {
 
 **The Concept**: Include a version number in the cache key. When data changes, increment the version. Old versions naturally become orphaned and expire.
 
+```mermaid
+flowchart TD
+    Version["VERSION-BASED INVALIDATION"]
+    
+    DB["Database:<br/>products table:<br/>id=123, name='Keyboard', price=99.99, version=1"]
+    
+    Pattern["Cache Key Pattern: 'product:{id}:v{version}'"]
+    
+    Step1["Step 1: Cache with version<br/>Cache: 'product:123:v1' → {'name': 'Keyboard', 'price': 99.99}"]
+    
+    Step2["Step 2: Update database (version increments)<br/>Database: id=123, price=79.99, version=2"]
+    
+    Step3["Step 3: Next read uses new version<br/>App looks for: 'product:123:v2' → Cache miss → Fetch from DB"]
+    
+    Expire["Old entry 'product:123:v1' naturally expires via TTL"]
+    
+    Version --> DB --> Pattern --> Step1 --> Step2 --> Step3 --> Expire
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VERSION-BASED INVALIDATION                            │
 │                                                                          │
@@ -289,6 +419,8 @@ if (product.getViewCount() > 10000) {
 │   Old entry "product:123:v1" naturally expires via TTL                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Advantages**:
 - No need to find and delete old cache entries
@@ -306,7 +438,30 @@ if (product.getViewCount() > 10000) {
 
 **The Concept**: Combine multiple strategies for defense in depth.
 
+```mermaid
+flowchart TD
+    Hybrid["HYBRID INVALIDATION"]
+    
+    L1["Layer 1: Event-Based (Primary)<br/>When data changes → Publish event → Invalidate cache immediately<br/>Latency: ~100ms"]
+    
+    L2["Layer 2: TTL (Safety Net)<br/>Even if event is lost, cache expires in 5 minutes<br/>Maximum staleness: 5 minutes"]
+    
+    L3["Layer 3: Version Check (Verification)<br/>On cache hit, verify version matches database<br/>If mismatch, treat as cache miss"]
+    
+    Result["Result: Fast invalidation + guaranteed eventual consistency"]
+    
+    Hybrid --> L1
+    Hybrid --> L2
+    Hybrid --> L3
+    L1 --> Result
+    L2 --> Result
+    L3 --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HYBRID INVALIDATION                                   │
 │                                                                          │
@@ -327,6 +482,8 @@ if (product.getViewCount() > 10000) {
 │                                                                          │
 │   Result: Fast invalidation + guaranteed eventual consistency           │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -447,7 +604,30 @@ Timeline:
 
 **Facebook's Cache Invalidation Architecture**:
 
+```mermaid
+flowchart TD
+    Facebook["FACEBOOK'S INVALIDATION SYSTEM"]
+    
+    MySQL["MySQL (Source of Truth)"]
+    McSqueal["McSqueal (CDC Service)<br/>- Reads MySQL binlog<br/>- Extracts changed rows<br/>- Publishes invalidation events"]
+    Mcrouter["Mcrouter (Routing Layer)<br/>- Routes invalidations to correct Memcached servers<br/>- Handles cross-region invalidation"]
+    
+    C1["Memcached Cluster 1"]
+    C2["Memcached Cluster 2"]
+    C3["Memcached Cluster 3"]
+    
+    MySQL -->|Binlog (transaction log)| McSqueal --> Mcrouter
+    Mcrouter --> C1
+    Mcrouter --> C2
+    Mcrouter --> C3
+    
+    Note["Invalidation latency: ~50ms within region, ~200ms cross-region"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK'S INVALIDATION SYSTEM                        │
 │                                                                          │
@@ -481,12 +661,47 @@ Timeline:
 │   Invalidation latency: ~50ms within region, ~200ms cross-region        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Netflix's EVCache Invalidation**:
 
 Netflix uses a "lease" mechanism to prevent thundering herd during invalidation:
 
+```mermaid
+sequenceDiagram
+    participant R1 as Request 1
+    participant R2 as Request 2
+    participant R3 as Request 3
+    participant Cache as Cache
+    participant DB as Database
+    
+    Note over R1,R3: Problem: 1000 requests hit cache miss simultaneously
+    Note over R1,R3: Solution: Lease mechanism
+    
+    R1->>Cache: GET user:123
+    Cache-->>R1: Miss
+    R1->>Cache: Get lease
+    R1->>DB: Query DB
+    
+    R2->>Cache: GET user:123
+    Cache-->>R2: Miss
+    R2->>Cache: No lease → Wait
+    
+    R3->>Cache: GET user:123
+    Cache-->>R3: Miss
+    R3->>Cache: No lease → Wait
+    
+    R1->>Cache: SET user:123
+    R1->>Cache: Release lease
+    
+    Note over R1,R3: 1. First request gets a 'lease' (permission to fetch from DB)<br/>2. Other requests wait or get stale data<br/>3. First request updates cache and releases lease<br/>4. Waiting requests now get fresh data from cache
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NETFLIX LEASE-BASED INVALIDATION                      │
 │                                                                          │
@@ -505,6 +720,9 @@ Netflix uses a "lease" mechanism to prevent thundering herd during invalidation:
 │   Request 2: GET user:123 → Miss → No lease → Wait                      │
 │   Request 3: GET user:123 → Miss → No lease → Wait                      │
 │   Request 1: Got data → SET user:123 → Release lease                    │
+```
+</details>
+```
 │   Request 2: GET user:123 → Hit → Return                                │
 │   Request 3: GET user:123 → Hit → Return                                │
 └─────────────────────────────────────────────────────────────────────────┘

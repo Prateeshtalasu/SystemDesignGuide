@@ -72,7 +72,41 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["Mobile Apps<br/>Web Clients<br/>API Consumers"]
+    Clients --> LoadBalancer
+    LoadBalancer["Load Balancer (CloudFlare)"]
+    LoadBalancer --> APIGateway
+    APIGateway["API Gateway<br/>- Auth<br/>- Rate Limiting<br/>- Routing"]
+    APIGateway --> SearchService
+    APIGateway --> GeocodingService
+    APIGateway --> RoutingEngine
+    SearchService["Search Service<br/>- POI search<br/>- Autocomplete<br/>- Nearby"]
+    GeocodingService["Geocoding Service<br/>- Address → Coordinates<br/>- Reverse"]
+    RoutingEngine["Routing Engine<br/>- Route calc<br/>- ETA<br/>- Alternatives"]
+    SearchService --> MapTileService
+    GeocodingService --> TrafficService
+    RoutingEngine --> GeospatialIndex
+    MapTileService["Map Tile Service<br/>- Tile gen<br/>- CDN cache<br/>- Rendering"]
+    TrafficService["Traffic Service<br/>- Real-time updates<br/>- Incidents"]
+    GeospatialIndex["Geospatial Index<br/>- QuadTree<br/>- R-tree<br/>- Geohash"]
+    MapTileService --> PostgreSQL
+    TrafficService --> Redis
+    GeospatialIndex --> TimescaleDB
+    PostgreSQL["PostgreSQL + PostGIS<br/>- POI data<br/>- User locs<br/>- Geospatial"]
+    Redis["Redis Cluster<br/>- Route cache<br/>- Search cache<br/>- Session"]
+    TimescaleDB["TimescaleDB<br/>- Traffic segments<br/>- Incidents"]
+    PostgreSQL --> S3CDN
+    Redis --> S3CDN
+    TimescaleDB --> S3CDN
+    S3CDN["S3 + CDN<br/>- Map tiles<br/>- Static assets"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                        LOCATION SERVICES SYSTEM                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -144,6 +178,9 @@ We choose **Availability + Partition Tolerance (AP)**:
                     │  - Map tiles    │
                     │  - Static assets│
                     └─────────────────┘
+```
+
+</details>
 ```
 
 ---

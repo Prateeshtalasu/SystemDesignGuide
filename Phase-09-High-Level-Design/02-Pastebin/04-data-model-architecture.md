@@ -346,7 +346,19 @@ public class ShardRouter {
 
 ### PostgreSQL Replication
 
+```mermaid
+flowchart TB
+    Primary["PRIMARY (Leader)<br/>- All WRITE queries<br/>- WAL generation<br/>- Synchronous to Replica 1<br/>Region: us-east-1a"]
+    Primary -->|"Sync"| Replica1
+    Primary -->|"Async"| Replica2
+    Replica1["REPLICA 1 (Sync)<br/>us-east-1b"]
+    Replica2["REPLICA 2 (Async)<br/>us-west-2a"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────┐
 │    PRIMARY (Leader)    │
 │                       │
@@ -367,6 +379,9 @@ public class ShardRouter {
 │             │  │             │
 │  us-east-1b │  │  us-west-2a │
 └─────────────┘  └─────────────┘
+```
+
+</details>
 ```
 
 **Sync vs Async Trade-offs:**
@@ -395,7 +410,42 @@ public class ShardRouter {
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web Browsers, CLI Tools, APIs"]
+    Clients --> CDN
+    Clients --> APIGateway
+    CDN["CDN (CloudFront)<br/>- Edge caching for raw content<br/>- Static assets<br/>- Geographic distribution"]
+    APIGateway["API Gateway<br/>- Rate limiting<br/>- Authentication<br/>- Request routing"]
+    CDN -->|"Cache Miss"| LoadBalancer
+    APIGateway --> LoadBalancer
+    LoadBalancer["LOAD BALANCER<br/>(AWS ALB)"]
+    LoadBalancer --> PasteService1
+    LoadBalancer --> PasteService2
+    LoadBalancer --> PasteServiceN
+    PasteService1["Paste Service 1"]
+    PasteService2["Paste Service 2"]
+    PasteServiceN["Paste Service N"]
+    PasteService1 --> Redis
+    PasteService2 --> Redis
+    PasteServiceN --> Redis
+    PasteService1 --> PostgreSQL
+    PasteService2 --> PostgreSQL
+    PasteServiceN --> PostgreSQL
+    PasteService1 --> S3
+    PasteService2 --> S3
+    PasteServiceN --> S3
+    Redis["Redis Cluster<br/>- Hot content cache<br/>- Rate limit data<br/>- Session data"]
+    PostgreSQL["PostgreSQL<br/>- Paste metadata<br/>- User data<br/>- API keys"]
+    S3["S3 (Content)<br/>- Paste content<br/>- Compressed (gzip)<br/>- Deduplicated"]
+    PostgreSQL -->|"Async"| CleanupWorker
+    CleanupWorker["Cleanup Worker<br/>- Delete expired pastes<br/>- Clean orphaned content<br/>- Update statistics"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                         (Web Browsers, CLI Tools, APIs)                              │
@@ -452,13 +502,45 @@ public class ShardRouter {
                           └─────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Detailed Data Flow
 
 ### Create Paste Flow
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant APIGateway as API Gateway
+    participant PasteService as Paste Service
+    participant Redis
+    participant PostgreSQL
+    participant S3
+    
+    Client->>APIGateway: POST /pastes
+    APIGateway->>PasteService: Rate limit check
+    PasteService->>Redis: INCR ratelimit count
+    Redis-->>PasteService: count
+    APIGateway->>PasteService: Forward request
+    PasteService->>PasteService: 1. Generate ID
+    PasteService->>PasteService: 2. Hash content
+    PasteService->>PostgreSQL: 3. Check dedup
+    PasteService->>S3: 4. Upload content (if new)
+    S3-->>PasteService: OK
+    PasteService->>PostgreSQL: 5. Save metadata
+    PostgreSQL-->>PasteService: OK
+    PasteService->>Redis: 6. Cache metadata
+    PasteService-->>APIGateway: 201 Created
+    APIGateway-->>Client: 201 Created
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────────┐     ┌─────────────┐     ┌───────┐     ┌──────────┐     ┌─────┐
 │Client│     │API Gate │     │Paste Service│     │ Redis │     │PostgreSQL│     │ S3  │
 └──┬───┘     └────┬────┘     └──────┬──────┘     └───┬───┘     └────┬─────┘     └──┬──┘
@@ -505,6 +587,9 @@ public class ShardRouter {
    │<─────────────│                 │                │              │              │
 ```
 
+</details>
+```
+
 **Step-by-Step Explanation:**
 
 1. **Client sends POST request** with paste content
@@ -519,7 +604,25 @@ public class ShardRouter {
 
 ### View Paste Flow (Cache Hit)
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CDN
+    participant PasteService as Paste Service
+    participant Redis
+    
+    Client->>CDN: GET /raw/abc123
+    CDN->>PasteService: Cache HIT
+    PasteService-->>CDN: 200 OK (content)
+    CDN-->>Client: 200 OK (content)
+    
+    Note over Client,Redis: Latency: ~10ms (CDN edge)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────┐     ┌─────────────┐     ┌───────┐
 │Client│     │ CDN │     │Paste Service│     │ Redis │
 └──┬───┘     └──┬──┘     └──────┬──────┘     └───┬───┘
@@ -538,9 +641,39 @@ public class ShardRouter {
 Latency: ~10ms (CDN edge)
 ```
 
+</details>
+```
+
 ### View Paste Flow (Cache Miss)
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CDN
+    participant PasteService as Paste Service
+    participant Redis
+    participant PostgreSQL
+    participant S3
+    
+    Client->>CDN: GET /raw/abc123
+    CDN->>PasteService: Cache MISS
+    PasteService->>Redis: 1. Check Redis
+    Redis-->>PasteService: MISS
+    PasteService->>PostgreSQL: 2. Get metadata
+    PostgreSQL-->>PasteService: paste info
+    PasteService->>S3: 3. Get content
+    S3-->>PasteService: content
+    PasteService->>Redis: 4. Cache in Redis
+    PasteService-->>CDN: 200 OK (cache it)
+    CDN-->>Client: 200 OK
+    
+    Note over Client,S3: Latency: ~100ms (origin + S3)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────┐     ┌─────────────┐     ┌───────┐     ┌──────────┐     ┌─────┐
 │Client│     │ CDN │     │Paste Service│     │ Redis │     │PostgreSQL│     │ S3  │
 └──┬───┘     └──┬──┘     └──────┬──────┘     └───┬───┘     └────┬─────┘     └──┬──┘
@@ -579,11 +712,36 @@ Latency: ~10ms (CDN edge)
 Latency: ~100ms (origin + S3)
 ```
 
+</details>
+```
+
 ---
 
 ## Caching Architecture
 
+```mermaid
+flowchart TB
+    Client["CLIENT"]
+    Client -->|"Cache MISS"| CDN
+    subgraph Layer1["LAYER 1: CDN (CloudFront)<br/>Cache Key: /raw/{paste_id}<br/>TTL: 1 hour for public, 0 for private<br/>Hit Rate: ~60% for popular pastes"]
+    end
+    CDN -->|"Cache MISS"| Redis
+    subgraph Layer2["LAYER 2: Application Cache (Redis)<br/>Hit Rate: ~40%"]
+        MetadataCache["Metadata Cache<br/>Key: meta:{paste_id}<br/>Value: JSON metadata<br/>TTL: 1 hour<br/>Size: ~500 bytes"]
+        ContentCache["Content Cache<br/>Key: content:{paste_id}<br/>Value: compressed text<br/>TTL: 15 minutes<br/>Max Size: 1 MB"]
+    end
+    Note1["Only cache pastes < 1 MB in Redis<br/>(larger go directly to S3)"]
+    Redis -->|"Cache MISS"| Origin
+    subgraph Layer3["LAYER 3: Origin Storage"]
+        PostgreSQL["PostgreSQL<br/>- Paste metadata<br/>- Always authoritative<br/>- Query for existence check"]
+        S3["S3<br/>- Paste content<br/>- Compressed (gzip)<br/>- Lifecycle policies"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              MULTI-LAYER CACHING                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -631,6 +789,10 @@ Latency: ~100ms (origin + S3)
 │  │  - Paste metadata                 │  │  - Paste content                  │      │
 │  │  - Always authoritative           │  │  - Compressed (gzip)              │      │
 │  │  - Query for existence check      │  │  - Lifecycle policies             │      │
+```
+
+</details>
+```
 │  └───────────────────────────────────┘  └───────────────────────────────────┘      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -639,7 +801,22 @@ Latency: ~100ms (origin + S3)
 
 ## Storage Architecture
 
+```mermaid
+flowchart TB
+    subgraph PostgreSQL["PostgreSQL (Metadata)<br/>Primary: us-east-1a<br/>Replicas: us-east-1b, us-west-2a"]
+        PastesTable["pastes table<br/>id | storage_key | title | syntax | expires_at<br/>abc12345 | pastes/2024/... | My Code | python | 2024-02-15<br/>def67890 | dedup/sha256-... | Config | yaml | NULL (never)"]
+    end
+    PostgreSQL -->|"storage_key references"| S3
+    subgraph S3["S3 (Content Storage)<br/>Bucket: pastebin-content-prod<br/>Storage Class: S3 Standard (first 30 days) → S3 IA (after 30 days)<br/>Encryption: SSE-S3<br/>Versioning: Disabled (pastes are immutable)"]
+        PastesFolder["pastes/<br/>├── 2024/<br/>│   ├── 01/<br/>│   │   ├── 15/<br/>│   │   │   ├── abc12345.txt.gz (45 bytes compressed)<br/>│   │   │   └── ghi34567.txt.gz (1.2 KB compressed)<br/>│   │   └── 16/<br/>│   └── 02/"]
+        DedupFolder["deduplicated/<br/>└── sha256-a1b2c3d4...xyz.txt.gz<br/>(shared by multiple pastes)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              STORAGE ARCHITECTURE                                    │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -688,6 +865,9 @@ Latency: ~100ms (origin + S3)
 │  Encryption: SSE-S3                                                                  │
 │  Versioning: Disabled (pastes are immutable)                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ### S3 Lifecycle Policy
@@ -823,7 +1003,19 @@ public class PasteService {
 
 ## Cleanup Worker Architecture
 
+```mermaid
+flowchart TD
+    Scheduler["Scheduler (Cron)<br/>Runs every hour"]
+    Scheduler --> CleanupJob
+    CleanupJob["Cleanup Job<br/><br/>1. Query expired pastes (batch of 1000)<br/>   SELECT id, storage_key FROM pastes<br/>   WHERE expires_at < NOW() AND deleted_at IS NULL<br/>   LIMIT 1000<br/><br/>2. For each paste:<br/>   a. Soft delete in PostgreSQL (set deleted_at)<br/>   b. Delete from Redis cache<br/>   c. Invalidate CDN cache<br/>   d. Queue S3 deletion (async)<br/><br/>3. Process S3 deletions in batches<br/>   (S3 DeleteObjects API supports 1000 keys per request)"]
+    CleanupJob --> OrphanCleanup
+    OrphanCleanup["Orphan Content Cleanup (Weekly)<br/>Find S3 objects with no corresponding paste record<br/>(handles crashes during paste creation)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              CLEANUP WORKER                                          │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -868,11 +1060,34 @@ public class PasteService {
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Deployment Architecture (Kubernetes)
 
+```mermaid
+flowchart TB
+    subgraph K8s["KUBERNETES CLUSTER"]
+        Ingress["INGRESS (NGINX)<br/>TLS termination, routing"]
+        Ingress --> PasteService
+        Ingress --> CleanupWorker
+        Ingress --> WebFrontend
+        PasteService["paste-service Deployment<br/>Replicas: 5<br/>CPU: 1 core<br/>Memory: 2Gi"]
+        CleanupWorker["cleanup-worker CronJob<br/>Schedule: hourly<br/>CPU: 0.5 core<br/>Memory: 1Gi"]
+        WebFrontend["web-frontend Deployment<br/>Replicas: 3<br/>CPU: 0.5 core<br/>Memory: 512Mi"]
+        Services["SERVICES (ClusterIP)<br/>paste-service:8080<br/>web-frontend:3000"]
+        PasteService --> Services
+        WebFrontend --> Services
+    end
+    External["EXTERNAL SERVICES<br/>RDS PostgreSQL (Multi-AZ)<br/>ElastiCache (Redis Cluster Mode)<br/>S3 Bucket (pastebin-content-prod)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              KUBERNETES CLUSTER                                      │
 │                                                                                      │
@@ -911,11 +1126,40 @@ public class PasteService {
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Failure Points and Recovery
 
+```mermaid
+flowchart LR
+    subgraph Failures["FAILURE ANALYSIS"]
+        CDN["CDN<br/>Edge down"] --> CDNImpact["Minor latency increase"]
+        CDNImpact --> CDNMit["Auto-failover to other edges"]
+        
+        PasteService["Paste Service<br/>Pod crash"] --> PasteImpact["Degraded capacity"]
+        PasteImpact --> PasteMit["K8s auto-restart + HPA scaling"]
+        
+        Redis["Redis<br/>Node down"] --> RedisImpact["Cache miss spike, S3 load"]
+        RedisImpact --> RedisMit["Cluster failover (automatic)"]
+        
+        PostgreSQL["PostgreSQL<br/>Primary down"] --> PGImpact["Writes fail (30 seconds)"]
+        PGImpact --> PGMit["Promote replica (automatic)"]
+        
+        S3["S3<br/>Region down"] --> S3Impact["Content unavailable"]
+        S3Impact --> S3Mit["S3 cross-region replication"]
+        
+        CleanupWorker["Cleanup Worker<br/>Job fails"] --> CleanupImpact["Expired pastes accumulate"]
+        CleanupImpact --> CleanupMit["Retry on next schedule"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              FAILURE ANALYSIS                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -952,6 +1196,9 @@ Component              Failure Mode           Impact              Recovery
 │   Cleanup   │ ───── Job fails ──────── Expired pastes ─── Retry on next
 │   Worker    │                          accumulate         schedule
 └─────────────┘
+```
+
+</details>
 ```
 
 ### Graceful Degradation

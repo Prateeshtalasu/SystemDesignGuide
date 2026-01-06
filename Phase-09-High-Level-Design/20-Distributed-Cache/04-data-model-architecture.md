@@ -58,7 +58,23 @@ public class ConsistentHash {
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    ClientApps["Client Apps"]
+    ClientApps --> CacheClient
+    CacheClient["Cache Client (Library)<br/>- Consistent Hash<br/>- Routing"]
+    CacheClient --> Node1
+    CacheClient --> Node2
+    CacheClient --> NodeN
+    Node1["Cache Node 1<br/>- Primary<br/>- Replica"]
+    Node2["Cache Node 2<br/>- Primary<br/>- Replica"]
+    NodeN["Cache Node N<br/>- Primary<br/>- Replica"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                        DISTRIBUTED CACHE CLUSTER                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -84,6 +100,9 @@ public class ConsistentHash {
 │ - Primary     │   │ - Primary     │   │ - Primary     │
 │ - Replica     │   │ - Replica     │   │ - Replica     │
 └───────────────┘   └───────────────┘   └───────────────┘
+```
+
+</details>
 ```
 
 ---

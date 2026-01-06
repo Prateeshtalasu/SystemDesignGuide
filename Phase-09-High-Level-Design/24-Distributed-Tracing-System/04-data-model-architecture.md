@@ -201,7 +201,35 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Services["Services (500 microservices)"]
+    Services -->|"Spans (OpenTelemetry Protocol)"| Collectors
+    subgraph Collectors["SPAN COLLECTORS (50 instances)"]
+        Collector1["Collector 1<br/>- Validate<br/>- Route<br/>- Buffer"]
+        Collector2["Collector 2<br/>- Validate<br/>- Route<br/>- Buffer"]
+        Collector3["Collector 3<br/>- Validate<br/>- Route<br/>- Buffer"]
+        CollectorN["Collector N<br/>- Validate<br/>- Route<br/>- Buffer"]
+    end
+    Collectors --> Kafka
+    Kafka["Kafka (spans) (Buffering)"]
+    Kafka --> Aggregators
+    subgraph Aggregators["TRACE AGGREGATORS (20 instances)"]
+        Aggregator1["Aggregator 1<br/>- Group spans<br/>- Reconstruct<br/>- Complete"]
+        Aggregator2["Aggregator 2<br/>- Group spans<br/>- Reconstruct<br/>- Complete"]
+        AggregatorN["Aggregator N<br/>- Group spans<br/>- Reconstruct<br/>- Complete"]
+    end
+    Aggregators --> StorageLayer
+    subgraph StorageLayer["STORAGE LAYER"]
+        HotStorage["HOT STORAGE (7 days)"]
+        ColdStorage["COLD STORAGE (90 days)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                         DISTRIBUTED TRACING SYSTEM                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -252,6 +280,10 @@ Services (500 microservices)
 │                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐    │
 │  │                         HOT STORAGE (7 days)                                 │    │
+```
+
+</details>
+```
 │  │                                                                              │    │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                      │    │
 │  │  │ Elasticsearch│  │ Elasticsearch│  │ Elasticsearch│                      │    │

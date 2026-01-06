@@ -29,6 +29,33 @@ Initial State:
 - Publishers: [NYSE-Feed, NASDAQ-Feed]
 
 Concurrent Execution Timeline:
+
+```mermaid
+flowchart TD
+    A["T0: NYSE-Feed publishes('stock-prices', AAPL=$150)"]
+    B["T0: NASDAQ-Feed publishes('stock-prices', GOOG=$2800)"]
+    
+    subgraph ThreadPool["Thread Pool Processing"]
+        W1["Worker-1: TradingBot1.onMessage(AAPL=$150)"]
+        W2["Worker-2: TradingBot2.onMessage(AAPL=$150)"]
+        W3["Worker-3: AlertService.onMessage(AAPL=$150)"]
+        W4["Worker-4: TradingBot1.onMessage(GOOG=$2800)"]
+        W5["Worker-5: TradingBot2.onMessage(GOOG=$2800)"]
+        W6["Worker-6: AlertService.onMessage(GOOG=$2800)"]
+    end
+    
+    A --> ThreadPool
+    B --> ThreadPool
+    
+    C["Thread Safety Verification:<br/>- CopyOnWriteArraySet prevents ConcurrentModificationException<br/>- Each subscriber receives both messages (order may vary)<br/>- No message loss despite concurrent publishing"]
+    
+    ThreadPool --> C
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ T0: NYSE-Feed publishes("stock-prices", AAPL=$150)           │
 │ T0: NASDAQ-Feed publishes("stock-prices", GOOG=$2800)        │
@@ -48,6 +75,9 @@ Concurrent Execution Timeline:
 │ - Each subscriber receives both messages (order may vary)    │
 │ - No message loss despite concurrent publishing              │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Expected Result:
 - TradingBot1: received [AAPL, GOOG] (any order)
@@ -66,6 +96,26 @@ Setup:
   [PaymentLogger, FraudDetector (throws exception), EmailNotifier]
 
 Step 1: publish("payments", PaymentMessage{amount=$500})
+
+```mermaid
+flowchart TD
+    A["publish('payments', PaymentMessage{amount=$500})"]
+    
+    B["Delivery to PaymentLogger:<br/>- PaymentLogger.onMessage(msg) → SUCCESS<br/>- Logs: 'Payment of $500 processed'"]
+    
+    C["Delivery to FraudDetector:<br/>- FraudDetector.onMessage(msg) →<br/>  THROWS RuntimeException('Database connection failed')<br/><br/>Exception Handling:<br/>- Exception caught in try-catch<br/>- Logged: 'Subscriber FraudDetector failed: Database...'<br/>- CONTINUE to next subscriber (isolation preserved)"]
+    
+    D["Delivery to EmailNotifier:<br/>- EmailNotifier.onMessage(msg) → SUCCESS<br/>- Sends email notification to customer"]
+    
+    A --> B
+    B --> C
+    C --> D
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Delivery to PaymentLogger:                                    │
 │   - PaymentLogger.onMessage(msg) → SUCCESS                   │
@@ -88,6 +138,9 @@ Step 1: publish("payments", PaymentMessage{amount=$500})
 │   - EmailNotifier.onMessage(msg) → SUCCESS                   │
 │   - Sends email notification to customer                     │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Final Result:
 - PaymentLogger: ✅ Received message successfully
@@ -106,6 +159,29 @@ Initial State:
 - Subscribers: [NewsReader1]
 
 Concurrent Operations:
+
+```mermaid
+sequenceDiagram
+    participant P as Publisher
+    participant S1 as NewsReader1
+    participant S2 as NewsReader2
+    
+    Note over P,S1: T0: Publisher starts publish("news", Article1)<br/>Gets snapshot: [NewsReader1]
+    P->>S1: onMessage(Article1)
+    
+    Note over S2: T1: New subscriber arrives<br/>subscribe("news", NewsReader2) → SUCCESS<br/>Subscribers now: [NewsReader1, NewsReader2]
+    
+    Note over P,S1: T2: Delivery continues with ORIGINAL snapshot<br/>NewsReader1.onMessage(Article1) → delivered<br/>NewsReader2 NOT in original snapshot → NOT delivered
+    
+    Note over P,S2: T3: Next publish("news", Article2)<br/>Gets NEW snapshot: [NewsReader1, NewsReader2]
+    P->>S1: onMessage(Article2)
+    P->>S2: onMessage(Article2)
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ T0: Publisher starts publish("news", Article1)               │
 │     - Gets snapshot of subscribers: [NewsReader1]            │
@@ -122,6 +198,9 @@ Concurrent Operations:
 │     - Gets NEW snapshot: [NewsReader1, NewsReader2]          │
 │     - Both receive Article2                                   │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Why This Is Correct:
 - CopyOnWriteArraySet creates snapshot at iteration start

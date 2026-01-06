@@ -43,7 +43,29 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Services["Services (1,000 services)"]
+    Services -->|"Logs (HTTP, Syslog, File-based)"| Collectors
+    subgraph Collectors["LOG COLLECTORS (200 instances)"]
+        Collector1["Collector 1<br/>- Parse<br/>- Compress<br/>- Buffer"]
+        Collector2["Collector 2<br/>- Parse<br/>- Compress<br/>- Buffer"]
+        Collector3["Collector 3<br/>- Parse<br/>- Compress<br/>- Buffer"]
+        CollectorN["Collector N<br/>- Parse<br/>- Compress<br/>- Buffer"]
+    end
+    Collectors --> Kafka
+    Kafka["Kafka (logs) (Buffering)"]
+    Kafka --> LogStorage
+    subgraph LogStorage["LOG STORAGE"]
+        HotStorage["HOT STORAGE (7 days)<br/>Elasticsearch Cluster"]
+        ColdStorage["COLD STORAGE (90 days)<br/>S3 (Logs) (Compressed)<br/>Elasticsearch (Metadata)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                         CENTRALIZED LOGGING SYSTEM                                  │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -93,6 +115,10 @@ Services (1,000 services)
 │  │  │  S3 (Logs)   │  │ Elasticsearch│                                        │    │
 │  │  │  (Compressed)│  │  (Metadata)  │                                        │    │
 │  │  └──────────────┘  └──────────────┘                                        │    │
+```
+
+</details>
+```
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                              │

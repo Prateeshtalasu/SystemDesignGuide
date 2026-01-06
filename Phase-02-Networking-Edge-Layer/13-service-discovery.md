@@ -28,7 +28,22 @@ In a microservices architecture, services need to communicate with each other. B
 
 ### What Systems Looked Like Before Service Discovery
 
+```mermaid
+flowchart TD
+    Config["Order Service Configuration:<br/>payment.service.url=http://192.168.1.10:8080<br/>inventory.service.url=http://192.168.1.11:8080<br/>shipping.service.url=http://192.168.1.12:8080"]
+    
+    Problems["Problems:<br/>1. IP changes → Update all configs → Redeploy all services<br/>2. New instance added → Manual config update<br/>3. Instance dies → Manual removal from config<br/>4. No automatic failover<br/>5. Doesn't scale"]
+    
+    Scenario["What happens when Payment Service moves?<br/>1. DevOps notices Payment Service moved to 192.168.1.20<br/>2. Update Order Service config<br/>3. Update Notification Service config<br/>4. Update Analytics Service config<br/>5. Redeploy all services<br/>6. Hope nothing breaks during update"]
+    
+    Config --> Problems
+    Problems --> Scenario
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HARDCODED CONFIGURATION (OLD WAY)                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -56,6 +71,7 @@ What happens when Payment Service moves?
 5. Redeploy all services
 6. Hope nothing breaks during update
 ```
+</details>
 
 ### What Breaks Without Service Discovery
 
@@ -94,7 +110,25 @@ Pods are ephemeral—they're created and destroyed constantly. Kubernetes built-
 - Friend changes number → Phone book updated
 - You always find the right number
 
+```mermaid
+flowchart TD
+    subgraph Without["Without Service Discovery"]
+        OS1["Order Service"] -->|"Payment Service<br/>@ 192.168.1.10:8080"| PS1["Payment Service<br/>@ 192.168.1.10:8080"]
+        PS1 -->|"IP Changed to<br/>192.168.1.20"| PS2["Payment Service<br/>@ 192.168.1.20:8080"]
+        OS2["Order Service"] -.->|"Connection Failed!<br/>Doesn't know new address"| PS1
+    end
+    
+    subgraph With["With Service Discovery"]
+        OS3["Order Service"] -->|"Where is Payment Service?"| Registry["Service Registry"]
+        Registry -->|"[192.168.1.20:8080,<br/>192.168.1.21:8080]"| OS4["Order Service"]
+        OS4 -->|"Payment Service<br/>@ 192.168.1.20:8080"| PS3["Payment Service<br/>@ 192.168.1.20:8080"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SERVICE DISCOVERY CONCEPT                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -124,6 +158,7 @@ Order Service ──> "Where is Payment Service?" ──> Service Registry
 Order Service ──────────────────────────────────> Payment Service
                                                   @ 192.168.1.20:8080
 ```
+</details>
 
 ### The Key Insight
 
@@ -138,7 +173,27 @@ Service Discovery has three components:
 
 ### Service Discovery Patterns
 
+```mermaid
+flowchart TD
+    Registry["Service Registry<br/>(Eureka, Consul)"]
+    OrderService["Order Service"]
+    ClientLB["Client-Side<br/>Load Balancer<br/>(Ribbon)"]
+    PaymentService["Payment Service<br/>Instance1<br/>Instance2<br/>Inst..."]
+    
+    OrderService -->|"1. Query"| ClientLB
+    ClientLB -->|"2. Return instances"| Registry
+    Registry -.->|"2. Return instances"| ClientLB
+    ClientLB -->|"3. Route to instance"| PaymentService
+    
+    Note1["Flow:<br/>1. Order Service queries registry for 'payment-service'<br/>2. Registry returns list of healthy instances<br/>3. Client-side load balancer picks one instance<br/>4. Order Service calls chosen instance directly"]
+    
+    Note2["Pros:<br/>- No single point of failure (registry can be cached)<br/>- Client can implement custom load balancing<br/>- Fewer network hops<br/><br/>Cons:<br/>- Client complexity (needs discovery library)<br/>- Each language needs its own implementation<br/>- Client must handle instance failures"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CLIENT-SIDE DISCOVERY                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -181,8 +236,31 @@ Cons:
 - Client complexity (needs discovery library)
 - Each language needs its own implementation
 - Client must handle instance failures
+```
+</details>
 
 
+```mermaid
+flowchart TD
+    Registry2["Service Registry"]
+    OrderService2["Order Service"]
+    LB["Load Balancer<br/>/ API Gateway"]
+    PaymentService2["Payment Service<br/>Instance1<br/>Instance2<br/>Inst..."]
+    
+    OrderService2 -->|"1. Request"| LB
+    LB -->|"2. Query instances"| Registry2
+    Registry2 -.->|"Return instances"| LB
+    LB -->|"3. Route to instance"| PaymentService2
+    
+    Note1["Flow:<br/>1. Order Service calls load balancer/gateway<br/>2. Load balancer queries registry for instances<br/>3. Load balancer routes to healthy instance<br/>4. Response flows back through load balancer"]
+    
+    Note2["Pros:<br/>- Simple clients (just HTTP calls)<br/>- Language agnostic<br/>- Centralized load balancing logic<br/><br/>Cons:<br/>- Load balancer is single point of failure<br/>- Extra network hop<br/>- Load balancer can become bottleneck"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SERVER-SIDE DISCOVERY                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -223,6 +301,8 @@ Cons:
 - Load balancer is single point of failure
 - Extra network hop
 - Load balancer can become bottleneck
+```
+</details>
 
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -261,7 +341,34 @@ Cons:
 
 ### Service Registration
 
+```mermaid
+flowchart TD
+    subgraph SelfReg["Self-Registration"]
+        PS1["Payment Service<br/>On startup:<br/>- Register self<br/>- Send heartbeat<br/>- Deregister on shutdown"]
+        Registry1["Service Registry"]
+        
+        PS1 -->|"1. Register<br/>(name, IP, port)"| Registry1
+        Registry1 -->|"2. Heartbeat check"| PS1
+        
+        Note1["Service is responsible for:<br/>- Registering on startup<br/>- Sending periodic heartbeats<br/>- Deregistering on shutdown"]
+    end
+    
+    subgraph ThirdParty["Third-Party Registration"]
+        PS2["Payment Service<br/>Just runs,<br/>no registration logic"]
+        Registrar["Registrar<br/>(Kubernetes,<br/>Consul Agent)"]
+        Registry2["Service Registry"]
+        
+        Registrar -->|"1. Health check"| PS2
+        Registrar -->|"2. Register healthy<br/>instances"| Registry2
+        
+        Note2["Registrar is responsible for:<br/>- Monitoring service health<br/>- Registering healthy instances<br/>- Deregistering unhealthy instances<br/><br/>Pros: Service doesn't need discovery library<br/>Cons: Additional component to manage"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SERVICE REGISTRATION PATTERNS                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -308,10 +415,32 @@ Registrar is responsible for:
 Pros: Service doesn't need discovery library
 Cons: Additional component to manage
 ```
+</details>
 
 ### Health Checking
 
+```mermaid
+flowchart TD
+    HealthChecks["Health Check Mechanisms"]
+    
+    TTL["TTL (Time-To-Live) Based:<br/>Service → Registry: 'I'm alive' (every 30 seconds)<br/>If no heartbeat for 90 seconds → Mark unhealthy<br/>If no heartbeat for 180 seconds → Remove from registry"]
+    
+    HTTP["HTTP Health Check:<br/>Registry → Service: GET /health<br/>200 OK → Healthy<br/>503 Service Unavailable → Unhealthy<br/>No response → Unhealthy<br/><br/>Response: {'status': 'UP', 'checks': {'database': 'UP', 'redis': 'UP', 'disk': 'UP'}}"]
+    
+    TCP["TCP Health Check:<br/>Registry → Service: TCP connect to port 8080<br/>Connection successful → Healthy<br/>Connection refused → Unhealthy<br/>Timeout → Unhealthy"]
+    
+    gRPC["gRPC Health Check:<br/>Registry → Service: grpc.health.v1.Health/Check<br/>SERVING → Healthy<br/>NOT_SERVING → Unhealthy<br/>UNKNOWN → Unknown state"]
+    
+    HealthChecks --> TTL
+    HealthChecks --> HTTP
+    HealthChecks --> TCP
+    HealthChecks --> gRPC
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HEALTH CHECK MECHANISMS                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -357,6 +486,7 @@ SERVING → Healthy
 NOT_SERVING → Unhealthy
 UNKNOWN → Unknown state
 ```
+</details>
 
 ---
 
@@ -376,7 +506,27 @@ UNKNOWN → Unknown state
 
 ### Netflix Eureka (Spring Cloud)
 
+```mermaid
+flowchart TD
+    subgraph Cluster["Eureka Server Cluster"]
+        Eureka1["Eureka Server 1"]
+        Eureka2["Eureka Server 2"]
+        Eureka1 <--> Eureka2
+    end
+    
+    OrderService["Order Service<br/>(Eureka Client)<br/>- Registers<br/>- Heartbeat<br/>- Caches registry"]
+    PaymentService["Payment Service<br/>(Eureka Client)<br/>- Registers<br/>- Heartbeat<br/>- Caches registry"]
+    
+    OrderService --> Cluster
+    PaymentService --> Cluster
+    
+    Note1["Key Concepts:<br/>- Eureka Server: Service registry (run 2+ for HA)<br/>- Eureka Client: Library in each service<br/>- Self-Preservation: If too many services fail heartbeat,<br/>  Eureka assumes network issue, keeps stale data"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    EUREKA ARCHITECTURE                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -409,10 +559,35 @@ Key Concepts:
 - Self-Preservation: If too many services fail heartbeat,
   Eureka assumes network issue, keeps stale data
 ```
+</details>
 
 ### HashiCorp Consul
 
+```mermaid
+flowchart TD
+    subgraph Cluster2["Consul Server Cluster"]
+        Server1["Server (Leader)"]
+        Server2["Server (Follower)"]
+        Server1 <-->|"Raft Consensus"| Server2
+    end
+    
+    Agent1["Consul Agent<br/>(Client Mode)"]
+    Agent2["Consul Agent<br/>(Client Mode)"]
+    OrderService2["Order Service"]
+    PaymentService2["Payment Svc"]
+    
+    Agent1 --> Cluster2
+    Agent2 --> Cluster2
+    Agent1 --> OrderService2
+    Agent2 --> PaymentService2
+    
+    Note1["Key Concepts:<br/>- Consul Server: Stores data, Raft consensus (3-5 servers)<br/>- Consul Agent: Runs on each node, local health checks<br/>- DNS Interface: service.consul DNS queries<br/>- KV Store: Configuration storage<br/>- Connect: Service mesh with mTLS"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CONSUL ARCHITECTURE                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -446,10 +621,34 @@ Key Concepts:
 - KV Store: Configuration storage
 - Connect: Service mesh with mTLS
 ```
+</details>
 
 ### Kubernetes Service Discovery
 
+```mermaid
+flowchart TD
+    subgraph K8s["Kubernetes Cluster"]
+        API["Kubernetes API Server<br/>(Source of truth for services)"]
+        CoreDNS["CoreDNS<br/>(DNS-based service discovery)<br/>payment-service.default.svc.cluster.local → ClusterIP"]
+        
+        Service1["Service: payment<br/>ClusterIP: 10.96.100.50"]
+        Service2["Service: order<br/>ClusterIP: 10.96.100.51"]
+        
+        Pod1["Pod: payment-abc123<br/>IP: 10.244.1.5"]
+        Pod2["Pod: payment-def456<br/>IP: 10.244.1.6"]
+        Pod3["Pod: order-xyz789<br/>IP: 10.244.2.8"]
+        
+        API --> CoreDNS
+        Service1 -->|"Endpoints"| Pod1
+        Service1 -->|"Endpoints"| Pod2
+        Service2 -->|"Endpoints"| Pod3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    KUBERNETES SERVICE DISCOVERY                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -486,6 +685,8 @@ Key Concepts:
 │  │ IP: 10.244.1.6      │                                                    │
 │  └─────────────────────┘                                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 
 How it works:
 1. Service created → Kubernetes assigns ClusterIP

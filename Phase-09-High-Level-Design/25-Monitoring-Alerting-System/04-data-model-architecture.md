@@ -58,7 +58,29 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Services["Services (1,000 services)"]
+    Services -->|"Metrics (Prometheus, StatsD, HTTP)"| Collectors
+    subgraph Collectors["METRICS COLLECTORS (100 instances)"]
+        Collector1["Collector 1<br/>- Validate<br/>- Compress<br/>- Buffer"]
+        Collector2["Collector 2<br/>- Validate<br/>- Compress<br/>- Buffer"]
+        Collector3["Collector 3<br/>- Validate<br/>- Compress<br/>- Buffer"]
+        CollectorN["Collector N<br/>- Validate<br/>- Compress<br/>- Buffer"]
+    end
+    Collectors --> Kafka
+    Kafka["Kafka (metrics) (Buffering)"]
+    Kafka --> TimeSeriesStorage
+    subgraph TimeSeriesStorage["TIME-SERIES STORAGE"]
+        HotStorage["HOT STORAGE (30 days)<br/>InfluxDB/TimescaleDB Cluster"]
+        ColdStorage["COLD STORAGE (1 year)<br/>S3 (Metrics) (Compressed)<br/>Index (ES) (Metadata)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                         MONITORING & ALERTING SYSTEM                                │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -109,6 +131,10 @@ Services (1,000 services)
 │  │  │  S3 (Metrics)│  │  Index (ES)  │                                        │    │
 │  │  │  (Compressed)│  │  (Metadata)  │                                        │    │
 │  │  └──────────────┘  └──────────────┘                                        │    │
+```
+
+</details>
+```
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                              │

@@ -50,7 +50,28 @@ Approach 3: Database triggers
 
 ### The Dual-Write Problem
 
+```mermaid
+flowchart TD
+    Dual["DUAL-WRITE PROBLEM<br/><br/>Application tries to:<br/>1. Write to Database<br/>2. Publish to Kafka"]
+    
+    Scenarios["Failure scenarios:"]
+    
+    A["Scenario A: DB succeeds, Kafka fails<br/>Database: Product price = $10<br/>Kafka: No event published<br/>Cache: Still shows old price<br/>Search: Still shows old price<br/>Result: INCONSISTENT"]
+    
+    B["Scenario B: Kafka succeeds, DB fails<br/>Database: Rollback, price unchanged<br/>Kafka: Event says price = $10<br/>Cache: Updated to $10 (wrong!)<br/>Result: INCONSISTENT"]
+    
+    CDC["CDC Solution: Database is source of truth<br/>1. Write to Database (single write)<br/>2. CDC reads transaction log<br/>3. CDC publishes to Kafka<br/>4. Consumers update cache, search, etc.<br/>Result: EVENTUALLY CONSISTENT (guaranteed)"]
+    
+    Dual --> Scenarios
+    Scenarios --> A
+    Scenarios --> B
+    Dual --> CDC
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 DUAL-WRITE PROBLEM                           │
 │                                                              │
@@ -88,10 +109,33 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What CDC Enables
 
+```mermaid
+flowchart TD
+    CDCUses["CDC USE CASES"]
+    
+    U1["1. Cache Invalidation<br/>Database changes → CDC → Invalidate Redis cache"]
+    U2["2. Search Index Updates<br/>Database changes → CDC → Update Elasticsearch"]
+    U3["3. Data Warehouse Sync<br/>OLTP database → CDC → Data warehouse (real-time ETL)"]
+    U4["4. Microservices Sync<br/>Service A database → CDC → Service B reads events"]
+    U5["5. Audit Logging<br/>All changes → CDC → Immutable audit log"]
+    U6["6. Event Sourcing<br/>Database as event store → CDC → Projections"]
+    
+    CDCUses --> U1
+    CDCUses --> U2
+    CDCUses --> U3
+    CDCUses --> U4
+    CDCUses --> U5
+    CDCUses --> U6
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   CDC USE CASES                              │
 │                                                              │
@@ -115,6 +159,7 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples
 
@@ -134,7 +179,15 @@ Approach 3: Database triggers
 
 **Without CDC = Periodic Inventory Checks**
 
+```mermaid
+flowchart TD
+    Periodic["PERIODIC INVENTORY CHECKS<br/><br/>Warehouse manager checks inventory every hour<br/><br/>10:00 AM: Count = 100 units<br/>10:30 AM: Someone takes 20 units (unnoticed)<br/>11:00 AM: Count = 80 units<br/><br/>Problem:<br/>- Don't know WHEN the change happened<br/>- Don't know WHO made the change<br/>- Might miss rapid changes between checks"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              PERIODIC INVENTORY CHECKS                       │
 │                                                              │
@@ -150,10 +203,19 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **With CDC = Security Camera Recording**
 
+```mermaid
+flowchart TD
+    Camera["SECURITY CAMERA RECORDING<br/><br/>Camera records every movement in real-time<br/><br/>10:00:00 - Inventory: 100 units<br/>10:15:23 - John removes 10 units<br/>10:22:45 - Jane adds 5 units<br/>10:30:12 - Mike removes 15 units<br/>10:45:00 - Inventory: 80 units<br/><br/>Benefits:<br/>- Know exactly WHEN each change happened<br/>- Know WHO made each change<br/>- Can replay history<br/>- Real-time notifications possible"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SECURITY CAMERA RECORDING                       │
 │                                                              │
@@ -173,6 +235,7 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -180,7 +243,27 @@ Approach 3: Database triggers
 
 ### CDC Architecture
 
+```mermaid
+flowchart TD
+    App["Application"]
+    DB["Database<br/>(MySQL, PostgreSQL)"]
+    Log["Transaction Log<br/>(binlog, WAL)"]
+    Debezium["Debezium Connector<br/>(CDC Connector)"]
+    Kafka["Kafka Topics"]
+    Cache["Cache Invalidator"]
+    Search["Search Indexer"]
+    DW["Data Warehouse"]
+    
+    App -->|Write| DB --> Log --> Debezium --> Kafka
+    Kafka --> Cache
+    Kafka --> Search
+    Kafka --> DW
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   CDC ARCHITECTURE                           │
 │                                                              │
@@ -216,12 +299,34 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### How Databases Track Changes
 
 **MySQL Binary Log (binlog)**:
 
+```mermaid
+flowchart TD
+    Binlog["MYSQL BINLOG<br/>Every write operation is logged"]
+    
+    subgraph Events["binlog.000001"]
+        E1["Position: 4<br/>Event: QUERY<br/>Statement: BEGIN"]
+        E2["Position: 120<br/>Event: TABLE_MAP<br/>Table: products"]
+        E3["Position: 180<br/>Event: UPDATE_ROWS<br/>Before: {id: 1, price: 100}<br/>After: {id: 1, price: 90}"]
+        E4["Position: 250<br/>Event: XID (commit)"]
+    end
+    
+    Formats["Formats:<br/>- STATEMENT: SQL statements (compact but can be ambiguous)<br/>- ROW: Actual row changes (larger but precise)<br/>- MIXED: Combination<br/><br/>CDC uses ROW format for accurate change capture"]
+    
+    Binlog --> Events
+    E1 --> E2 --> E3 --> E4
+    Events --> Formats
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    MYSQL BINLOG                              │
 │                                                              │
@@ -255,10 +360,30 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **PostgreSQL Write-Ahead Log (WAL)**:
 
+```mermaid
+flowchart TD
+    WAL["POSTGRESQL WAL"]
+    
+    Logical["Logical Decoding:<br/>WAL records physical changes (page modifications)<br/><br/>Logical decoding plugins translate to logical events:<br/>- pgoutput (built-in)<br/>- wal2json<br/>- decoderbufs (Protobuf)"]
+    
+    Slot["Replication Slot:<br/>Keeps track of consumer position<br/>Prevents WAL from being deleted before consumed<br/>Named slot per consumer"]
+    
+    Example["Example output (wal2json):<br/>{<br/>  'change': [{<br/>    'kind': 'update',<br/>    'table': 'products',<br/>    'columnnames': ['id', 'price'],<br/>    'columnvalues': [1, 90],<br/>    'oldkeys': {'keynames': ['id'], 'keyvalues': [1]}<br/>  }]<br/>}"]
+    
+    WAL --> Logical
+    WAL --> Slot
+    Slot --> Example
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  POSTGRESQL WAL                              │
 │                                                              │
@@ -294,10 +419,33 @@ Approach 3: Database triggers
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Debezium Architecture
 
+```mermaid
+flowchart TD
+    Debezium["DEBEZIUM ARCHITECTURE<br/>Kafka Connect Framework"]
+    
+    subgraph Worker["Kafka Connect Worker"]
+        MySQL["MySQL Connector"]
+        PG["PostgreSQL Connector"]
+        Converter["Converter<br/>(JSON, Avro, Protobuf)"]
+        
+        MySQL --> Converter
+        PG --> Converter
+    end
+    
+    Kafka["Kafka Broker<br/><br/>Topics:<br/>- dbserver1.inventory.products<br/>- dbserver1.inventory.orders<br/>- dbserver1.inventory.customers"]
+    
+    Worker --> Kafka
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  DEBEZIUM ARCHITECTURE                       │
 │                                                              │
@@ -332,6 +480,8 @@ Approach 3: Database triggers
 │  └─────────────────────────────────────────────────────┘   │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### CDC Event Structure
@@ -498,7 +648,25 @@ Consumers see:
 
 **Pattern 1: Outbox Pattern**
 
+```mermaid
+flowchart TD
+    Outbox["OUTBOX PATTERN<br/>Problem: Need to update DB and publish event atomically"]
+    
+    Solution["Solution:<br/>1. Write business data + outbox entry in same transaction<br/>2. CDC captures outbox table changes<br/>3. Publish outbox entries to Kafka<br/>4. Mark as published (or delete)"]
+    
+    Transaction["Transaction:<br/>INSERT INTO orders (...);<br/>INSERT INTO outbox (<br/>  aggregate_type, aggregate_id, event_type, payload<br/>) VALUES ('Order', 123, 'OrderCreated', '...');<br/>COMMIT;"]
+    
+    CDC["CDC reads outbox → Publishes to Kafka<br/>Guaranteed: Event published iff transaction committed"]
+    
+    Outbox --> Solution
+    Solution --> Transaction
+    Transaction --> CDC
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   OUTBOX PATTERN                             │
 │                                                              │
@@ -524,10 +692,33 @@ Consumers see:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Pattern 2: CQRS with CDC**
 
+```mermaid
+flowchart TD
+    CQRS["CQRS WITH CDC"]
+    
+    Command["Command Side:<br/>Application → PostgreSQL (normalized, ACID)<br/>Optimized for writes"]
+    
+    CDC2["CDC"]
+    
+    Query["Query Side:<br/>Kafka → Elasticsearch (denormalized, fast reads)<br/>Optimized for queries"]
+    
+    Note["Writes go to PostgreSQL<br/>Reads come from Elasticsearch<br/>CDC keeps them in sync"]
+    
+    CQRS --> Command
+    Command -->|CDC| CDC2
+    CDC2 --> Query
+    Query --> Note
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   CQRS WITH CDC                              │
 │                                                              │
@@ -550,6 +741,8 @@ Consumers see:
 │  CDC keeps them in sync                                     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -956,7 +1149,28 @@ Solution:
 
 ### Performance Gotchas
 
+```mermaid
+flowchart TD
+    Gotchas["CDC GOTCHAS"]
+    
+    G1["1. Binlog/WAL overhead<br/>   - ROW format uses more disk<br/>   - More data to replicate<br/>   - Monitor disk usage"]
+    
+    G2["2. Snapshot locking<br/>   - Initial snapshot may lock tables<br/>   - Use snapshot.locking.mode = none (if safe)<br/>   - Schedule during low traffic"]
+    
+    G3["3. High cardinality topics<br/>   - One topic per table by default<br/>   - Many tables = many topics<br/>   - Consider topic routing"]
+    
+    G4["4. Large transactions<br/>   - Single transaction = single Kafka message<br/>   - Very large transactions may cause issues<br/>   - Break up large batch operations"]
+    
+    Gotchas --> G1
+    Gotchas --> G2
+    Gotchas --> G3
+    Gotchas --> G4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  CDC GOTCHAS                                 │
 │                                                              │
@@ -981,6 +1195,8 @@ Solution:
 │     - Break up large batch operations                       │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

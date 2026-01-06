@@ -376,7 +376,7 @@ sequenceDiagram
     DB-->>Order: Response (50ms)
     Order-->>API: Response (120ms total)
     
-    Note over API,DB: Each box is a "span" with:<br>• Span ID, Parent Span ID<br>• Service name, Operation<br>• Duration, Tags<br><br>From this trace:<br>• Database is the slowest (50ms)<br>• Total request time is 150ms<br>• Order service waits for 3 downstream calls
+    Note over API,DB: Each box is a 'span' with:<br>• Span ID, Parent Span ID<br>• Service name, Operation<br>• Duration, Tags<br><br>From this trace:<br>• Database is the slowest (50ms)<br>• Total request time is 150ms<br>• Order service waits for 3 downstream calls
 ```
 
 <details>
@@ -425,7 +425,22 @@ sequenceDiagram
 
 ### Health Checks
 
+```mermaid
+graph TD
+    subgraph "HEALTH CHECK TYPES"
+        Liveness["1. LIVENESS CHECK<br>'Is the application running?'<br>If fails: Restart the container/process<br>Example: GET /health/live<br>Response: 200 OK (just proves process is alive)"]
+        Readiness["2. READINESS CHECK<br>'Can the application handle requests?'<br>If fails: Remove from load balancer (don't restart)<br>Example: GET /health/ready<br>Checks: Database connection, cache connection, dependencies<br>Response: 200 OK or 503 Service Unavailable"]
+        Startup["3. STARTUP CHECK<br>'Has the application finished starting?'<br>Used for slow-starting applications<br>Example: GET /health/startup<br>Checks: Migrations complete, caches warmed"]
+        Deep["DEEP HEALTH CHECK (for debugging)<br>GET /health/details<br>Returns detailed status of all components:<br>database, redis, payment_api, disk"]
+        
+        Liveness --> Readiness --> Startup --> Deep
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HEALTH CHECK TYPES                                    │
 │                                                                          │
@@ -472,10 +487,29 @@ sequenceDiagram
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Alerting Basics
 
+```mermaid
+graph TD
+    subgraph "ALERTING PRINCIPLES"
+        Good["GOOD ALERTS:<br>✓ Actionable: Someone can do something about it<br>✓ Urgent: Needs attention now (or soon)<br>✓ Clear: What's wrong and what to do<br>✓ Rare: Not crying wolf constantly"]
+        Bad["BAD ALERTS:<br>✗ 'CPU is at 75%' (So what? Is anything broken?)<br>✗ 'Disk usage is 60%' (Not urgent, not actionable now)<br>✗ 'Error occurred' (Which error? Where? Impact?)"]
+        P1["P1 - CRITICAL (Page immediately, 24/7)<br>• Service completely down<br>• Data loss occurring<br>• Security breach<br>Response: Immediate (minutes)"]
+        P2["P2 - HIGH (Page during business hours)<br>• Service degraded significantly<br>• Error rate > 5%<br>Response: Within 1 hour"]
+        P3["P3 - MEDIUM (Ticket, next business day)<br>• Performance degradation<br>• Non-critical feature broken<br>Response: Within 24 hours"]
+        P4["P4 - LOW (Ticket, this sprint)<br>• Minor issues<br>• Optimization opportunities<br>Response: Within 1 week"]
+        
+        Good --> Bad
+        Bad --> P1 --> P2 --> P3 --> P4
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ALERTING PRINCIPLES                                   │
 │                                                                          │
@@ -520,6 +554,7 @@ sequenceDiagram
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -527,7 +562,64 @@ sequenceDiagram
 
 ### Setting Up Monitoring: Step by Step
 
+```mermaid
+graph TD
+    subgraph "MONITORING SETUP FLOW"
+        App["YOUR APPLICATION<br>1. Instrument code (add metrics, logs, traces)"]
+        MetricsLib["Metrics Library"]
+        LogsLib["Logs Library"]
+        TracesLib["Traces Library"]
+        
+        Collect["2. Collect and ship data"]
+        Prometheus["Prometheus<br>(scrapes metrics)"]
+        Fluentd["Fluentd/Logstash<br>(ships logs)"]
+        JaegerCollector["Jaeger Collector<br>(collects traces)"]
+        
+        Store["3. Store data"]
+        PromTSDB["Prometheus TSDB"]
+        Elasticsearch["Elasticsearch<br>(logs)"]
+        JaegerStorage["Jaeger Storage"]
+        
+        Visualize["4. Visualize and alert"]
+        Grafana["GRAFANA<br>Dashboard: Order Service<br>Requests/s: 1,234 | p99 Latency: 145ms | Error Rate: 0.02%"]
+        
+        Alert["5. Alert on anomalies"]
+        AlertManager["Alertmanager"]
+        PagerDuty["PagerDuty → On-call engineer"]
+        Slack["Slack"]
+        Email["Email"]
+        
+        App --> MetricsLib
+        App --> LogsLib
+        App --> TracesLib
+        MetricsLib --> Collect
+        LogsLib --> Collect
+        TracesLib --> Collect
+        Collect --> Prometheus
+        Collect --> Fluentd
+        Collect --> JaegerCollector
+        Prometheus --> Store
+        Fluentd --> Store
+        JaegerCollector --> Store
+        Store --> PromTSDB
+        Store --> Elasticsearch
+        Store --> JaegerStorage
+        PromTSDB --> Visualize
+        Elasticsearch --> Visualize
+        JaegerStorage --> Visualize
+        Visualize --> Grafana
+        Grafana --> Alert
+        Alert --> AlertManager
+        AlertManager --> PagerDuty
+        AlertManager --> Slack
+        AlertManager --> Email
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MONITORING SETUP FLOW                                 │
 │                                                                          │
@@ -587,6 +679,7 @@ sequenceDiagram
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -614,7 +707,22 @@ sequenceDiagram
 
 ### Common Monitoring Stacks
 
+```mermaid
+graph TD
+    subgraph "POPULAR MONITORING STACKS"
+        PromGraf["PROMETHEUS + GRAFANA (Open Source)<br>Metrics: Prometheus<br>Visualization: Grafana<br>Alerting: Alertmanager<br>Cost: Free (self-hosted)<br>Best for: Kubernetes, cloud-native"]
+        ELK["ELK STACK (Open Source)<br>Logs: Elasticsearch + Logstash + Kibana<br>Or: Elasticsearch + Fluentd + Kibana (EFK)<br>Cost: Free (self-hosted) or Elastic Cloud<br>Best for: Log aggregation, search"]
+        Datadog["DATADOG (SaaS)<br>All-in-one: Metrics, Logs, Traces, APM<br>Cost: $15-35/host/month<br>Best for: Teams wanting managed solution"]
+        CloudWatch["AWS CLOUDWATCH (Cloud Provider)<br>Metrics: CloudWatch Metrics<br>Logs: CloudWatch Logs<br>Traces: X-Ray<br>Cost: Pay per use<br>Best for: AWS-native applications"]
+        
+        PromGraf --> ELK --> Datadog --> CloudWatch
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    POPULAR MONITORING STACKS                             │
 │                                                                          │
@@ -649,6 +757,7 @@ sequenceDiagram
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

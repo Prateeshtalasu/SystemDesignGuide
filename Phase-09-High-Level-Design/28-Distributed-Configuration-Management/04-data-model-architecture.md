@@ -97,7 +97,43 @@ CREATE INDEX idx_flags_name_env ON feature_flags(flag_name, environment);
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Services, Admin UI, SDKs"]
+    Clients --> HTTPAPI
+    Clients --> WSAPI
+    Clients --> gRPCAPI
+    HTTPAPI["HTTP API"]
+    WSAPI["WebSocket API"]
+    gRPCAPI["gRPC API"]
+    HTTPAPI --> APIGateway
+    WSAPI --> APIGateway
+    gRPCAPI --> APIGateway
+    APIGateway["API Gateway<br/>(Auth, Rate Limit)"]
+    APIGateway --> ConfigService
+    APIGateway --> FeatureFlags
+    APIGateway --> SecretsService
+    ConfigService["Configuration Service"]
+    FeatureFlags["Feature Flags"]
+    SecretsService["Secrets Service"]
+    ConfigService --> PostgreSQL
+    FeatureFlags --> Redis
+    SecretsService --> Vault
+    PostgreSQL["PostgreSQL (Configs)"]
+    Redis["Redis (Cache)"]
+    Vault["Vault (Secrets)"]
+    PostgreSQL --> Kafka
+    Redis --> Kafka
+    Vault --> Kafka
+    Kafka["Kafka (Pub/Sub)"]
+    Kafka --> UpdatePropagation
+    UpdatePropagation["Update Propagation"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                        CLIENTS                               │
 │              (Services, Admin UI, SDKs)                      │
@@ -148,6 +184,10 @@ CREATE INDEX idx_flags_name_env ON feature_flags(flag_name, environment);
                     │ Propagation  │
                     └──────┬───────┘
                            │
+```
+
+</details>
+```
                            ▼
                     ┌──────────────┐
                     │  WebSocket    │

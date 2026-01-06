@@ -69,7 +69,34 @@ public class PricingService {
 
 **Entry Flow:**
 
+```mermaid
+flowchart TD
+    A["User arrives → EntryPanel.processEntry(vehicle)"]
+    B["ParkingLot.parkVehicle(vehicle)"]
+    
+    C{"Check: vehicleToTicket.containsKey(plate)?"}
+    C -->|Yes| D["Return null (already parked)"]
+    C -->|No| E["findAvailableSpot(vehicle)"]
+    
+    E --> F["For each ParkingFloor:<br/>floor.findAvailableSpot(vehicle)"]
+    F --> G["For each spot in searchOrder:<br/>spot.canFitVehicle(vehicle)?"]
+    G --> H{"vehicle.canFitInSpot(spotType)?"}
+    H -->|Yes| I["spot.parkVehicle(vehicle)"]
+    H -->|No| G
+    
+    I --> J["spot.isAvailable = false<br/>spot.parkedVehicle = vehicle"]
+    J --> K["Create ParkingTicket"]
+    K --> L["activeTickets.put(ticketId, ticket)<br/>vehicleToTicket.put(plate, ticket)"]
+    L --> M["updateAllDisplayBoards()"]
+    
+    A --> B
+    B --> C
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 User arrives → EntryPanel.processEntry(vehicle)
                     │
                     ▼
@@ -105,9 +132,39 @@ User arrives → EntryPanel.processEntry(vehicle)
                     └──► updateAllDisplayBoards()
 ```
 
+</details>
+```
+
 **Exit Flow:**
 
+```mermaid
+flowchart TD
+    A["User at exit → ExitPanel.processExit(ticket)"]
+    B["ticket.calculateFee()"]
+    C["Duration = now - entryTime<br/>Hours = ceiling(minutes / 60)<br/>Fee = hours × hourlyRate"]
+    D["paymentService.processPayment(ticket, fee)"]
+    E["Payment.processPayment()"]
+    F["ticket.markAsPaid(fee)"]
+    G["parkingLot.releaseSpot(ticket)"]
+    H["spot.removeVehicle()"]
+    I["activeTickets.remove(ticketId)<br/>vehicleToTicket.remove(plate)"]
+    J["updateAllDisplayBoards()"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    G --> I
+    G --> J
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 User at exit → ExitPanel.processExit(ticket)
                     │
                     ├──► ticket.calculateFee()
@@ -133,6 +190,9 @@ User at exit → ExitPanel.processExit(ticket)
                               │    vehicleToTicket.remove(plate)
                               │
                               └──► updateAllDisplayBoards()
+```
+
+</details>
 ```
 
 ---

@@ -4,7 +4,44 @@
 
 ### System Overview
 
+```mermaid
+flowchart TB
+    EventSources["Event Sources<br/>Order Service, Payment Service, Marketing Platform, Security Service"]
+    EventSources --> APIGateway
+    APIGateway["API Gateway"]
+    APIGateway --> NotificationService
+    APIGateway --> Kafka
+    NotificationService["Notification Service"]
+    Kafka["Kafka Cluster"]
+    Kafka --> NotificationService
+    NotificationService --> Router
+    NotificationService --> TemplateEngine
+    NotificationService --> PreferenceService
+    NotificationService --> RateLimitService
+    NotificationService --> DedupService
+    Router["Router"]
+    TemplateEngine["Template Engine"]
+    PreferenceService["Preference Service"]
+    RateLimitService["Rate Limit Service"]
+    DedupService["Dedup Service"]
+    Router --> PushWorkers
+    Router --> EmailWorkers
+    Router --> SMSWorkers
+    Router --> InAppWorkers
+    PushWorkers["Push Workers"]
+    EmailWorkers["Email Workers"]
+    SMSWorkers["SMS Workers"]
+    InAppWorkers["In-App Workers"]
+    PushWorkers --> APNSFCM["APNS/FCM"]
+    EmailWorkers --> SendGrid["SendGrid"]
+    SMSWorkers --> Twilio["Twilio"]
+    InAppWorkers --> WSServers["WebSocket Servers"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        Notification System Architecture                          │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -49,6 +86,9 @@
 │                                                   └───────────┘                 │
 │                                                                                   │
 └─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

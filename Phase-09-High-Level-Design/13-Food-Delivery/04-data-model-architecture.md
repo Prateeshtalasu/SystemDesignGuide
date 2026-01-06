@@ -25,7 +25,45 @@ Before looking at diagrams, let's understand each component and why it exists.
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Customer App, Restaurant App, Partner App, Admin Dashboard"]
+    Clients --> CDN
+    Clients --> LoadBalancer
+    Clients --> WSGateway
+    CDN["CDN (CloudFront)<br/>Images, static assets"]
+    LoadBalancer["Load Balancer (AWS ALB)<br/>REST API traffic"]
+    WSGateway["WebSocket Gateway<br/>Real-time updates, Order tracking"]
+    LoadBalancer --> APIGateway
+    WSGateway --> APIGateway
+    APIGateway["API Gateway<br/>- Authentication<br/>- Rate Limiting<br/>- Request Routing"]
+    APIGateway --> RestaurantService
+    APIGateway --> OrderService
+    APIGateway --> DeliveryService
+    RestaurantService["Restaurant Service<br/>- Menu CRUD<br/>- Availability<br/>- Hours"]
+    OrderService["Order Service<br/>- Order creation<br/>- Status updates<br/>- Cancellation"]
+    DeliveryService["Delivery Service<br/>- Partner mgmt<br/>- Assignment<br/>- Tracking"]
+    RestaurantService --> SearchService
+    OrderService --> PaymentService
+    DeliveryService --> NotificationService
+    SearchService["Search Service<br/>- Restaurant search<br/>- Menu search<br/>- Recommendations"]
+    PaymentService["Payment Service<br/>- Authorization<br/>- Capture<br/>- Refunds"]
+    NotificationService["Notification Service<br/>- Push notifications<br/>- SMS<br/>- Email"]
+    SearchService --> DataLayer
+    PaymentService --> DataLayer
+    NotificationService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis Cluster<br/>- Sessions<br/>- Partner locs<br/>- Menu cache<br/>- Active orders"]
+        PostgreSQL["PostgreSQL<br/>- Orders<br/>- Payments<br/>- Users<br/>- Restaurants"]
+        Elasticsearch["Elasticsearch<br/>- Restaurant search index<br/>- Menu search"]
+        Kafka["Kafka<br/>- Events<br/>- Logs<br/>- Analytics"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                        │
 │           (Customer App, Restaurant App, Partner App, Admin Dashboard)           │
@@ -85,6 +123,9 @@ Before looking at diagrams, let's understand each component and why it exists.
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  └────────────┘  │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

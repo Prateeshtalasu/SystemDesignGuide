@@ -67,6 +67,7 @@ cache.put(key, value);
 ```
 
 Problems:
+
 - Cache hit rate drops to 0% after clearing
 - All subsequent requests hit the database
 - Database gets overwhelmed
@@ -82,6 +83,7 @@ if (cache.size() >= MAX_SIZE) {
 ```
 
 Problems:
+
 - Might remove frequently accessed data
 - No consideration of access patterns
 - Unpredictable performance
@@ -89,14 +91,16 @@ Problems:
 ### What Breaks Without Smart Eviction?
 
 1. **Thrashing**: Constantly evicting and re-caching the same items
+
    - User A's profile evicted, then immediately requested again
    - Cache becomes useless
 
 2. **Low Hit Rate**: Wrong items kept in cache
+
    - Keeping data that's never accessed again
    - Missing data that's accessed frequently
 
-3. **Inconsistent Performance**: 
+3. **Inconsistent Performance**:
    - Sometimes fast (cache hit), sometimes slow (cache miss)
    - Hard to predict and plan for
 
@@ -154,6 +158,7 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **Key insight**: Different strategies work better for different reading patterns:
+
 - If you tend to re-read recent books: **LRU** is best
 - If you have favorite books you read repeatedly: **LFU** is best
 - If you read books in order and rarely re-read: **FIFO** is fine
@@ -164,7 +169,29 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 
 ### Overview of Eviction Policies
 
+```mermaid
+flowchart TD
+    Policies["EVICTION POLICIES COMPARISON"]
+
+    P_FIFO["FIFO<br/>Evicts: Oldest added<br/>Best For: Sequential access<br/>Overhead: Low"]
+    P_LRU["LRU<br/>Evicts: Oldest accessed<br/>Best For: Temporal locality<br/>Overhead: Medium"]
+    P_LFU["LFU<br/>Evicts: Least accessed<br/>Best For: Frequency patterns<br/>Overhead: High"]
+    P_Random["Random<br/>Evicts: Random item<br/>Best For: Uniform access<br/>Overhead: Very Low"]
+    P_TTL["TTL<br/>Evicts: Expired items<br/>Best For: Time-sensitive data<br/>Overhead: Low"]
+    P_ARC["ARC<br/>Evicts: Adaptive<br/>Best For: Mixed workloads<br/>Overhead: High"]
+
+    Policies --> P_FIFO
+    Policies --> P_LRU
+    Policies --> P_LFU
+    Policies --> P_Random
+    Policies --> P_TTL
+    Policies --> P_ARC
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    EVICTION POLICIES COMPARISON                          │
 │                                                                          │
@@ -178,6 +205,8 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 │   ARC       │ Adaptive         │ Mixed workloads       │ High            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -217,11 +246,13 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **When FIFO Works Well**:
+
 - Data is accessed in order (like processing a stream)
 - Access patterns are uniform
 - Simplicity is more important than optimization
 
 **When FIFO Fails**:
+
 - Frequently accessed items might be evicted just because they're old
 - No consideration of actual usage patterns
 
@@ -268,11 +299,13 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **Why LRU Works**:
+
 - **Temporal Locality**: Recently accessed data is likely to be accessed again soon
 - Most real-world workloads exhibit this pattern
 - Good balance between effectiveness and complexity
 
 **When LRU Fails**:
+
 - **Scan Resistance**: A one-time scan of many items evicts frequently-used items
 - Example: Backup process reads all data once, evicting the hot cache
 
@@ -314,15 +347,18 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **Why LFU Works**:
+
 - Keeps truly popular items in cache
 - Resistant to scans (one-time access doesn't increase frequency much)
 
 **When LFU Fails**:
+
 - **Cache Pollution**: Old popular items stay forever even if no longer relevant
 - **Cold Start**: New items have low frequency, get evicted quickly
 - Example: Yesterday's trending topic stays cached, today's trending topic gets evicted
 
 **Solution: LFU with Aging**
+
 - Decay frequency counts over time
 - Or use a time window for frequency counting
 
@@ -355,6 +391,7 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **When Random Works**:
+
 - Access patterns are uniform
 - Overhead of tracking is too expensive
 - As an approximation of other policies
@@ -444,11 +481,13 @@ Imagine you have a small bookshelf that holds 10 books, but you own 100 books. Y
 ```
 
 **Why ARC is Powerful**:
+
 - Self-tuning: No need to choose between LRU and LFU
 - Scan-resistant: One-time accesses don't pollute T2
 - Adapts to changing workloads
 
 **Drawback**:
+
 - More complex implementation
 - Higher memory overhead (ghost entries)
 - Patented by IBM (check licensing)
@@ -462,6 +501,7 @@ Let's trace through different policies with the same access pattern.
 ### Scenario: Cache Size = 3, Access Pattern: A, B, C, A, D, A, E
 
 **FIFO**:
+
 ```
 Access A: Cache [A]           - Miss, add A
 Access B: Cache [A, B]        - Miss, add B
@@ -475,6 +515,7 @@ Hits: 1, Misses: 6, Hit Rate: 14%
 ```
 
 **LRU**:
+
 ```
 Access A: Cache [A]           - Miss, add A
 Access B: Cache [A, B]        - Miss, add B
@@ -488,6 +529,7 @@ Hits: 2, Misses: 5, Hit Rate: 29%
 ```
 
 **LFU**:
+
 ```
 Access A: Cache [A(1)]              - Miss, add A with count 1
 Access B: Cache [A(1), B(1)]        - Miss, add B with count 1
@@ -551,6 +593,7 @@ Cache<String, User> cache = Caffeine.newBuilder()
 ### Real-World Configuration Examples
 
 **Netflix's EVCache**:
+
 ```
 # Uses LRU with TTL
 maxmemory-policy: allkeys-lru
@@ -563,6 +606,7 @@ user_profile_ttl: 30m
 ```
 
 **Facebook's TAO Cache**:
+
 ```
 # Uses LRU with multiple cache tiers
 L1 (local): 1GB, LRU, 1 minute TTL
@@ -585,12 +629,12 @@ import java.util.Map;
 
 /**
  * LRU Cache using LinkedHashMap
- * 
+ *
  * LinkedHashMap with accessOrder=true maintains access order.
  * Override removeEldestEntry to evict when full.
  */
 public class LRUCache<K, V> extends LinkedHashMap<K, V> {
-    
+
     private final int capacity;
 
     /**
@@ -615,15 +659,15 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V> {
     // Usage example
     public static void main(String[] args) {
         LRUCache<String, String> cache = new LRUCache<>(3);
-        
+
         cache.put("A", "1");
         cache.put("B", "2");
         cache.put("C", "3");
         System.out.println(cache.keySet());  // [A, B, C]
-        
+
         cache.get("A");  // Access A, moves to end
         System.out.println(cache.keySet());  // [B, C, A]
-        
+
         cache.put("D", "4");  // Evicts B (least recently used)
         System.out.println(cache.keySet());  // [C, A, D]
     }
@@ -640,23 +684,23 @@ import java.util.*;
 
 /**
  * LFU Cache with O(1) operations
- * 
+ *
  * Uses:
  * - HashMap for key -> value
  * - HashMap for key -> frequency
  * - HashMap for frequency -> LinkedHashSet of keys (maintains insertion order for tie-breaking)
  */
 public class LFUCache<K, V> {
-    
+
     private final int capacity;
     private int minFrequency;
-    
+
     // Key -> Value
     private final Map<K, V> values;
-    
+
     // Key -> Frequency
     private final Map<K, Integer> frequencies;
-    
+
     // Frequency -> Keys with that frequency (LinkedHashSet for LRU tie-breaking)
     private final Map<Integer, LinkedHashSet<K>> frequencyBuckets;
 
@@ -675,10 +719,10 @@ public class LFUCache<K, V> {
         if (!values.containsKey(key)) {
             return null;
         }
-        
+
         // Update frequency
         updateFrequency(key);
-        
+
         return values.get(key);
     }
 
@@ -687,19 +731,19 @@ public class LFUCache<K, V> {
      */
     public void put(K key, V value) {
         if (capacity <= 0) return;
-        
+
         // If key exists, update value and frequency
         if (values.containsKey(key)) {
             values.put(key, value);
             updateFrequency(key);
             return;
         }
-        
+
         // If at capacity, evict
         if (values.size() >= capacity) {
             evict();
         }
-        
+
         // Add new entry with frequency 1
         values.put(key, value);
         frequencies.put(key, 1);
@@ -712,15 +756,15 @@ public class LFUCache<K, V> {
      */
     private void updateFrequency(K key) {
         int freq = frequencies.get(key);
-        
+
         // Remove from current frequency bucket
         frequencyBuckets.get(freq).remove(key);
-        
+
         // If this was the min frequency bucket and it's now empty, increment min
         if (freq == minFrequency && frequencyBuckets.get(freq).isEmpty()) {
             minFrequency++;
         }
-        
+
         // Add to new frequency bucket
         int newFreq = freq + 1;
         frequencies.put(key, newFreq);
@@ -733,10 +777,10 @@ public class LFUCache<K, V> {
      */
     private void evict() {
         LinkedHashSet<K> minFreqBucket = frequencyBuckets.get(minFrequency);
-        
+
         // Get first item (oldest in this frequency - LRU tie-breaker)
         K keyToEvict = minFreqBucket.iterator().next();
-        
+
         // Remove from all data structures
         minFreqBucket.remove(keyToEvict);
         values.remove(keyToEvict);
@@ -750,18 +794,18 @@ public class LFUCache<K, V> {
     // Usage example
     public static void main(String[] args) {
         LFUCache<String, String> cache = new LFUCache<>(3);
-        
+
         cache.put("A", "1");
         cache.put("B", "2");
         cache.put("C", "3");
-        
+
         cache.get("A");  // A: freq=2
         cache.get("A");  // A: freq=3
         cache.get("B");  // B: freq=2
-        
+
         // Frequencies: A=3, B=2, C=1
         cache.put("D", "4");  // Evicts C (lowest frequency)
-        
+
         System.out.println(cache.get("C"));  // null (evicted)
         System.out.println(cache.get("A"));  // "1" (still there)
     }
@@ -784,7 +828,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Production-ready caching with Caffeine
- * 
+ *
  * Caffeine uses Window TinyLFU algorithm:
  * - Combines recency (LRU) and frequency (LFU)
  * - Admission filter prevents cache pollution
@@ -903,7 +947,7 @@ import io.lettuce.core.resource.ClientResources;
 
 /**
  * Redis configuration with eviction policy settings
- * 
+ *
  * Note: Eviction policy is set in redis.conf, not in Java client.
  * This shows how to configure the connection.
  */
@@ -912,12 +956,12 @@ public class RedisEvictionConfig {
 
     /**
      * Redis configuration
-     * 
+     *
      * In redis.conf or via CONFIG SET:
-     * 
+     *
      * maxmemory 4gb
      * maxmemory-policy allkeys-lru
-     * 
+     *
      * For LFU (Redis 4.0+):
      * maxmemory-policy allkeys-lfu
      * lfu-log-factor 10
@@ -928,7 +972,7 @@ public class RedisEvictionConfig {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
         config.setHostName("localhost");
         config.setPort(6379);
-        
+
         return new LettuceConnectionFactory(config);
     }
 
@@ -950,7 +994,7 @@ public class RedisEvictionConfig {
 maxmemory 4gb
 
 # Eviction policy
-# Options: noeviction, allkeys-lru, volatile-lru, allkeys-lfu, 
+# Options: noeviction, allkeys-lru, volatile-lru, allkeys-lfu,
 #          volatile-lfu, allkeys-random, volatile-random, volatile-ttl
 maxmemory-policy allkeys-lru
 
@@ -970,14 +1014,14 @@ maxmemory-samples 5
 
 ### Policy Comparison
 
-| Policy | Hit Rate | Overhead | Scan Resistant | Adapts to Workload |
-|--------|----------|----------|----------------|-------------------|
-| FIFO | Low | Very Low | No | No |
-| LRU | Good | Low | No | Somewhat |
-| LFU | Good | Medium | Yes | No |
-| Random | Medium | Very Low | Somewhat | No |
-| ARC | Excellent | High | Yes | Yes |
-| W-TinyLFU | Excellent | Medium | Yes | Yes |
+| Policy    | Hit Rate  | Overhead | Scan Resistant | Adapts to Workload |
+| --------- | --------- | -------- | -------------- | ------------------ |
+| FIFO      | Low       | Very Low | No             | No                 |
+| LRU       | Good      | Low      | No             | Somewhat           |
+| LFU       | Good      | Medium   | Yes            | No                 |
+| Random    | Medium    | Very Low | Somewhat       | No                 |
+| ARC       | Excellent | High     | Yes            | Yes                |
+| W-TinyLFU | Excellent | Medium   | Yes            | Yes                |
 
 ### Common Mistakes
 
@@ -1010,7 +1054,7 @@ Policy: LRU
 
 Problem: Backup evicts all hot data!
 
-Solution: 
+Solution:
 - Use LFU (one-time access doesn't increase frequency)
 - Or use ARC (adapts automatically)
 - Or exclude backup from cache
@@ -1042,21 +1086,25 @@ if (cache.stats().hitRate() < 0.8) {
 ## 8️⃣ When NOT to Use Each Policy
 
 ### FIFO: Don't Use When
+
 - Items are accessed multiple times
 - Access patterns have temporal locality
 - Cache hit rate matters
 
 ### LRU: Don't Use When
+
 - Workload has sequential scans
 - Frequency matters more than recency
 - Memory overhead is critical
 
 ### LFU: Don't Use When
+
 - Access patterns change over time (old popular items stay forever)
 - New items need fair chance
 - Memory overhead is critical
 
 ### Random: Don't Use When
+
 - Access patterns are skewed (some items much more popular)
 - Predictable performance is needed
 - Hit rate is critical
@@ -1098,14 +1146,14 @@ if (cache.stats().hitRate() < 0.8) {
 
 ### Real-World Choices
 
-| Use Case | Recommended Policy | Why |
-|----------|-------------------|-----|
-| Web session cache | LRU | Recent sessions likely active |
-| Product catalog | LFU or W-TinyLFU | Popular products accessed repeatedly |
-| API response cache | LRU + TTL | Fresh data matters |
-| DNS cache | LRU | Recent lookups likely repeated |
-| Database query cache | W-TinyLFU | Mixed patterns |
-| CDN edge cache | LRU | Temporal locality strong |
+| Use Case             | Recommended Policy | Why                                  |
+| -------------------- | ------------------ | ------------------------------------ |
+| Web session cache    | LRU                | Recent sessions likely active        |
+| Product catalog      | LFU or W-TinyLFU   | Popular products accessed repeatedly |
+| API response cache   | LRU + TTL          | Fresh data matters                   |
+| DNS cache            | LRU                | Recent lookups likely repeated       |
+| Database query cache | W-TinyLFU          | Mixed patterns                       |
+| CDN edge cache       | LRU                | Temporal locality strong             |
 
 ---
 
@@ -1138,26 +1186,31 @@ A: Cache pollution occurs when items unlikely to be accessed again occupy cache 
 A: I'd design a multi-tier approach:
 
 **Tier 1 - Static Assets (images, JS, CSS)**:
+
 - Policy: LRU with long TTL (1 week)
 - Reasoning: These rarely change and have high temporal locality
 - Size: 70% of cache
 
 **Tier 2 - API Responses (product data, search results)**:
+
 - Policy: W-TinyLFU with medium TTL (5 minutes)
 - Reasoning: Mix of popular and long-tail queries
 - Size: 25% of cache
 
 **Tier 3 - Personalized Content (user dashboards)**:
+
 - Policy: LRU with short TTL (1 minute)
 - Reasoning: Each user's data is unique, recent access matters
 - Size: 5% of cache
 
 **Admission Control**:
+
 - Use Bloom filter to track "seen" items
 - Only admit to main cache on second access
 - Prevents scan pollution
 
 **Monitoring**:
+
 - Track hit rate per tier
 - Adjust tier sizes based on observed patterns
 - Alert if hit rate drops below threshold
@@ -1167,4 +1220,3 @@ A: I'd design a multi-tier approach:
 ## 1️⃣1️⃣ One Clean Mental Summary
 
 Cache eviction policies determine which items to remove when the cache is full. **FIFO** removes the oldest item, simple but ignores access patterns. **LRU** removes the least recently accessed item, good for temporal locality. **LFU** removes the least frequently accessed item, keeps popular items but can be polluted by old popular items. **Random** is surprisingly effective with low overhead. **ARC** and **W-TinyLFU** adapt automatically between recency and frequency, providing near-optimal hit rates. Choose based on your access patterns: LRU for temporal locality, LFU for frequency patterns, W-TinyLFU (Caffeine) for mixed workloads. Always monitor hit rates and adjust.
-

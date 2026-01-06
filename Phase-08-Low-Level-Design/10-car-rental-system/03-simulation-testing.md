@@ -36,6 +36,16 @@ Initial State:
 - Daily rate: $50, One-way fee: $75
 
 Step 1: Pickup at Location A
+
+```mermaid
+flowchart TD
+    A["pickupVehicle(RES-045)<br/>- Verify reservation: CONFIRMED<br/>- Record start mileage: 25,000<br/>- Vehicle status: AVAILABLE → RENTED<br/>- Rental start time: Jan 10, 10:00 AM"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ pickupVehicle(RES-045)                                        │
 │   - Verify reservation: CONFIRMED                            │
@@ -43,8 +53,21 @@ Step 1: Pickup at Location A
 │   - Vehicle status: AVAILABLE → RENTED                       │
 │   - Rental start time: Jan 10, 10:00 AM                      │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Customer returns 1 day late at Location B
+
+```mermaid
+flowchart TD
+    A["returnVehicle(RES-045, Location B, Jan 13 2:00 PM)<br/><br/>Expected return: Jan 12, 10:00 AM<br/>Actual return: Jan 13, 2:00 PM (28 hours late)<br/><br/>Charge Calculation:<br/>  Base rental: 2 days × $50 = $100<br/>  Late fee: 1 extra day × $50 × 1.5 = $75<br/>  One-way fee: $75<br/>  Total: $100 + $75 + $75 = $250<br/><br/>Vehicle status: RENTED → AVAILABLE<br/>Vehicle location: A → B (Boston)"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ returnVehicle(RES-045, Location B, Jan 13 2:00 PM)           │
 │                                                               │
@@ -62,6 +85,9 @@ Step 2: Customer returns 1 day late at Location B
 └───────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ### Scenario 3: Concurrent Booking Race Condition (Failure Prevention)
@@ -72,12 +98,48 @@ Initial State:
 - Two customers try to book same vehicle for overlapping dates
 
 Concurrent Requests:
+
+```mermaid
+sequenceDiagram
+    participant CX as Customer-X
+    participant CY as Customer-Y
+    participant V as SUV-001
+    
+    Note over CX,V: T0: Customer-X: reserve(SUV-001, Jan 15-17)
+    Note over CY,V: T0: Customer-Y: reserve(SUV-001, Jan 16-18)
+```
+
+With Synchronized Vehicle Booking:
+
+```mermaid
+sequenceDiagram
+    participant T1 as Thread-1 (Customer-X)
+    participant V as SUV-001
+    participant T2 as Thread-2 (Customer-Y)
+    
+    T1->>V: synchronized(SUV-001) { acquire lock }
+    T1->>V: Check availability Jan 15-17: AVAILABLE
+    T1->>V: Create reservation RES-100
+    T1->>V: Mark SUV-001 RESERVED for Jan 15-17
+    T1->>V: Release lock
+    T1->>T1: Result: SUCCESS
+    
+    T2->>V: synchronized(SUV-001) { waiting for lock... }
+    T2->>V: Lock acquired
+    T2->>V: Check availability Jan 16-18:<br/>Conflict with Jan 15-17 reservation
+    T2->>V: Release lock
+    T2->>T2: Result: VEHICLE_NOT_AVAILABLE<br/>Offer: Search for alternative vehicles
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ T0: Customer-X: reserve(SUV-001, Jan 15-17)                  │
 │ T0: Customer-Y: reserve(SUV-001, Jan 16-18)                  │
 └───────────────────────────────────────────────────────────────┘
 
-With Synchronized Vehicle Booking:
 ┌───────────────────────────────────────────────────────────────┐
 │ Thread-1 (Customer-X):                                        │
 │   - synchronized(SUV-001) { acquire lock }                   │
@@ -96,6 +158,9 @@ With Synchronized Vehicle Booking:
 │   - Result: VEHICLE_NOT_AVAILABLE                            │
 │   - Offer: Search for alternative vehicles                   │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result: No double-booking, Customer-Y offered alternatives
 ```
@@ -110,6 +175,16 @@ Initial State:
 - Vehicle condition at pickup: EXCELLENT, no damage recorded
 
 Step 1: Return with visible damage
+
+```mermaid
+flowchart TD
+    A["returnVehicle(RES-078, Location A)<br/><br/>Staff inspection reveals:<br/>  - Rear bumper dent (not present at pickup)<br/>  - Left mirror scratched<br/><br/>Damage Assessment:<br/>  - recordDamage(RES-078, DamageType.BODY_DAMAGE, 'Rear...')<br/>  - Estimated repair cost: $450<br/><br/>Updated Charges:<br/>  Base rental: 2 days × $45 = $90<br/>  Damage charge: $450<br/>  Total: $540<br/><br/>Vehicle status: RENTED → MAINTENANCE<br/>(Vehicle unavailable until repaired)<br/><br/>Customer notification sent<br/>Damage dispute process initiated"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ returnVehicle(RES-078, Location A)                           │
 │                                                               │
@@ -132,6 +207,9 @@ Step 1: Return with visible damage
 │ Customer notification sent                                    │
 │ Damage dispute process initiated                             │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Post-Processing:
 - Vehicle SEDAN-015 moves to MAINTENANCE status

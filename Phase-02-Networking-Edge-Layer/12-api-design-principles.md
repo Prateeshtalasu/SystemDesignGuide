@@ -29,7 +29,31 @@ APIs are contracts between systems. A poorly designed API causes:
 
 ### What Bad APIs Look Like
 
+```mermaid
+flowchart TD
+    Bad["Bad API Design Examples"]
+    
+    Inconsistent["Inconsistent Naming:<br/>GET /getUsers<br/>GET /fetch_orders<br/>GET /ProductList<br/>GET /retrieve-customers"]
+    
+    ActionURL["Action in URL (not RESTful):<br/>POST /createUser<br/>POST /deleteUser/123<br/>GET /getUserById?id=123"]
+    
+    InconsistentResp["Inconsistent Response Structure:<br/>GET /users/123 → {'user': {'id': 123, 'name': 'Alice'}}<br/>GET /orders/456 → {'id': 456, 'total': 100} (no wrapper)<br/>GET /products/789 → [{'product_id': 789}] (array for single item?)"]
+    
+    UnclearError["Unclear Error Responses:<br/>{'error': true}<br/>{'message': 'Something went wrong'}<br/>{'code': -1}"]
+    
+    NoVersioning["No Versioning:<br/>Breaking changes affect all clients immediately"]
+    
+    Bad --> Inconsistent
+    Bad --> ActionURL
+    Bad --> InconsistentResp
+    Bad --> UnclearError
+    Bad --> NoVersioning
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    BAD API DESIGN EXAMPLES                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -58,6 +82,7 @@ Unclear Error Responses:
 No Versioning:
   Breaking changes affect all clients immediately
 ```
+</details>
 
 ### Real Examples of the Problem
 
@@ -83,7 +108,39 @@ REST (Representational State Transfer) is an architectural style with these cons
 
 ### Resource-Oriented Design
 
+```mermaid
+flowchart TD
+    subgraph Resources["Resources are NOUNS, not verbs"]
+        R1["✓ /users (collection of users)"]
+        R2["✓ /users/123 (specific user)"]
+        R3["✓ /users/123/orders (user's orders)"]
+        R4["✗ /getUser"]
+        R5["✗ /createUser"]
+        R6["✗ /deleteUserById"]
+    end
+    
+    subgraph Methods["HTTP Methods are VERBS"]
+        M1["GET → Read (retrieve resource)"]
+        M2["POST → Create (new resource)"]
+        M3["PUT → Update (replace entire resource)"]
+        M4["PATCH → Update (partial modification)"]
+        M5["DELETE → Delete (remove resource)"]
+    end
+    
+    subgraph Mapping["Mapping Actions to Methods"]
+        Map1["Create user: POST /users"]
+        Map2["List users: GET /users"]
+        Map3["Get user: GET /users/123"]
+        Map4["Update user: PUT /users/123"]
+        Map5["Partial update: PATCH /users/123"]
+        Map6["Delete user: DELETE /users/123"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    RESOURCE-ORIENTED DESIGN                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -114,10 +171,29 @@ Update user:    PUT    /users/123
 Partial update: PATCH  /users/123
 Delete user:    DELETE /users/123
 ```
+</details>
 
 ### URL Naming Conventions
 
+```mermaid
+flowchart TD
+    BestPractices["URL Naming Best Practices"]
+    
+    P1["1. Use nouns, not verbs:<br/>✓ GET /articles<br/>✗ GET /getArticles"]
+    P2["2. Use plural nouns for collections:<br/>✓ /users, /orders, /products<br/>✗ /user, /order, /product"]
+    P3["3. Use lowercase with hyphens:<br/>✓ /user-profiles<br/>✗ /userProfiles, /user_profiles, /UserProfiles"]
+    P4["4. Nest for relationships:<br/>✓ /users/123/orders (orders belonging to user 123)<br/>✓ /orders/456/items (items in order 456)"]
+    P5["5. Limit nesting depth (max 2-3 levels):<br/>✓ /users/123/orders<br/>✗ /users/123/orders/456/items/789/reviews"]
+    P6["6. Use query parameters for filtering:<br/>✓ /orders?status=pending&user_id=123<br/>✗ /orders/pending/user/123"]
+    P7["7. Avoid file extensions:<br/>✓ /users/123 (use Accept header for format)<br/>✗ /users/123.json"]
+    
+    BestPractices --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    URL NAMING BEST PRACTICES                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -150,10 +226,53 @@ Delete user:    DELETE /users/123
    ✓ /users/123 (use Accept header for format)
    ✗ /users/123.json
 ```
+</details>
 
 ### Complete CRUD Example
 
+```mermaid
+flowchart TD
+    API["E-Commerce API Design"]
+    
+    subgraph Products["Products"]
+        P1["GET /products<br/>List all products"]
+        P2["GET /products?category=electronics&min_price=100"]
+        P3["GET /products/123<br/>Get product 123"]
+        P4["POST /products<br/>Create product"]
+        P5["PUT /products/123<br/>Replace product 123"]
+        P6["PATCH /products/123<br/>Update product 123 partially"]
+        P7["DELETE /products/123<br/>Delete product 123"]
+    end
+    
+    subgraph Orders["Orders"]
+        O1["GET /orders<br/>List orders (for current user)"]
+        O2["GET /orders?status=pending<br/>Filter by status"]
+        O3["GET /orders/456<br/>Get order 456"]
+        O4["POST /orders<br/>Create order"]
+        O5["PATCH /orders/456<br/>Update order (e.g., cancel)"]
+        O6["DELETE /orders/456<br/>Delete order (if allowed)"]
+    end
+    
+    subgraph Items["Order Items (nested resource)"]
+        I1["GET /orders/456/items<br/>List items in order 456"]
+        I2["POST /orders/456/items<br/>Add item to order 456"]
+        I3["DELETE /orders/456/items/789<br/>Remove item from order"]
+    end
+    
+    subgraph UserOrders["User's Orders (relationship)"]
+        U1["GET /users/123/orders<br/>List orders for user 123"]
+    end
+    
+    API --> Products
+    API --> Orders
+    API --> Items
+    API --> UserOrders
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    E-COMMERCE API DESIGN                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -187,6 +306,7 @@ User's Orders (relationship):
 ─────────────────────────────────────────────────────────────────────────────
 GET    /users/123/orders            List orders for user 123
 ```
+</details>
 
 ---
 
@@ -194,7 +314,26 @@ GET    /users/123/orders            List orders for user 123
 
 ### Status Code Categories
 
+```mermaid
+flowchart TD
+    Categories["HTTP Status Code Categories"]
+    Info["1xx - Informational<br/>(rarely used in REST)"]
+    Success["2xx - Success"]
+    Redirect["3xx - Redirection"]
+    ClientError["4xx - Client Error<br/>(client did something wrong)"]
+    ServerError["5xx - Server Error<br/>(server did something wrong)"]
+    
+    Categories --> Info
+    Categories --> Success
+    Categories --> Redirect
+    Categories --> ClientError
+    Categories --> ServerError
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HTTP STATUS CODE CATEGORIES                               │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -205,6 +344,7 @@ GET    /users/123/orders            List orders for user 123
 4xx - Client Error (client did something wrong)
 5xx - Server Error (server did something wrong)
 ```
+</details>
 
 ### Complete Status Code Guide
 
@@ -312,7 +452,34 @@ GET    /users/123/orders            List orders for user 123
 
 ### Status Code Decision Tree
 
+```mermaid
+flowchart TD
+    Start["Request successful?"]
+    Yes["Yes"]
+    No["No"]
+    
+    Create["Creating resource?<br/>→ 201 Created"]
+    Delete["Deleting resource?<br/>→ 204 No Content"]
+    Other["Other<br/>→ 200 OK"]
+    
+    ClientFault["Client's fault?"]
+    NotAuth["Not authenticated?<br/>→ 401 Unauthorized"]
+    NotAuthorized["Not authorized?<br/>→ 403 Forbidden"]
+    
+    Start -->|Yes| Yes
+    Start -->|No| No
+    Yes --> Create
+    Yes --> Delete
+    Yes --> Other
+    No --> ClientFault
+    ClientFault --> NotAuth
+    ClientFault --> NotAuthorized
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    STATUS CODE DECISION TREE                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -327,16 +494,29 @@ Request successful?
     ├── Client's fault?
     │   ├── Not authenticated? → 401 Unauthorized
     │   ├── Not authorized? → 403 Forbidden
-    │   ├── Resource not found? → 404 Not Found
-    │   ├── Invalid request format? → 400 Bad Request
-    │   ├── Validation error? → 422 Unprocessable Entity
-    │   ├── Rate limited? → 429 Too Many Requests
-    │   └── Conflict? → 409 Conflict
-    │
-    └── Server's fault?
-        ├── Temporary? → 503 Service Unavailable
-        └── Permanent? → 500 Internal Server Error
 ```
+</details>
+    NotFound["Resource not found?<br/>→ 404 Not Found"]
+    InvalidFormat["Invalid request format?<br/>→ 400 Bad Request"]
+    ValidationError["Validation error?<br/>→ 422 Unprocessable Entity"]
+    RateLimited["Rate limited?<br/>→ 429 Too Many Requests"]
+    Conflict["Conflict?<br/>→ 409 Conflict"]
+    
+    ServerFault["Server's fault?"]
+    Temporary["Temporary?<br/>→ 503 Service Unavailable"]
+    Permanent["Permanent?<br/>→ 500 Internal Server Error"]
+    
+    ClientFault --> NotFound
+    ClientFault --> InvalidFormat
+    ClientFault --> ValidationError
+    ClientFault --> RateLimited
+    ClientFault --> Conflict
+    
+    No --> ServerFault
+    ServerFault --> Temporary
+    ServerFault --> Permanent
+```
+</details>
 
 ---
 
@@ -484,7 +664,28 @@ APIs evolve. Breaking changes are sometimes necessary. Versioning lets you:
 
 ### Versioning Strategies
 
+```mermaid
+flowchart TD
+    Strategies["API Versioning Strategies"]
+    
+    URLPath["1. URL Path Versioning (Most Common)<br/>https://api.example.com/v1/users<br/>https://api.example.com/v2/users<br/>Pros: Clear, visible, easy to implement<br/>Cons: Changes URL, not truly RESTful<br/>Used by: Twitter, Stripe, GitHub"]
+    
+    QueryParam["2. Query Parameter Versioning<br/>https://api.example.com/users?version=1<br/>https://api.example.com/users?api-version=2024-01-01<br/>Pros: URL stays same<br/>Cons: Easy to forget, optional parameter issues<br/>Used by: Google, Amazon (some APIs)"]
+    
+    Header["3. Header Versioning<br/>GET /users<br/>Accept: application/vnd.example.v1+json<br/>Or custom header: X-API-Version: 1<br/>Pros: Clean URLs, truly RESTful<br/>Cons: Hidden, harder to test in browser<br/>Used by: GitHub (Accept header)"]
+    
+    ContentNeg["4. Content Negotiation<br/>Accept: application/vnd.example.user.v1+json<br/>Pros: Most RESTful<br/>Cons: Complex, not widely understood"]
+    
+    Strategies --> URLPath
+    Strategies --> QueryParam
+    Strategies --> Header
+    Strategies --> ContentNeg
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    API VERSIONING STRATEGIES                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -526,10 +727,27 @@ APIs evolve. Breaking changes are sometimes necessary. Versioning lets you:
    Pros: Most RESTful
    Cons: Complex, not widely understood
 ```
+</details>
 
 ### Version Lifecycle
 
+```mermaid
+gantt
+    title API Version Lifecycle
+    dateFormat YYYY-MM
+    section v1
+    Active Development    :2024-01, 5M
+    Deprecated            :2024-06, 6M
+    Sunset Warning        :2024-12, 3M
+    Retired (410 Gone)    :2025-03, 0M
+    section v2
+    Current               :2024-06, 9M
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    API VERSION LIFECYCLE                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -562,6 +780,7 @@ Communication:
 5. Provide sunset date
 6. Return 410 Gone after retirement
 ```
+</details>
 
 ### Implementation Example
 
@@ -626,7 +845,25 @@ Returning thousands of records in one response:
 
 ### Pagination Strategies
 
+```mermaid
+flowchart TD
+    Offset["Offset-Based Pagination"]
+    Request["Request:<br/>GET /users?limit=20&offset=40"]
+    Response["Response:<br/>{<br/>  'data': [...],<br/>  'pagination': {<br/>    'total': 1000,<br/>    'limit': 20,<br/>    'offset': 40,<br/>    'has_more': true<br/>  }<br/>}"]
+    Pros["Pros:<br/>- Simple to implement<br/>- Can jump to any page<br/>- Total count available"]
+    Cons["Cons:<br/>- Slow for large offsets (OFFSET 10000 scans 10000 rows)<br/>- Inconsistent if data changes (items shift)<br/>- Can miss or duplicate items"]
+    SQL["SQL: SELECT * FROM users LIMIT 20 OFFSET 40"]
+    
+    Offset --> Request --> Response
+    Offset --> Pros
+    Offset --> Cons
+    Offset --> SQL
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    OFFSET-BASED PAGINATION                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -656,8 +893,29 @@ Cons:
 - Can miss or duplicate items
 
 SQL: SELECT * FROM users LIMIT 20 OFFSET 40
+```
+</details>
 
 
+```mermaid
+flowchart TD
+    Cursor["Cursor-Based Pagination"]
+    Request2["Request:<br/>GET /users?limit=20&cursor=eyJpZCI6MTIzfQ==<br/><br/>Cursor is encoded: {'id': 123} → base64"]
+    Response2["Response:<br/>{<br/>  'data': [...],<br/>  'pagination': {<br/>    'next_cursor': 'eyJpZCI6MTQzfQ==',<br/>    'has_more': true<br/>  }<br/>}"]
+    Pros2["Pros:<br/>- Consistent results (no duplicates/misses)<br/>- Fast for any page (uses index)<br/>- Scales to millions of records"]
+    Cons2["Cons:<br/>- Can't jump to arbitrary page<br/>- No total count (expensive to compute)<br/>- Cursor can become invalid"]
+    SQL2["SQL: SELECT * FROM users WHERE id > 123 ORDER BY id LIMIT 20"]
+    
+    Cursor --> Request2 --> Response2
+    Cursor --> Pros2
+    Cursor --> Cons2
+    Cursor --> SQL2
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CURSOR-BASED PAGINATION                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -688,6 +946,7 @@ Cons:
 
 SQL: SELECT * FROM users WHERE id > 123 ORDER BY id LIMIT 20
 ```
+</details>
 
 ### Cursor Implementation
 
@@ -755,7 +1014,31 @@ private Long decodeCursor(String cursor) {
 
 ### Filtering
 
+```mermaid
+flowchart TD
+    Filtering["Filtering Patterns"]
+    
+    Simple["Simple equality:<br/>GET /products?category=electronics&brand=apple"]
+    
+    Comparison["Comparison operators:<br/>GET /products?price[gte]=100&price[lte]=500<br/>GET /products?price_min=100&price_max=500<br/>GET /orders?created_after=2024-01-01"]
+    
+    Multiple["Multiple values (OR):<br/>GET /products?category=electronics,clothing<br/>GET /products?category[]=electronics&category[]=clothing"]
+    
+    Search["Search:<br/>GET /products?q=iphone<br/>GET /products?search=iphone+pro"]
+    
+    Complex["Complex filters (JSON):<br/>GET /products?filter={'category':'electronics','price':{'$gte':100}}"]
+    
+    Filtering --> Simple
+    Filtering --> Comparison
+    Filtering --> Multiple
+    Filtering --> Search
+    Filtering --> Complex
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    FILTERING PATTERNS                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -779,10 +1062,29 @@ Search:
 Complex filters (JSON):
   GET /products?filter={"category":"electronics","price":{"$gte":100}}
 ```
+</details>
 
 ### Sorting
 
+```mermaid
+flowchart TD
+    Sorting["Sorting Patterns"]
+    
+    Single["Single field:<br/>GET /products?sort=price (ascending)<br/>GET /products?sort=-price (descending)<br/>GET /products?sort=price&order=desc"]
+    
+    Multiple2["Multiple fields:<br/>GET /products?sort=category,-price<br/>GET /products?sort[]=category&sort[]=-price"]
+    
+    Explicit["Explicit direction:<br/>GET /products?sort=price:asc,created_at:desc"]
+    
+    Sorting --> Single
+    Sorting --> Multiple2
+    Sorting --> Explicit
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SORTING PATTERNS                                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -799,10 +1101,29 @@ Multiple fields:
 Explicit direction:
   GET /products?sort=price:asc,created_at:desc
 ```
+</details>
 
 ### Field Selection (Sparse Fieldsets)
 
+```mermaid
+flowchart TD
+    FieldSelection["Field Selection"]
+    
+    Select["Select specific fields:<br/>GET /users?fields=id,name,email<br/>GET /users?fields[user]=id,name&fields[posts]=title"]
+    
+    Without["Response without field selection:<br/>{<br/>  'id': '123',<br/>  'name': 'Alice',<br/>  'email': 'alice@example.com',<br/>  'address': {...},<br/>  'preferences': {...},<br/>  'created_at': '...'<br/>}"]
+    
+    With["Response with fields=id,name,email:<br/>{<br/>  'id': '123',<br/>  'name': 'Alice',<br/>  'email': 'alice@example.com'<br/>}"]
+    
+    FieldSelection --> Select
+    Select --> Without
+    Select --> With
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    FIELD SELECTION                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -828,6 +1149,7 @@ Response with fields=id,name,email:
   "email": "alice@example.com"
 }
 ```
+</details>
 
 ### Implementation
 
@@ -982,7 +1304,28 @@ public class OrderController {
 
 ### Authentication
 
+```mermaid
+flowchart TD
+    Auth["API Authentication Methods"]
+    
+    APIKey["1. API Keys (Simple, for server-to-server):<br/>X-API-Key: sk_live_abc123"]
+    
+    Bearer["2. Bearer Tokens (JWT, OAuth):<br/>Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."]
+    
+    Basic["3. Basic Auth (Legacy, over HTTPS only):<br/>Authorization: Basic base64(username:password)"]
+    
+    OAuth["4. OAuth 2.0 (Third-party access):<br/>Authorization: Bearer access_token"]
+    
+    Auth --> APIKey
+    Auth --> Bearer
+    Auth --> Basic
+    Auth --> OAuth
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    API AUTHENTICATION METHODS                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -999,6 +1342,7 @@ public class OrderController {
 4. OAuth 2.0 (Third-party access):
    Authorization: Bearer access_token
 ```
+</details>
 
 ### Security Headers
 

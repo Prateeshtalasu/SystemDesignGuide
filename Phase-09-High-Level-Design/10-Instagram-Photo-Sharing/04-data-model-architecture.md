@@ -271,7 +271,64 @@ CREATE INDEX idx_post_hashtags_hashtag ON post_hashtags(hashtag_id);
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string user_id UK
+        string username
+        int follower_count
+        int following_count
+        int post_count
+    }
+    posts {
+        int id PK
+        int user_id FK
+        string post_id
+        string image_urls
+        text caption
+        int like_count
+    }
+    follows {
+        int follower_id FK
+        int following_id FK
+        timestamp created_at
+    }
+    likes {
+        int user_id FK
+        int post_id FK
+        timestamp created_at
+    }
+    comments {
+        int id PK
+        int post_id FK
+        int user_id FK
+        int parent_id FK
+        string text
+    }
+    
+    users ||--o{ posts : "creates"
+    users ||--o{ follows : "follower"
+    users ||--o{ follows : "following"
+    posts ||--o{ likes : "has"
+    posts ||--o{ comments : "has"
+    users ||--o{ likes : "likes"
+    users ||--o{ comments : "writes"
 ```
+
+**Cassandra:**
+- `stories`: (user_id, story_id) → story data
+- `story_views`: (story_id, viewer_id) → viewed_at
+
+**Redis Cache:**
+- `feed:{user_id}` → Sorted Set of post_ids
+- `stories:{user_id}` → Sorted Set of story owners
+- `user:{user_id}` → Hash of user data
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐       ┌─────────────────────┐
 │       users         │       │       posts         │
 ├─────────────────────┤       ├─────────────────────┤
@@ -317,6 +374,9 @@ CREATE INDEX idx_post_hashtags_hashtag ON post_hashtags(hashtag_id);
 │ stories:{user_id}     → Sorted Set of story owners  │
 │ user:{user_id}        → Hash of user data           │
 └─────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

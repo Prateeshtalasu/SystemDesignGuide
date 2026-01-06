@@ -53,7 +53,27 @@ Access pattern:
 
 ### B-Tree Limitations for Write-Heavy Workloads
 
+```mermaid
+flowchart TD
+    Insert["Inserting a single row"]
+    
+    Step1["1. Read leaf page from disk<br/>(random I/O)"]
+    Step2["2. Modify page in memory"]
+    Step3["3. Write page back to disk<br/>(random I/O)"]
+    Step4["4. Update parent pages if needed<br/>(more random I/O)"]
+    Step5["5. Update indexes<br/>(more random I/O per index)"]
+    
+    Result["Result: 1 logical write = 5-20 physical I/O operations"]
+    
+    Problems["For write-heavy workloads:<br/>- Disk becomes bottleneck<br/>- Random I/O is slow<br/>- SSD wear increases"]
+    
+    Insert --> Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Result --> Problems
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              B-TREE WRITE AMPLIFICATION                      │
 │                                                              │
@@ -74,6 +94,7 @@ Access pattern:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples
 
@@ -91,7 +112,24 @@ Access pattern:
 
 **B-Tree = Organized Library**
 
+```mermaid
+flowchart TD
+    Library["ORGANIZED LIBRARY<br/>Books sorted on shelves by call number"]
+    
+    Step1_2["1. Find the right shelf<br/>(navigate tree)"]
+    Step2_2["2. Make room<br/>(shift existing books)"]
+    Step3_2["3. Insert book in correct position"]
+    Step4_2["4. Update catalog cards"]
+    
+    Library --> Step1_2 --> Step2_2 --> Step3_2 --> Step4_2
+    
+    Tradeoff["Fast to find any book (O(log n))<br/>Slow to add books (must maintain order)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   ORGANIZED LIBRARY                          │
 │                                                              │
@@ -108,10 +146,37 @@ Access pattern:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **LSM Tree = Library with Inbox System**
 
+```mermaid
+flowchart TD
+    NewBooks["New books go to inbox (fast!)"]
+    
+    subgraph Inbox["INBOX (unsorted)"]
+        BookZ["Book Z"]
+        BookA["Book A"]
+        BookM["Book M"]
+    end
+    
+    SortedInbox["Sorted Inbox<br/>A, M, Z"]
+    MainShelves["Main Shelves<br/>B, C, D, E, ..."]
+    
+    Merged["Merged Shelves:<br/>A, B, C, D, E, ..., Z"]
+    
+    NewBooks --> Inbox
+    Inbox --> SortedInbox
+    SortedInbox --> Merged
+    MainShelves --> Merged
+    
+    Benefits["Fast to add books (just drop in inbox)<br/>Finding books: Check inbox first, then shelves"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 LIBRARY WITH INBOX                           │
 │                                                              │
@@ -138,6 +203,7 @@ Access pattern:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -147,7 +213,36 @@ Access pattern:
 
 **Core Idea**: Convert random writes to sequential writes by buffering in memory and periodically flushing to disk.
 
+```mermaid
+flowchart TD
+    subgraph Memory["MEMORY (fast)"]
+        MemTable["MemTable (sorted in-memory structure)<br/>- Red-black tree or skip list<br/>- All writes go here first<br/>- Sorted by key"]
+    end
+    
+    subgraph Level0["Level 0: Recent SSTables<br/>(unsorted between files)"]
+        SST1["SST 1"]
+        SST2["SST 2"]
+        SST3["SST 3"]
+    end
+    
+    subgraph Level1["Level 1: Merged SSTables<br/>(sorted, non-overlapping)"]
+        SST_AM["SST A-M"]
+        SST_NZ["SST N-Z"]
+    end
+    
+    subgraph Level2["Level 2: Larger, more merged SSTables"]
+        More["..."]
+    end
+    
+    MemTable -->|"When full, flush to disk"| Level0
+    Level0 -->|"Compaction merges files"| Level1
+    Level1 --> Level2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    LSM TREE STRUCTURE                        │
 │                                                              │
@@ -186,10 +281,30 @@ Access pattern:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **SSTable (Sorted String Table)**:
 
+```mermaid
+flowchart TD
+    subgraph SSTable["SSTABLE STRUCTURE"]
+        Block1["Data Block 1:<br/>key1→val1, key2→val2, key3→val3"]
+        Block2["Data Block 2:<br/>key4→val4, key5→val5, key6→val6"]
+        MoreBlocks["..."]
+        Index["Index Block:<br/>key1→block1, key4→block2, ..."]
+        Bloom["Bloom Filter:<br/>Fast 'key might exist' check"]
+        Footer["Footer:<br/>Metadata, offsets"]
+        
+        Block1 --> Block2 --> MoreBlocks --> Index --> Bloom --> Footer
+    end
+    
+    Properties["Properties:<br/>- Immutable once written (no in-place updates)<br/>- Sorted by key (enables efficient merging)<br/>- Compressed (saves disk space)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    SSTABLE STRUCTURE                         │
 │                                                              │
@@ -214,6 +329,7 @@ Access pattern:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Write Path**:
 
@@ -242,7 +358,26 @@ Read amplification: Might need to check multiple SSTables
 
 **Definition**: The ratio of actual bytes written to disk vs. logical bytes written by the application.
 
+```mermaid
+flowchart TD
+    subgraph BTree5["B-Tree Write Amplification"]
+        BTree5_1["1 row insert = 1 page write<br/>(4KB for 100 byte row)<br/>+ Index updates (more pages)<br/>Write amplification: ~40x (4KB / 100 bytes)"]
+    end
+    
+    subgraph LSM5["LSM Tree Write Amplification"]
+        LSM5_1["1 row insert = 1 MemTable entry<br/>Eventually flushed to Level 0<br/>Compacted to Level 1 (rewritten)<br/>Compacted to Level 2 (rewritten again)<br/>...<br/>Write amplification: 10-30x (depends on levels)"]
+    end
+    
+    Difference2["Key difference:<br/>B-Tree: Random writes (slow on HDD, SSD wear)<br/>LSM: Sequential writes (fast, SSD-friendly)"]
+    
+    BTree5 --> Difference2
+    LSM5 --> Difference2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  WRITE AMPLIFICATION                         │
 │                                                              │
@@ -269,12 +404,32 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Space Amplification
 
 **Definition**: The ratio of actual disk space used vs. logical data size.
 
+```mermaid
+flowchart LR
+    subgraph BTree2["B-Tree"]
+        BTree2_1["Pages may be partially filled<br/>(~67% average)<br/>Space amplification: ~1.5x"]
+    end
+    
+    subgraph LSM2["LSM Tree"]
+        LSM2_1["Old versions exist until compaction<br/>Multiple copies during compaction<br/>Space amplification: 1.1x - 2x"]
+    end
+    
+    Tradeoff2["Trade-off: LSM can have more temporary space usage<br/>during heavy compaction"]
+    
+    BTree2 --> Tradeoff2
+    LSM2 --> Tradeoff2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  SPACE AMPLIFICATION                         │
 │                                                              │
@@ -292,12 +447,32 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Read Amplification
 
 **Definition**: The number of disk reads required to satisfy a query.
 
+```mermaid
+flowchart LR
+    subgraph BTree3["B-Tree"]
+        BTree3_1["Point query: O(log n) pages<br/>= ~4 reads for 1B rows<br/>Range query: Sequential after finding start<br/>Read amplification: Low (1-4x)"]
+    end
+    
+    subgraph LSM3["LSM Tree"]
+        LSM3_1["Point query: Check MemTable + multiple SSTables<br/>Bloom filters reduce unnecessary reads<br/>Read amplification: Higher (1-10x without Bloom)<br/>Lower with Bloom filters (1-2x)"]
+    end
+    
+    Tradeoff3["Trade-off: LSM optimizes writes at cost of reads<br/>Bloom filters help but don't eliminate cost"]
+    
+    BTree3 --> Tradeoff3
+    LSM3 --> Tradeoff3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   READ AMPLIFICATION                         │
 │                                                              │
@@ -317,12 +492,40 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Compaction Strategies
 
 **Size-Tiered Compaction (STCS)**:
 
+```mermaid
+flowchart LR
+    Before["Before:<br/>4 similar-size SSTables"]
+    
+    SST1_2["10MB"]
+    SST2_2["10MB"]
+    SST3_2["10MB"]
+    SST4_2["10MB"]
+    
+    After["After compaction:<br/>40MB"]
+    
+    Before --> SST1_2
+    Before --> SST2_2
+    Before --> SST3_2
+    Before --> SST4_2
+    
+    SST1_2 --> After
+    SST2_2 --> After
+    SST3_2 --> After
+    SST4_2 --> After
+    
+    ProsCons["Pros: Good write throughput<br/>Cons: High space amplification (old data persists)<br/>Read performance degrades over time"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SIZE-TIERED COMPACTION                          │
 │                                                              │
@@ -344,10 +547,40 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Leveled Compaction (LCS)**:
 
+```mermaid
+flowchart TD
+    subgraph Level0_2["Level 0: Overlapping SSTables<br/>(from MemTable flushes)"]
+        L0_1["[A-Z]"]
+        L0_2["[A-Z]"]
+        L0_3["[A-Z]"]
+    end
+    
+    subgraph Level1_2["Level 1: Non-overlapping, sorted SSTables"]
+        L1_1["[A-M]"]
+        L1_2["[N-Z]"]
+    end
+    
+    subgraph Level2_2["Level 2: (10x larger)"]
+        L2_1["[A-F]"]
+        L2_2["[G-M]"]
+        L2_3["[N-S]"]
+        L2_4["[T-Z]"]
+    end
+    
+    Level0_2 -->|"Compaction: Merge Level N SSTable<br/>with overlapping Level N+1 SSTables"| Level1_2
+    Level1_2 --> Level2_2
+    
+    ProsCons2["Pros: Better read performance (fewer files to check)<br/>Lower space amplification<br/>Cons: Higher write amplification"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                LEVELED COMPACTION                            │
 │                                                              │
@@ -369,12 +602,31 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Query Optimization and Execution Plans
 
 **Query Planner Components**:
 
+```mermaid
+flowchart TD
+    Input["Input: SQL Query"]
+    
+    Step1_3["Step 1: Parse<br/>- Convert SQL text to Abstract Syntax Tree (AST)<br/>- Check syntax validity"]
+    
+    Step2_3["Step 2: Analyze<br/>- Resolve table and column names<br/>- Check permissions<br/>- Type checking"]
+    
+    Step3_3["Step 3: Optimize<br/>- Generate possible execution plans<br/>- Estimate cost of each plan<br/>- Choose lowest-cost plan"]
+    
+    Step4_3["Step 4: Execute<br/>- Run the chosen plan<br/>- Return results"]
+    
+    Input --> Step1_3 --> Step2_3 --> Step3_3 --> Step4_3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   QUERY PLANNER                              │
 │                                                              │
@@ -400,10 +652,35 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Cost Estimation**:
 
+```mermaid
+flowchart TD
+    Factors["Factors considered:<br/>- Table statistics (row count, column cardinality)<br/>- Index availability and selectivity<br/>- Disk I/O cost (sequential vs random)<br/>- CPU cost for operations<br/>- Memory available for sorting/hashing"]
+    
+    Example["Example: SELECT * FROM users WHERE country = 'US'"]
+    
+    PlanA["Plan A: Full table scan<br/>- Read all 10M rows<br/>- Filter in memory<br/>- Cost: 10M * row_read_cost = 10,000,000"]
+    
+    PlanB["Plan B: Index scan on country<br/>- Index lookup: 100 rows (if 'US' is rare)<br/>- Fetch 100 rows from table<br/>- Cost: 100 * index_cost + 100 * row_fetch = 300"]
+    
+    Winner["Plan B wins! (assuming 'US' is selective)"]
+    
+    But["But if 'US' is 80% of data:<br/>Plan B: 8M index lookups + 8M fetches = worse than scan!"]
+    
+    Factors --> Example
+    Example --> PlanA
+    Example --> PlanB
+    PlanB --> Winner
+    PlanB --> But
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  COST ESTIMATION                             │
 │                                                              │
@@ -433,6 +710,7 @@ Read amplification: Might need to check multiple SSTables
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### EXPLAIN Output Analysis
 
@@ -441,7 +719,25 @@ EXPLAIN ANALYZE SELECT * FROM orders
 WHERE user_id = 123 AND status = 'pending';
 ```
 
+```mermaid
+flowchart TD
+    Explain["EXPLAIN OUTPUT"]
+    
+    Output["Index Scan using idx_orders_user_status on orders<br/>Index Cond: ((user_id = 123) AND (status = 'pending'))<br/>Rows Removed by Filter: 0<br/>Buffers: shared hit=4<br/>Planning Time: 0.2 ms<br/>Execution Time: 0.5 ms"]
+    
+    Good["Key metrics:<br/>- 'Index Scan': Using index (good!)<br/>- 'shared hit=4': 4 pages from cache (no disk I/O)<br/>- 'Execution Time: 0.5 ms': Fast!"]
+    
+    Bad["Bad signs to look for:<br/>- 'Seq Scan': Full table scan (might be slow)<br/>- 'Rows Removed by Filter': Many rows read but filtered<br/>- 'shared read': Pages from disk (slow)<br/>- 'Sort': Sorting in memory/disk (can be slow)"]
+    
+    Explain --> Output
+    Output --> Good
+    Output --> Bad
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   EXPLAIN OUTPUT                             │
 │                                                              │
@@ -465,6 +761,7 @@ WHERE user_id = 123 AND status = 'pending';
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -598,7 +895,37 @@ Planner chooses Plan C if index exists, otherwise Plan B
 
 ### Choosing Between B-Tree and LSM
 
+```mermaid
+flowchart TD
+    Decision["B-TREE vs LSM TREE DECISION"]
+    
+    subgraph BTree4["Choose B-Tree (PostgreSQL, MySQL InnoDB) when:"]
+        B1["Read-heavy workload"]
+        B2["Need consistent read latency"]
+        B3["Many point queries and range scans"]
+        B4["OLTP with mixed read/write"]
+        B5["Need strong ACID guarantees"]
+    end
+    
+    subgraph LSM4["Choose LSM (RocksDB, Cassandra, LevelDB) when:"]
+        L1["Write-heavy workload"]
+        L2["Append-only or time-series data"]
+        L3["Can tolerate variable read latency"]
+        L4["Need high write throughput"]
+        L5["SSD storage (sequential writes extend SSD life)"]
+    end
+    
+    Hybrid["Hybrid approaches:<br/>- TiDB: B-tree for small tables, LSM for large<br/>- CockroachDB: LSM (RocksDB) with B-tree-like interface"]
+    
+    Decision --> BTree4
+    Decision --> LSM4
+    Decision --> Hybrid
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            B-TREE vs LSM TREE DECISION                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -623,6 +950,7 @@ Planner chooses Plan C if index exists, otherwise Plan B
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Query Optimization Best Practices
 

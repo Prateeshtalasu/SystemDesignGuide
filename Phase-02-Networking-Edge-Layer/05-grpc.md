@@ -32,7 +32,21 @@ REST APIs with JSON are great for many use cases, but they have limitations:
 
 ### What Systems Looked Like Before gRPC
 
+```mermaid
+sequenceDiagram
+    participant ServiceA as Service A
+    participant ServiceB as Service B
+    
+    ServiceA->>ServiceB: HTTP/1.1 POST /api/users<br/>Content-Type: application/json<br/>{<br/>  "name": "Alice",<br/>  "email": "alice@example.com",<br/>  "age": 30,<br/>  "address": {...}<br/>}
+    ServiceB->>ServiceA: HTTP/1.1 201 Created<br/>Content-Type: application/json<br/>{"id": "123", "name": "Alice", ...}
+    
+    Note over ServiceA,ServiceB: Problems:<br/>- JSON payload: ~200 bytes (verbose)<br/>- Text parsing: CPU intensive<br/>- No type checking: runtime errors if schema changes<br/>- Manual client code: write HTTP calls, parse JSON
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REST API COMMUNICATION                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -64,6 +78,7 @@ Problems:
 - No type checking: runtime errors if schema changes
 - Manual client code: write HTTP calls, parse JSON
 ```
+</details>
 
 ### What Breaks Without gRPC
 
@@ -107,7 +122,27 @@ Imagine you're a business executive who only speaks English, and you need to com
 - Both sides know exactly what to expect
 - But you need the interpreter (generated code)
 
+```mermaid
+flowchart LR
+    subgraph REST["REST + JSON"]
+        C1["Client Code"] -->|"JSON"| H1["HTTP Layer"] -->|"JSON"| S1["Server Code"]
+        C1 -.->|"Manual JSON<br/>serialization"| C1
+        H1 -.->|"Text<br/>parsing"| H1
+        S1 -.->|"Manual JSON<br/>parsing"| S1
+    end
+    
+    subgraph gRPC["gRPC + Protobuf"]
+        C2["Client Stub"] -->|"Binary"| H2["HTTP/2 gRPC"] -->|"Binary"| S2["Server Impl"]
+        C2 -.->|"Generated<br/>code"| C2
+        H2 -.->|"Efficient<br/>binary"| H2
+        S2 -.->|"Generated<br/>code"| S2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    REST vs gRPC COMPARISON                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -132,6 +167,7 @@ gRPC + Protobuf:
      │ code                   │ binary                 │ code
      │                        │                        │
 ```
+</details>
 
 ### The Key Insight
 
@@ -260,7 +296,26 @@ Wire Types:
 
 ### gRPC Communication Flow
 
+```mermaid
+flowchart TD
+    ClientApp["Client Application<br/>userService.getUser(request)<br/>(Generated stub method)"]
+    ClientStub["Client Stub (Generated)<br/>1. Serialize request to protobuf"]
+    GRPCClient["gRPC Client Library<br/>2. Create HTTP/2 request<br/>Headers: content-type: application/grpc<br/>grpc-encoding: gzip<br/>Body: [protobuf bytes]"]
+    GRPCServer["gRPC Server Library<br/>4. Receive HTTP/2 request"]
+    ServerStub["Server Stub (Generated)<br/>5. Deserialize protobuf"]
+    ServiceImpl["Your Service Implementation<br/>getUser(req)<br/>→ return user"]
+    
+    ClientApp --> ClientStub
+    ClientStub --> GRPCClient
+    GRPCClient -->|"HTTP/2 POST<br/>/com.example.UserService/GetUser"| GRPCServer
+    GRPCServer --> ServerStub
+    ServerStub --> ServiceImpl
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         gRPC REQUEST FLOW                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -313,10 +368,52 @@ Client Application                                    Server Application
                                                     │ → return user │
                                                     └───────────────┘
 ```
+</details>
 
 ### Four Types of RPC
 
+```mermaid
+flowchart TD
+    subgraph Unary["1. UNARY RPC (most common)"]
+        U1["Client ────[Request]────> Server"]
+        U2["Client <───[Response]──── Server"]
+        U1 --> U2
+        U3["Example: GetUser, CreateOrder"]
+    end
+    
+    subgraph ServerStream["2. SERVER STREAMING RPC"]
+        SS1["Client ────[Request]────────────────> Server"]
+        SS2["Client <───[Response 1]────────────── Server"]
+        SS3["Client <───[Response 2]────────────── Server"]
+        SS4["Client <───[Response N]────────────── Server"]
+        SS1 --> SS2 --> SS3 --> SS4
+        SS5["Example: ListUsers, DownloadFile, StockPrices"]
+    end
+    
+    subgraph ClientStream["3. CLIENT STREAMING RPC"]
+        CS1["Client ────[Request 1]────────────> Server"]
+        CS2["Client ────[Request 2]────────────> Server"]
+        CS3["Client ────[Request N]────────────> Server"]
+        CS4["Client <───[Response]───────────── Server"]
+        CS1 --> CS2 --> CS3 --> CS4
+        CS5["Example: UploadFile, BatchInsert"]
+    end
+    
+    subgraph Bidir["4. BIDIRECTIONAL STREAMING RPC"]
+        B1["Client ────[Request 1]────────────> Server"]
+        B2["Client <───[Response 1]──────────── Server"]
+        B3["Client ────[Request 2]────────────> Server"]
+        B4["Client <───[Response 2]──────────── Server"]
+        B1 --> B2 --> B3 --> B4
+        B5["... (interleaved, either side can send anytime)"]
+        B6["Example: Chat, GameState, RealTimeSync"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         gRPC COMMUNICATION PATTERNS                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -352,6 +449,7 @@ Client Application                                    Server Application
    
    Example: Chat, GameState, RealTimeSync
 ```
+</details>
 
 ---
 
@@ -508,7 +606,33 @@ User user = stub.getUser(request);
 
 ### Production Architecture
 
+```mermaid
+flowchart TD
+    Gateway["API Gateway<br/>(gRPC-Web)"]
+    UserSvc["User Service<br/>(gRPC)"]
+    OrderSvc["Order Service<br/>(gRPC)"]
+    ProductSvc["Product Service<br/>(gRPC)"]
+    PG["PostgreSQL"]
+    Redis["Redis"]
+    ES["Elasticsearch"]
+    
+    Gateway --> UserSvc
+    Gateway --> OrderSvc
+    Gateway --> ProductSvc
+    UserSvc --> PG
+    OrderSvc --> Redis
+    ProductSvc --> ES
+    
+    OrderSvc -.->|"calls to validate user"| UserSvc
+    OrderSvc -.->|"calls to check inventory"| ProductSvc
+    
+    Note1["All service-to-service calls use gRPC:<br/>- Fast, type-safe, streaming-capable"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    gRPC MICROSERVICES ARCHITECTURE                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -538,12 +662,24 @@ All service-to-service calls use gRPC:
 - Order Service calls Product Service to check inventory
 - Fast, type-safe, streaming-capable
 ```
+</details>
 
 ### gRPC-Web for Browsers
 
 Browsers don't support HTTP/2 trailers required by gRPC. gRPC-Web is a variant that works in browsers:
 
+```mermaid
+flowchart LR
+    Browser["Browser<br/>(gRPC-Web)"] -->|"HTTP/1.1 or HTTP/2<br/>(gRPC-Web format)"| Envoy["Envoy Proxy"]
+    Envoy -->|"gRPC/HTTP2<br/>(native gRPC)"| Server["gRPC Server"]
+    
+    Note1["Envoy translates gRPC-Web to native gRPC"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         gRPC-WEB ARCHITECTURE                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -560,6 +696,7 @@ Browsers don't support HTTP/2 trailers required by gRPC. gRPC-Web is a variant t
 
 Envoy translates gRPC-Web to native gRPC
 ```
+</details>
 
 ---
 

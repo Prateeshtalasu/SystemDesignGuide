@@ -50,7 +50,23 @@ Request 2 arrives:
 
 ### Database Connection Limits
 
+```mermaid
+flowchart TD
+    Limits["DATABASE CONNECTION LIMITS<br/>PostgreSQL default: max_connections = 100<br/>MySQL default: max_connections = 151"]
+    
+    Consumes["Each connection consumes:<br/>- Memory: ~10MB per connection (PostgreSQL)<br/>- File descriptors<br/>- Backend process (PostgreSQL) or thread (MySQL)"]
+    
+    Calc["100 connections × 10MB = 1GB just for connections!"]
+    
+    AppServers["Application servers:<br/>- 10 app servers<br/>- 20 connections each<br/>- Total: 200 connections needed<br/>- Database limit: 100<br/>- Result: Connection errors!"]
+    
+    Limits --> Consumes --> Calc --> AppServers
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              DATABASE CONNECTION LIMITS                      │
 │                                                              │
@@ -73,6 +89,8 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Real Examples
 
@@ -90,7 +108,21 @@ Request 2 arrives:
 
 **Without Pooling = New Table for Every Bite**
 
+```mermaid
+flowchart TD
+    Without["WITHOUT CONNECTION POOLING<br/>Customer wants to eat:"]
+    
+    Steps["1. Reserve a table (connection setup)<br/>2. Wait for table to be prepared<br/>3. Sit down<br/>4. Take one bite<br/>5. Leave, table is cleared<br/>6. For next bite, repeat from step 1"]
+    
+    Waste["Incredibly wasteful!"]
+    
+    Without --> Steps --> Waste
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WITHOUT CONNECTION POOLING                      │
 │                                                              │
@@ -106,10 +138,26 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **With Pooling = Shared Tables**
 
+```mermaid
+flowchart TD
+    With["WITH CONNECTION POOLING<br/>Restaurant has 10 tables (pool size = 10)"]
+    
+    Arrives["Customer arrives:<br/>1. Check if table available<br/>2. If yes: Sit immediately<br/>3. If no: Wait in line<br/>4. Eat entire meal<br/>5. Leave, table available for next customer"]
+    
+    Benefits["Tables are reused, not destroyed after each customer<br/>Limited tables = controlled resource usage"]
+    
+    With --> Arrives --> Benefits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │               WITH CONNECTION POOLING                        │
 │                                                              │
@@ -127,6 +175,8 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -134,7 +184,28 @@ Request 2 arrives:
 
 ### Connection Pool Architecture
 
+```mermaid
+flowchart TD
+    Pool["CONNECTION POOL INTERNALS"]
+    
+    Threads["Application Thread Pool<br/>Thread 1  Thread 2  Thread 3  ...  Thread N"]
+    
+    subgraph CPool["Connection Pool"]
+        Active["Active Connections: [C1, C2, C3]<br/>(currently in use)"]
+        Idle["Idle Connections: [C4, C5]<br/>(ready to be used)"]
+        Pending["Pending Requests: [R1, R2]<br/>(waiting for connection)"]
+    end
+    
+    DB["Database"]
+    
+    Threads --> CPool
+    CPool --> DB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONNECTION POOL INTERNALS                       │
 │                                                              │
@@ -165,10 +236,32 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Pool Lifecycle
 
+```mermaid
+flowchart TD
+    Lifecycle["CONNECTION LIFECYCLE"]
+    
+    Init["1. INITIALIZATION<br/>Pool starts with minimum connections (e.g., 5)<br/>Connections are created and validated"]
+    
+    Borrow["2. BORROW<br/>Thread requests connection<br/>If idle available: Return immediately<br/>If none idle but < max: Create new connection<br/>If at max: Wait in queue (with timeout)"]
+    
+    Use["3. USE<br/>Thread executes queries<br/>Connection marked as 'active'"]
+    
+    Return["4. RETURN<br/>Thread returns connection to pool<br/>Connection validated (still alive?)<br/>Moved to idle pool"]
+    
+    Evict["5. EVICTION<br/>Idle connections beyond minimum are closed<br/>Connections exceeding max lifetime are closed<br/>Broken connections are removed"]
+    
+    Lifecycle --> Init --> Borrow --> Use --> Return --> Evict
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONNECTION LIFECYCLE                            │
 │                                                              │
@@ -198,10 +291,33 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### HikariCP Internals
 
+```mermaid
+flowchart TD
+    HikariCP["HIKARICP ARCHITECTURE<br/>Key components:"]
+    
+    Bag["ConcurrentBag:<br/>Thread-local list of connections<br/>- Each thread has preferred connections<br/>- Reduces contention<br/>- Falls back to shared pool if needed"]
+    
+    States["Connection states:<br/>- NOT_IN_USE: Available for borrowing<br/>- IN_USE: Currently borrowed by a thread<br/>- REMOVED: Being evicted<br/>- RESERVED: Being created or validated"]
+    
+    Fast["Fast path (no contention):<br/>1. Check thread-local list<br/>2. CAS (Compare-And-Swap) to mark IN_USE<br/>3. Return connection<br/>Time: ~250 nanoseconds"]
+    
+    Slow["Slow path (contention):<br/>1. Scan shared list<br/>2. Wait on semaphore if none available<br/>3. Create new connection if < max"]
+    
+    HikariCP --> Bag
+    HikariCP --> States
+    States --> Fast
+    States --> Slow
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  HIKARICP ARCHITECTURE                       │
 │                                                              │
@@ -234,10 +350,39 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### PgBouncer (External Pooler)
 
+```mermaid
+flowchart LR
+    App1["App 1<br/>(20 conn)"]
+    App2["App 2<br/>(20 conn)"]
+    App3["App 3<br/>(20 conn)"]
+    
+    PgBouncer["PgBouncer<br/>Pool (50)"]
+    
+    PG["PostgreSQL<br/>(100)"]
+    
+    App1 --> PgBouncer
+    App2 --> PgBouncer
+    App3 --> PgBouncer
+    PgBouncer --> PG
+    
+    Note["60 app connections → 50 PgBouncer pool → 50 DB connections"]
+    
+    subgraph Modes["Pool modes"]
+        SESSION["SESSION: Connection held for entire client session<br/>(like no pooling, but with limits)"]
+        TRANSACTION["TRANSACTION: Connection returned after each txn<br/>(best for most workloads)"]
+        STATEMENT["STATEMENT: Connection returned after each statement<br/>(most aggressive, some limitations)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  PGBOUNCER ARCHITECTURE                      │
 │                                                              │
@@ -266,10 +411,38 @@ Request 2 arrives:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Connection Validation
 
+```mermaid
+flowchart TD
+    Validation["CONNECTION VALIDATION"]
+    
+    Why["Why validate?<br/>- Network interruption may have closed connection<br/>- Database may have terminated idle connections<br/>- Firewall may have dropped the connection"]
+    
+    Strategy1["1. Test on borrow:<br/>Before returning connection, run test query<br/>Pros: Never get broken connection<br/>Cons: Adds latency to every borrow"]
+    
+    Strategy2["2. Test while idle:<br/>Background thread periodically tests idle connections<br/>Pros: No latency on borrow<br/>Cons: Might miss recently broken connections"]
+    
+    Strategy3["3. Connection age:<br/>Close connections older than max lifetime<br/>Pros: Simple, prevents stale connections<br/>Cons: Might close healthy connections"]
+    
+    HikariCP["HikariCP approach:<br/>- Uses JDBC4 isValid() (no query needed)<br/>- Validates on borrow if idle > 500ms<br/>- Max lifetime for connection rotation"]
+    
+    Validation --> Why
+    Why --> Strategy1
+    Why --> Strategy2
+    Why --> Strategy3
+    Strategy1 --> HikariCP
+    Strategy2 --> HikariCP
+    Strategy3 --> HikariCP
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONNECTION VALIDATION                           │
 │                                                              │
@@ -301,6 +474,8 @@ Request 2 arrives:
 │  - Max lifetime for connection rotation                     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -428,7 +603,25 @@ Prevention:
 
 ### Pool Sizing Guidelines
 
+```mermaid
+flowchart TD
+    Formula["POOL SIZING FORMULA<br/>connections = (core_count * 2) + effective_spindle_count"]
+    
+    Examples["For SSDs (spindle_count ≈ 1):<br/>- 4-core machine: (4 * 2) + 1 = 9 connections<br/>- 8-core machine: (8 * 2) + 1 = 17 connections"]
+    
+    Why["Why this formula?<br/>- CPU-bound: 2 threads per core (context switching)<br/>- I/O-bound: Add for disk parallelism"]
+    
+    Practical["Practical adjustments:<br/>- Start with 10-20 connections<br/>- Monitor wait time and active connections<br/>- Increase if wait time > 0<br/>- Decrease if many connections idle"]
+    
+    Limits["Database limits:<br/>- Total pool across all apps < database max_connections<br/>- Leave headroom for admin connections"]
+    
+    Formula --> Examples --> Why --> Practical --> Limits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              POOL SIZING FORMULA                             │
 │                                                              │
@@ -453,6 +646,8 @@ Prevention:
 │  - Leave headroom for admin connections                     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -866,7 +1061,28 @@ hikari:
 
 ### Performance Gotchas
 
+```mermaid
+flowchart TD
+    Gotchas["CONNECTION POOL GOTCHAS"]
+    
+    G1["1. Validation overhead<br/>   - Test-on-borrow adds latency<br/>   - Use JDBC4 isValid() instead of test query<br/>   - HikariCP validates only if idle > 500ms"]
+    
+    G2["2. Connection creation storm<br/>   - All connections created at startup<br/>   - Slow startup, spike on database<br/>   - Use lazy initialization"]
+    
+    G3["3. Prepared statement cache<br/>   - Each connection has its own cache<br/>   - More connections = more memory<br/>   - Balance pool size with cache size"]
+    
+    G4["4. Transaction isolation<br/>   - PgBouncer transaction mode resets session state<br/>   - SET commands don't persist<br/>   - Use session mode if needed"]
+    
+    Gotchas --> G1
+    Gotchas --> G2
+    Gotchas --> G3
+    Gotchas --> G4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           CONNECTION POOL GOTCHAS                            │
 │                                                              │
@@ -891,6 +1107,8 @@ hikari:
 │     - Use session mode if needed                           │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -1074,7 +1292,26 @@ hikari:
 
 **Strategy:**
 
+```mermaid
+flowchart TD
+    Strategy["MULTI-REGION CONNECTION STRATEGY"]
+    
+    subgraph Region["Per Region"]
+        PgBouncer["PgBouncer (transaction mode)<br/>- 100 connections to primary<br/>- 200 connections to local replica<br/>- Handles 1000+ app connections"]
+    end
+    
+    subgraph Service["Per Service"]
+        HikariCP["HikariCP pools:<br/>- Primary pool: 10 connections (writes)<br/>- Replica pool: 20 connections (reads)<br/>- Read/write routing based on @Transactional"]
+    end
+    
+    Strategy --> Region
+    Strategy --> Service
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              MULTI-REGION CONNECTION STRATEGY                │
 │                                                              │
@@ -1095,6 +1332,8 @@ hikari:
 │  └─────────────────────────────────────────────────────┘   │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Key decisions:**

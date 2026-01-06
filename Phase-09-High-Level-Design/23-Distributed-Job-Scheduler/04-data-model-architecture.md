@@ -49,7 +49,32 @@ We choose **Availability + Partition Tolerance (AP)**:
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>API Clients, Web UI"]
+    Clients --> APIGateway
+    APIGateway["API GATEWAY<br/>Load Balancer, Rate Limiting"]
+    APIGateway --> SchedulerService
+    APIGateway --> JobQueueService
+    APIGateway --> WorkerService
+    SchedulerService["Scheduler Service<br/>- Schedule jobs<br/>- Evaluate cron<br/>- Priority queue"]
+    JobQueueService["Job Queue Service<br/>- Assign jobs<br/>- Load balance"]
+    WorkerService["Worker Service<br/>- Execute jobs<br/>- Report status<br/>- Health checks"]
+    SchedulerService --> DataLayer
+    JobQueueService --> DataLayer
+    WorkerService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis (Job Queue)"]
+        PostgreSQL["PostgreSQL (Jobs/Workers)"]
+        Kafka["Kafka (Events)"]
+        Workers["Workers (10,000)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (API Clients, Web UI)                                            │
@@ -84,6 +109,9 @@ We choose **Availability + Partition Tolerance (AP)**:
 │  │              │  │   Workers)   │  │              │  │              │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘          │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

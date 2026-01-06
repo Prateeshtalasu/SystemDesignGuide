@@ -24,7 +24,27 @@ Traditional HTTP is **pull-based**: the client asks, the server responds. But ma
 
 ### What Systems Looked Like Before Real-Time Solutions
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    loop Every 5 seconds
+        Client->>Server: GET /messages?since=100
+        Server->>Client: 200 OK (empty)
+        Note over Client: [Wait 5 seconds]
+    end
+    
+    Client->>Server: GET /messages?since=100
+    Server->>Client: 200 OK (1 new message!)
+    
+    Note over Client,Server: Problem: 99% of requests return nothing.<br/>Massive waste of resources.
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    NAIVE POLLING (The Bad Old Days)                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -51,6 +71,7 @@ Client                                                    Server
 
 Problem: 99% of requests return nothing. Massive waste of resources.
 ```
+</details>
 
 ### What Breaks Without Real-Time Solutions
 
@@ -102,7 +123,37 @@ Multiple users editing the same document need instant updates. Even 1-second del
 - Two-way, instant communication
 - Perfect for conversations (chat, gaming)
 
+```mermaid
+flowchart TD
+    subgraph Polling["Regular Polling"]
+        P1["Client ──────> Server<br/>(request)"] --> P2["Client <────── Server<br/>(response, maybe empty)"]
+        P2 -->|"[repeat every N seconds]"| P1
+    end
+    
+    subgraph LongPoll["Long Polling"]
+        LP1["Client ──────> Server<br/>(request, held open)"] --> LP2["[server waits for data...]"]
+        LP2 --> LP3["Client <────── Server<br/>(response when data ready)"]
+        LP3 -->|"[client immediately reconnects]"| LP1
+    end
+    
+    subgraph SSE["SSE"]
+        SSE1["Client ──────> Server<br/>(subscribe once)"] --> SSE2["Client <══════ Server<br/>(stream of events)"]
+        SSE2 --> SSE3["Client <══════ Server<br/>(more events)"]
+        SSE3 --> SSE4["Client <══════ Server<br/>(keeps flowing)"]
+    end
+    
+    subgraph WS["WebSocket"]
+        WS1["Client <═════> Server<br/>(bidirectional channel)"]
+        WS2["Client ══════> Server<br/>(client can send)"]
+        WS3["Client <══════ Server<br/>(server can send)"]
+        Note1["[either side, anytime]"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                  COMMUNICATION PATTERN COMPARISON                            │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -126,6 +177,7 @@ WebSocket:           Client <═════> Server    (bidirectional channel)
                      Client <══════ Server    (server can send)
                      [either side, anytime]
 ```
+</details>
 
 ---
 
@@ -135,7 +187,25 @@ WebSocket:           Client <═════> Server    (bidirectional channel)
 
 **Concept**: Client makes a request, server holds it open until data is available or timeout occurs.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: GET /events?timeout=30s
+    Note over Server: [Server holds connection open]<br/>[Waiting for events...]
+    Note over Client,Server: ... 15 seconds pass ...
+    Note over Server: [Event occurs on server!]
+    Server->>Client: 200 OK + Event Data
+    Note over Client: [Client processes event]
+    Client->>Server: GET /events?timeout=30s<br/>[Immediately reconnects]
+    Note over Server: [Server holds connection open again...]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         LONG POLLING FLOW                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -161,6 +231,7 @@ Client                                                    Server
    │  [Server holds connection open again...]                │
    │                                                         │
 ```
+</details>
 
 **How Server Holds Connection**:
 
@@ -219,7 +290,24 @@ public class LongPollingServlet extends HttpServlet {
 
 **Concept**: Client opens a persistent HTTP connection. Server sends events as they occur. One-way: server to client only.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: GET /events<br/>Accept: text/event-stream
+    Server->>Client: HTTP/1.1 200 OK<br/>Content-Type: text/event-stream<br/>Cache-Control: no-cache<br/>Connection: keep-alive
+    Server->>Client: data: {"type": "connected"}
+    Note over Client: [Connection stays open]
+    Server->>Client: event: message<br/>data: {"user": "Alice", "text": "Hello!"}
+    Server->>Client: event: message<br/>data: {"user": "Bob", "text": "Hi there!"}
+    Note over Server: [Events keep flowing as they occur...]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         SSE CONNECTION FLOW                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -250,6 +338,7 @@ Client                                                    Server
    │                                                         │
    │  [Events keep flowing as they occur...]                 │
 ```
+</details>
 
 **SSE Message Format**:
 
@@ -334,7 +423,23 @@ eventSource.onerror = () => console.log('Error/Reconnecting...');
 
 **Concept**: Upgrade HTTP connection to a persistent, bidirectional channel. Either side can send messages anytime.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: GET /chat HTTP/1.1<br/>Host: example.com<br/>Upgrade: websocket<br/>Connection: Upgrade<br/>Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==<br/>Sec-WebSocket-Version: 13
+    Server->>Client: HTTP/1.1 101 Switching Protocols<br/>Upgrade: websocket<br/>Connection: Upgrade<br/>Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+    Note over Client,Server: WebSocket Connection Established
+    Client->>Server: [Binary Frame: "Hello Server!"]
+    Server->>Client: [Binary Frame: "Hello Client!"]
+    Note over Client,Server: [Either side can send anytime...]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      WEBSOCKET HANDSHAKE                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -365,6 +470,7 @@ Client                                                    Server
    │                                                         │
    │  [Either side can send anytime...]                      │
 ```
+</details>
 
 **WebSocket Frame Structure**:
 
@@ -517,7 +623,26 @@ Let's trace how each pattern would handle a chat message.
 
 ### Long Polling Chat
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (Browser)
+    participant Server
+    participant Bob as Bob (Browser)
+    
+    Alice->>Server: GET /messages<br/>(waiting...)
+    Server->>Bob: GET /messages<br/>(waiting...)
+    Alice->>Server: POST /send<br/>{"text":"Hello!"}
+    Server->>Alice: 200 OK
+    Server->>Bob: 200 OK<br/>[{"text":"Hello!"}]
+    Bob->>Server: GET /messages<br/>(reconnect)
+    
+    Note over Alice,Bob: Timeline:<br/>- Alice sends message: instant<br/>- Bob receives: depends on when his poll was active<br/>- Worst case delay: poll interval (e.g., 30 seconds)<br/>- Best case: instant (if poll was waiting)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    LONG POLLING CHAT FLOW                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -546,10 +671,30 @@ Timeline:
 - Worst case delay: poll interval (e.g., 30 seconds)
 - Best case: instant (if poll was waiting)
 ```
+</details>
 
 ### SSE Chat (with separate POST for sending)
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (Browser)
+    participant Server
+    participant Bob as Bob (Browser)
+    
+    Alice->>Server: GET /events<br/>(SSE stream open)
+    Server->>Bob: GET /events<br/>(SSE stream open)
+    Alice->>Server: POST /send<br/>{"text":"Hello!"}
+    Server->>Alice: 200 OK
+    Server->>Alice: event: message<br/>data: {"text":"Hello!", "user":"Alice"}
+    Server->>Bob: event: message<br/>data: {"text":"Hello!", "user":"Alice"}
+    
+    Note over Alice,Bob: Timeline:<br/>- Alice sends message: instant (POST)<br/>- Bob receives: instant (SSE push)<br/>- Both Alice and Bob see the message via SSE<br/>- Latency: ~RTT (typically <100ms)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         SSE CHAT FLOW                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -574,10 +719,29 @@ Timeline:
 - Both Alice and Bob see the message via SSE
 - Latency: ~RTT (typically <100ms)
 ```
+</details>
 
 ### WebSocket Chat
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (Browser)
+    participant Server
+    participant Bob as Bob (Browser)
+    
+    Alice->>Server: WS Connect<br/>(bidirectional)
+    Server->>Bob: WS Connect<br/>(bidirectional)
+    Alice->>Server: {"type":"msg", "text":"Hello!"}
+    Server->>Alice: {"type":"msg", "text":"Hello!", "user":"Alice"}
+    Server->>Bob: {"type":"msg", "text":"Hello!", "user":"Alice"}
+    
+    Note over Alice,Bob: Timeline:<br/>- Alice sends message: instant (WebSocket frame)<br/>- Server broadcasts: instant<br/>- Bob receives: instant<br/>- Latency: ~RTT/2 (no request needed, just push)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      WEBSOCKET CHAT FLOW                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -601,6 +765,7 @@ Timeline:
 - Bob receives: instant
 - Latency: ~RTT/2 (no request needed, just push)
 ```
+</details>
 
 ---
 
@@ -631,7 +796,28 @@ Timeline:
 
 ### Production Architecture
 
+```mermaid
+flowchart TD
+    LB["Load Balancer<br/>(L7, sticky)"]
+    WS1["WS Server 1<br/>(10K conns)"]
+    WS2["WS Server 2<br/>(10K conns)"]
+    WS3["WS Server 3<br/>(10K conns)"]
+    Redis["Redis Pub/Sub<br/>(Message Bus)"]
+    
+    LB --> WS1
+    LB --> WS2
+    LB --> WS3
+    WS1 --> Redis
+    WS2 --> Redis
+    WS3 --> Redis
+    
+    Note1["How it works:<br/>1. User connects to one WS server (sticky session via load balancer)<br/>2. User sends message to their connected server<br/>3. Server publishes to Redis Pub/Sub<br/>4. All servers receive message from Redis<br/>5. Each server sends to their connected clients"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    PRODUCTION WEBSOCKET ARCHITECTURE                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -663,6 +849,7 @@ How it works:
 4. All servers receive message from Redis
 5. Each server sends to their connected clients
 ```
+</details>
 
 ### Scaling Considerations
 

@@ -44,7 +44,29 @@ Now imagine:
 
 ### What Systems Looked Like Before Caching
 
+```mermaid
+flowchart LR
+    U1["User 1"]
+    U2["User 2"]
+    U3["User 3"]
+    U4["User 4"]
+    
+    App["Application Server"]
+    DB["Database"]
+    
+    U1 --> App
+    U2 --> App
+    U3 --> App
+    U4 --> App
+    App --> DB
+    
+    Note["Every request hits database<br/>Database overwhelmed"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    WITHOUT CACHING                               │
 │                                                                  │
@@ -56,6 +78,8 @@ Now imagine:
 │              Every request                Database              │
 │              hits database              overwhelmed             │
 └─────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### What Breaks Without Caching?
@@ -84,7 +108,22 @@ Now imagine:
 
 Think of your database as a **massive library warehouse** in the basement:
 
+```mermaid
+flowchart TD
+    Desk["Your Desk (Application)<br/>You need a book"]
+    
+    Shelf["Bookshelf Next to Your Desk<br/>(5 seconds to grab)<br/>CACHE (fast, limited space)<br/>10 most-used books"]
+    
+    Warehouse["Basement Warehouse<br/>(10 minutes walk)<br/>DATABASE (slow, unlimited space)<br/>Millions of books"]
+    
+    Desk -->|Check first| Shelf
+    Shelf -->|Not there?| Warehouse
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                    THE LIBRARY SYSTEM                           │
 │                                                                 │
@@ -107,6 +146,8 @@ Think of your database as a **massive library warehouse** in the basement:
 │  └─────────────────────┘                                       │
 └────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insight**: The bookshelf next to your desk is your cache. It's fast but has limited space. You keep the most frequently needed books there.
 
@@ -124,7 +165,25 @@ This analogy will be referenced throughout:
 
 There are five fundamental patterns for how applications interact with cache and database. Each solves different problems.
 
+```mermaid
+flowchart LR
+    Patterns["CACHING PATTERNS OVERVIEW"]
+    
+    subgraph Table["Pattern Comparison"]
+        CA["Cache-Aside<br/>Who Writes Cache? Application<br/>Who Reads DB? Application<br/>Consistency: Eventual"]
+        RT["Read-Through<br/>Who Writes Cache? Cache Library<br/>Who Reads DB? Cache Library<br/>Consistency: Eventual"]
+        WT["Write-Through<br/>Who Writes Cache? Cache Library<br/>Who Reads DB? Cache Library<br/>Consistency: Strong"]
+        WB["Write-Behind<br/>Who Writes Cache? Cache Library<br/>Who Reads DB? Cache Library<br/>Consistency: Eventual (risky)"]
+        RA["Refresh-Ahead<br/>Who Writes Cache? Cache Library<br/>Who Reads DB? Cache Library<br/>Consistency: Eventual"]
+    end
+    
+    Patterns --> Table
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                        CACHING PATTERNS OVERVIEW                           │
 │                                                                            │
@@ -137,6 +196,8 @@ There are five fundamental patterns for how applications interact with cache and
 │  Refresh-Ahead    │ Cache Library     │ Cache Library │ Eventual          │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 Let's explore each pattern in depth.
 
@@ -148,7 +209,25 @@ Let's explore each pattern in depth.
 
 **The Concept**: The application is responsible for managing the cache. It checks the cache first, and if data is missing, it fetches from the database and populates the cache.
 
+```mermaid
+flowchart LR
+    Client["Client"]
+    App["Application"]
+    Cache["Cache<br/>(Redis)"]
+    DB["Database"]
+    
+    Client -->|1. Request| App
+    App -->|2. Get| Cache
+    Cache -->|3. Return<br/>(if found)| App
+    App -->|4. Query<br/>(if cache miss)| DB
+    DB -->|5. Store in cache & return| App
+    App --> Client
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         CACHE-ASIDE PATTERN                              │
 │                                                                          │
@@ -168,6 +247,8 @@ Let's explore each pattern in depth.
 │                      │    cache & return │                              │
 │                      └───────────────────┘                              │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Step-by-Step Flow**:
@@ -194,7 +275,25 @@ Let's explore each pattern in depth.
 
 **The Concept**: The cache itself is responsible for loading data from the database. The application only talks to the cache, never directly to the database for reads.
 
+```mermaid
+flowchart LR
+    Client["Client"]
+    Cache["Cache<br/>(with loader)"]
+    DB["Database"]
+    
+    Client -->|1. Request| Cache
+    Cache -->|2. Check if cached| Cache
+    Cache -->|3. Load data<br/>(if miss)| DB
+    DB -->|4. Return data<br/>(from cache or freshly loaded)| Cache
+    Cache --> Client
+    
+    Note["Application NEVER talks directly to database for reads"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        READ-THROUGH PATTERN                              │
 │                                                                          │
@@ -215,6 +314,8 @@ Let's explore each pattern in depth.
 │   Application NEVER talks directly to database for reads                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key Difference from Cache-Aside**:
 - **Cache-Aside**: Application manages cache population
@@ -231,7 +332,24 @@ Let's explore each pattern in depth.
 
 **The Concept**: When data is written, it goes to both the cache AND the database synchronously. The write only succeeds when both are updated.
 
+```mermaid
+flowchart LR
+    Client["Client"]
+    App["Application"]
+    Cache["Cache"]
+    DB["Database"]
+    
+    Client -->|1. Write Request| App
+    App -->|2. Write| Cache
+    App -->|3. Write| DB
+    DB -->|4. Return success<br/>(only if BOTH writes succeed)| App
+    App --> Client
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       WRITE-THROUGH PATTERN                              │
 │                                                                          │
@@ -252,6 +370,8 @@ Let's explore each pattern in depth.
 │                     │  writes succeed)   │                              │
 │                     └────────────────────┘                              │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Step-by-Step Flow**:
@@ -276,7 +396,25 @@ Let's explore each pattern in depth.
 
 **The Concept**: Writes go to the cache immediately, and the cache asynchronously writes to the database later. This is the opposite of write-through.
 
+```mermaid
+flowchart LR
+    Client["Client"]
+    App["Application"]
+    Cache["Cache<br/>(primary)"]
+    DB["Database"]
+    
+    Client -->|1. Write Request| App
+    App -->|2. Write| Cache
+    App -->|Returns immediately<br/>(doesn't wait for database)| Client
+    Cache -->|3. Async write<br/>(batched)| DB
+    
+    Note["Eventually consistent"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                       WRITE-BEHIND PATTERN                               │
 │                                                                          │
@@ -299,6 +437,8 @@ Let's explore each pattern in depth.
 │                     └────────────────────┘                              │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Why This Pattern Exists**:
 - **Extremely fast writes**: User doesn't wait for database
@@ -320,7 +460,27 @@ Let's explore each pattern in depth.
 
 **The Concept**: The cache proactively refreshes data BEFORE it expires. It predicts which data will be needed and refreshes it in the background.
 
+```mermaid
+gantt
+    title REFRESH-AHEAD PATTERN Timeline
+    dateFormat X
+    axisFormat %Ls
+    
+    section Data Lifecycle
+    Data cached (TTL=60s, Refresh threshold=80% = 48s) :0, 60
+    Normal serving from cache :0, 48
+    Background refresh triggered :48, 12
+    Async DB query :48, 5
+    Cache updated, TTL reset to 60s :53, 7
+    Would have expired (but already fresh) :60, 0
+    
+    Note: Users NEVER experience cache miss for hot data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      REFRESH-AHEAD PATTERN                               │
 │                                                                          │
@@ -343,6 +503,8 @@ Let's explore each pattern in depth.
 │                                                                          │
 │   Result: Users NEVER experience cache miss for hot data                │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 **Why This Pattern Exists**:
@@ -465,7 +627,34 @@ $-1      → Null bulk string (key doesn't exist)
 
 **Facebook's Cache Architecture**:
 
+```mermaid
+flowchart TD
+    Facebook["FACEBOOK'S CACHING LAYERS"]
+    
+    subgraph Web["Web Tier"]
+        S1["Server<br/>(local cache)"]
+        S2["Server<br/>(local cache)"]
+        S3["Server<br/>(local cache)"]
+        S4["Server<br/>(local cache)"]
+    end
+    
+    subgraph Memcached["Memcached Tier"]
+        MC["Thousands of Memcached servers<br/>- TAO (graph cache for social connections)<br/>- Mcrouter (routing layer)"]
+    end
+    
+    subgraph MySQL["MySQL Tier"]
+        DB["Primary source of truth"]
+    end
+    
+    Web --> Memcached --> MySQL
+    
+    Note["Cache-Aside pattern with lease-based invalidation<br/>99%+ cache hit rate"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK'S CACHING LAYERS                             │
 │                                                                          │
@@ -496,6 +685,8 @@ $-1      → Null bulk string (key doesn't exist)
 │   99%+ cache hit rate                                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Netflix's EVCache**:
 
@@ -507,7 +698,31 @@ Netflix built EVCache (Ephemeral Volatile Cache) on top of Memcached:
 
 **Amazon's Caching Strategy**:
 
+```mermaid
+flowchart TD
+    Amazon["AMAZON PRODUCT PAGE CACHING<br/>Product Page Components:"]
+    
+    Title["Product Title, Description<br/>→ ElastiCache (Redis)"]
+    Price["Price<br/>→ Real-time (no cache, always DB)"]
+    Stock["Stock Availability<br/>→ Short TTL cache (30 seconds)"]
+    Reviews["Customer Reviews<br/>→ Long TTL cache (1 hour)"]
+    Images["Product Images<br/>→ CDN (CloudFront)"]
+    Recs["Recommendations<br/>→ ML model cache (15 minutes)"]
+    
+    Amazon --> Title
+    Amazon --> Price
+    Amazon --> Stock
+    Amazon --> Reviews
+    Amazon --> Images
+    Amazon --> Recs
+    
+    Note["Different data = Different caching strategies"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AMAZON PRODUCT PAGE CACHING                           │
 │                                                                          │
@@ -523,6 +738,8 @@ Netflix built EVCache (Ephemeral Volatile Cache) on top of Memcached:
 │                                                                          │
 │   Different data = Different caching strategies                         │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Real Workflows and Tooling

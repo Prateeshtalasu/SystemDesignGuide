@@ -225,7 +225,64 @@ CREATE TABLE user_posts (
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string user_id UK
+        string username
+        string display_name
+        boolean is_celebrity
+        int followers_count
+    }
+    posts {
+        int id PK
+        string post_id UK
+        int user_id FK
+        text content_text
+        string privacy
+        int likes_count
+        timestamp created_at
+    }
+    follows {
+        int id PK
+        int follower_id FK
+        int following_id FK
+        float interaction_score
+        timestamp created_at
+    }
+    post_likes {
+        int id PK
+        int post_id FK
+        int user_id FK
+        timestamp created_at
+    }
+    post_media {
+        int id PK
+        int post_id FK
+        string media_url
+        string media_type
+        string dimensions
+    }
+    
+    users ||--o{ posts : "creates"
+    users ||--o{ follows : "follower"
+    users ||--o{ follows : "following"
+    posts ||--o{ post_likes : "has"
+    posts ||--o{ post_media : "has"
+    users ||--o{ post_likes : "likes"
 ```
+
+**Redis Cache:**
+- `feed:{user_id}` → Sorted Set of post_ids
+- `post:{post_id}` → Hash of post data
+- `user:{user_id}:following` → Set of following_ids
+- `engagement:{post_id}` → Hash of counts
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐       ┌─────────────────────┐
 │       users         │       │       posts         │
 ├─────────────────────┤       ├─────────────────────┤
@@ -267,11 +324,50 @@ CREATE TABLE user_posts (
 └─────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Mobile Apps, Web Browsers, API Consumers"]
+    Clients --> CDN
+    Clients --> WSGateway
+    Clients --> APIGateway
+    CDN["CDN/Edge (Static)"]
+    WSGateway["WebSocket Gateway"]
+    APIGateway["API Gateway"]
+    WSGateway --> AppLayer
+    APIGateway --> AppLayer
+    subgraph AppLayer["APPLICATION LAYER"]
+        FeedService["Feed Service"]
+        PostService["Post Service"]
+        GraphService["Graph Service"]
+        RankingService["Ranking Service"]
+    end
+    AppLayer --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis Cluster (Cache)"]
+        PostgreSQL["PostgreSQL Cluster (Primary)"]
+        Cassandra["Cassandra Cluster (Feeds)"]
+        Kafka["Kafka Cluster (Events)"]
+    end
+    DataLayer --> AsyncProcessing
+    subgraph AsyncProcessing["ASYNC PROCESSING"]
+        FanOutWorkers["Fan-out Workers"]
+        EngagementWorkers["Engagement Workers"]
+        NotificationWorkers["Notification Workers"]
+        AnalyticsPipeline["Analytics Pipeline"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Mobile Apps, Web Browsers, API Consumers)                       │
@@ -317,6 +413,10 @@ CREATE TABLE user_posts (
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
 │  │  Fan-out    │  │ Engagement  │  │Notification │  │  Analytics  │               │
 │  │  Workers    │  │  Workers    │  │  Workers    │  │  Pipeline   │               │
+```
+
+</details>
+```
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘               │
 │                                                                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -328,7 +428,30 @@ CREATE TABLE user_posts (
 
 ### Sequence Diagram
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant APIGateway as API Gateway
+    participant PostService as Post Service
+    participant Kafka
+    participant FanOutWorker as Fan-out Worker
+    participant Redis
+    
+    Client->>APIGateway: POST /posts
+    APIGateway->>PostService: Create post
+    PostService->>PostService: Store in DB
+    PostService->>Kafka: Publish event
+    PostService-->>APIGateway: 201 Created
+    APIGateway-->>Client: Post created
+    Kafka->>FanOutWorker: Consume
+    FanOutWorker->>FanOutWorker: Get followers
+    FanOutWorker->>Redis: Update feeds
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────────┐     ┌─────────┐     ┌───────┐     ┌─────────┐     ┌─────────┐
 │Client│     │   API   │     │  Post   │     │ Kafka │     │Fan-out  │     │  Redis  │
 │      │     │ Gateway │     │ Service │     │       │     │ Worker  │     │ (Feeds) │
@@ -357,6 +480,10 @@ CREATE TABLE user_posts (
    │              │               │              │              │              │
    │              │               │              │              │ Get followers│
    │              │               │              │              │──────────────│
+```
+
+</details>
+```
    │              │               │              │              │              │
    │              │               │              │              │ For each:    │
    │              │               │              │              │ Add to feed  │

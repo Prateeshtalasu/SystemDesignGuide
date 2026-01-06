@@ -239,7 +239,28 @@ Success: Booking Confirmed
 
 ## Failure Handling
 
+```mermaid
+flowchart LR
+    subgraph Failure1["Seat Lock Timeout"]
+        F1A["Seat Lock Timeout"]
+        F1A -->|"Lock timeout (5 minutes)"| F1B["Release lock, allow retry<br/>Notify user"]
+    end
+    
+    subgraph Failure2["Payment Failure"]
+        F2A["Payment Failure"]
+        F2A -->|"Gateway error"| F2B["Retry payment<br/>Release seat locks<br/>Notify user"]
+    end
+    
+    subgraph Failure3["Double Booking Attempt"]
+        F3A["Double Booking Attempt"]
+        F3A -->|"Database constraint violation"| F3B["Reject booking<br/>Return error<br/>Release locks"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Failure Type           Detection              Recovery
 ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -259,6 +280,9 @@ Failure Type           Detection              Recovery
 │ Attempt         │     constraint           Return error
 │                 │     violation            Release locks
 └─────────────────┘
+```
+
+</details>
 ```
 
 ---

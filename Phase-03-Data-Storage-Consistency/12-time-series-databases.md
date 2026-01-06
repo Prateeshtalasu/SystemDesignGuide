@@ -46,7 +46,22 @@ Query patterns:
 
 ### Why Traditional Databases Struggle
 
+```mermaid
+flowchart TD
+    Comp["TRADITIONAL DB vs TIME-SERIES DB"]
+    
+    Trad["TRADITIONAL DATABASE:<br/>- Row-oriented storage (all columns together)<br/>- B-tree indexes (random I/O for inserts)<br/>- No built-in compression for numeric sequences<br/>- No automatic data lifecycle management<br/>- Optimized for OLTP (random access)"]
+    
+    TSDB["TIME-SERIES DATABASE:<br/>- Column-oriented storage (compress similar values)<br/>- LSM trees or append-only (sequential writes)<br/>- Specialized compression (delta, gorilla, etc.)<br/>- Built-in retention policies and downsampling<br/>- Optimized for time-range queries"]
+    
+    Comp --> Trad
+    Comp --> TSDB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │         TRADITIONAL DB vs TIME-SERIES DB                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -71,6 +86,7 @@ Query patterns:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples
 
@@ -88,7 +104,15 @@ Query patterns:
 
 **Traditional Database = Detailed Diary**
 
+```mermaid
+flowchart TD
+    Diary["DETAILED DIARY<br/><br/>January 1, 2024, 00:00:00: Temperature is 72.1°F<br/>January 1, 2024, 00:00:01: Temperature is 72.1°F<br/>January 1, 2024, 00:00:02: Temperature is 72.2°F<br/>January 1, 2024, 00:00:03: Temperature is 72.2°F<br/>...<br/><br/>Every entry is complete and independent<br/>Lots of repetition<br/>Takes up entire bookshelf"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   DETAILED DIARY                             │
 │                                                              │
@@ -104,10 +128,19 @@ Query patterns:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Time-Series Database = Smart Compression**
 
+```mermaid
+flowchart TD
+    Smart["SMART COMPRESSION<br/><br/>Starting: January 1, 2024, 00:00:00, 72.1°F<br/>Changes only:<br/>  +2s: +0.1°F<br/>  +5s: +0.1°F<br/>  +10s: -0.2°F<br/>...<br/><br/>Store deltas, not absolute values<br/>Similar values compress well<br/>Fits in a small notebook"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   SMART COMPRESSION                          │
 │                                                              │
@@ -124,6 +157,7 @@ Query patterns:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

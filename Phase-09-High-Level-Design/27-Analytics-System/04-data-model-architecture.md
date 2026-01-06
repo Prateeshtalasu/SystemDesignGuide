@@ -394,7 +394,39 @@ int shardNumber = Math.abs(projectId.hashCode()) % numShards;
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Web SDK, Mobile SDK, Server SDK"]
+    Clients --> CDN
+    Clients --> APIGateway
+    Clients --> LoadBalancer
+    CDN["CDN (CloudFlare)"]
+    APIGateway["API Gateway (Kong)"]
+    LoadBalancer["Load Balancer"]
+    CDN --> EventIngestion
+    APIGateway --> EventIngestion
+    LoadBalancer --> EventIngestion
+    EventIngestion["Event Ingestion Service<br/>(High-throughput API)"]
+    EventIngestion --> Kafka
+    EventIngestion --> PostgreSQL
+    EventIngestion --> Redis
+    Kafka["Kafka (Events)"]
+    PostgreSQL["PostgreSQL (Metadata)"]
+    Redis["Redis (Dedupe)"]
+    Kafka --> StreamProcessor
+    Kafka --> BatchProcessor
+    StreamProcessor["Stream Processor (Flink)"]
+    BatchProcessor["Batch Processor (Spark)"]
+    StreamProcessor --> RedisAggregates
+    BatchProcessor --> ObjectStorage
+    RedisAggregates["Redis (Real-time Aggregates)"]
+    ObjectStorage["Object Storage (S3) (Raw Events)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (Web SDK, Mobile SDK, Server SDK)                                │
@@ -445,6 +477,10 @@ int shardNumber = Math.abs(projectId.hashCode()) % numShards;
        └──────────┬──────────┘
                   │
                   ▼
+```
+
+</details>
+```
          ┌─────────────────┐
          │  Data Warehouse │
          │ (Snowflake/     │

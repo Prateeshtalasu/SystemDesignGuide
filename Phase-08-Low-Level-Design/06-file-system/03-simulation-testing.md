@@ -37,6 +37,25 @@ Initial State:
 └── backup/
 
 Step 1: copy("/home/user/doc.txt", "/backup/doc_backup.txt")
+
+```mermaid
+flowchart TD
+    A["Resolve source: /home/user/doc.txt → File object"]
+    B["Resolve destination parent: /backup → Directory object"]
+    C["Create new File: name='doc_backup.txt', content='Hello'"]
+    D["Add to /backup directory"]
+    E["Result: SUCCESS"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Resolve source: /home/user/doc.txt → File object             │
 │ Resolve destination parent: /backup → Directory object        │
@@ -44,6 +63,9 @@ Step 1: copy("/home/user/doc.txt", "/backup/doc_backup.txt")
 │ Add to /backup directory                                       │
 │ Result: SUCCESS                                                │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 File System State:
 /
@@ -55,6 +77,27 @@ File System State:
     └── doc_backup.txt (5 bytes) ← Copy created
 
 Step 2: move("/home/user/notes.txt", "/backup/notes.txt")
+
+```mermaid
+flowchart TD
+    A["Resolve source: /home/user/notes.txt → File object"]
+    B["Resolve destination parent: /backup → Directory object"]
+    C["Remove from source parent (/home/user)"]
+    D["Add to destination parent (/backup)"]
+    E["Update file's parent reference"]
+    F["Result: SUCCESS"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Resolve source: /home/user/notes.txt → File object           │
 │ Resolve destination parent: /backup → Directory object        │
@@ -63,6 +106,9 @@ Step 2: move("/home/user/notes.txt", "/backup/notes.txt")
 │ Update file's parent reference                                 │
 │ Result: SUCCESS                                                │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Final State:
 /
@@ -94,6 +140,40 @@ File System Structure:
         └── README.md (50 bytes)
 
 getSize("/projects") Execution Trace:
+
+```mermaid
+flowchart TD
+    A["getSize('/projects')"]
+    B["getSize('/projects/app')"]
+    C["Main.java.getSize() → 100"]
+    D["Utils.java.getSize() → 200"]
+    E["getSize('/projects/app/lib')"]
+    F["helper.jar.getSize() → 500"]
+    G["= 100 + 200 + 500 = 800"]
+    H["getSize('/projects/docs')"]
+    I["README.md.getSize() → 50"]
+    J["= 50"]
+    K["Total = 800 + 50 = 850 bytes"]
+    
+    A --> B
+    A --> H
+    B --> C
+    B --> D
+    B --> E
+    E --> F
+    C --> G
+    D --> G
+    F --> G
+    H --> I
+    I --> J
+    G --> K
+    J --> K
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ getSize("/projects")                                          │
 │   │                                                           │
@@ -110,6 +190,9 @@ getSize("/projects") Execution Trace:
 │                                                               │
 │   Total = 800 + 50 = 850 bytes                               │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result: 850 bytes
 ```
@@ -127,6 +210,23 @@ Initial State:
         └── file2.txt
 
 Step 1: delete("/data") - Attempt to delete non-empty directory
+
+```mermaid
+flowchart TD
+    A["Resolve path: /data → Directory object"]
+    B["Check if directory:<br/>  - isDirectory() = TRUE<br/>  - isEmpty() = FALSE (has 2 children)"]
+    C["VALIDATION FAILED:<br/>  - Cannot delete non-empty directory<br/>  - Must delete contents first OR use recursive delete"]
+    D["Result: DirectoryNotEmptyException<br/>Message: 'Cannot delete /data: directory not empty'"]
+    
+    A --> B
+    B --> C
+    C --> D
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Resolve path: /data → Directory object                        │
 │ Check if directory:                                            │
@@ -140,6 +240,9 @@ Step 1: delete("/data") - Attempt to delete non-empty directory
 │ Result: DirectoryNotEmptyException                            │
 │ Message: "Cannot delete /data: directory not empty"          │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Correct approach: deleteRecursive("/data")
 ┌───────────────────────────────────────────────────────────────┐

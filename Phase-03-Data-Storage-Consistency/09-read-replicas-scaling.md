@@ -38,7 +38,31 @@ Database capacity:
 
 ### The Read vs Write Asymmetry
 
+```mermaid
+flowchart TD
+    Ratio["TYPICAL READ/WRITE RATIO"]
+    
+    Ecommerce["E-commerce product pages:<br/>99% reads, 1% writes"]
+    Social["Social media feeds:<br/>95% reads, 5% writes"]
+    Banking["Banking dashboards:<br/>90% reads, 10% writes"]
+    Logging["Logging systems:<br/>10% reads, 90% writes"]
+    
+    Insight["Most applications are READ-HEAVY<br/><br/>Key insight:<br/>- Writes MUST go to primary (for consistency)<br/>- Reads CAN go to replicas (if staleness acceptable)"]
+    
+    Ratio --> Ecommerce
+    Ratio --> Social
+    Ratio --> Banking
+    Ratio --> Logging
+    Ecommerce --> Insight
+    Social --> Insight
+    Banking --> Insight
+    Logging --> Insight
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              TYPICAL READ/WRITE RATIO                        │
 │                                                              │
@@ -55,6 +79,7 @@ Database capacity:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Read Scaling
 
@@ -110,7 +135,37 @@ Performance degrades for everyone
 
 **Single Database = One Librarian**
 
+```mermaid
+flowchart TD
+    Librarian["ONE LIBRARIAN"]
+    
+    People["100 people asking questions simultaneously"]
+    
+    P1["Person 1: 'Where is book X?' (read)"]
+    P2["Person 2: 'Where is book Y?' (read)"]
+    P3["Person 3: 'Add this new book' (write)"]
+    P4["Person 4: 'Where is book Z?' (read)"]
+    P100["Person 100: Still waiting..."]
+    
+    Problem["One librarian can only help one person at a time<br/>Long queues form"]
+    
+    Librarian --> People
+    People --> P1
+    People --> P2
+    People --> P3
+    People --> P4
+    People --> P100
+    P1 --> Problem
+    P2 --> Problem
+    P3 --> Problem
+    P4 --> Problem
+    P100 --> Problem
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   ONE LIBRARIAN                              │
 │                                                              │
@@ -128,10 +183,34 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Read Replicas = Multiple Librarians with Copies**
 
+```mermaid
+flowchart TD
+    subgraph Primary["HEAD LIBRARIAN (Primary)"]
+        P1_2["Only one who can add/modify books<br/>Keeps the master catalog<br/>Sends updates to assistants"]
+    end
+    
+    subgraph Replicas["ASSISTANT LIBRARIANS (Replicas)"]
+        R1["Have copies of the catalog<br/>Can answer 'where is book X?' questions<br/>Cannot add or modify books"]
+    end
+    
+    Traffic["Traffic distribution:<br/>- 'Add new book' → Head librarian only<br/>- 'Where is book?' → Any assistant (load balanced)"]
+    
+    Result["Result: 5 assistants = 5x read capacity!"]
+    
+    Primary -->|"sends updates"| Replicas
+    Primary --> Traffic
+    Replicas --> Traffic
+    Traffic --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │            MULTIPLE LIBRARIANS (Read Replicas)               │
 │                                                              │
@@ -153,10 +232,33 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Connection Pooling = Shared Phone Lines
 
+```mermaid
+flowchart LR
+    subgraph Without["WITHOUT POOLING"]
+        W1["Each call = New phone line installed<br/>Call ends = Phone line removed<br/>Next call = Install new line again<br/>Cost: High (installation time for each call)"]
+    end
+    
+    subgraph With["WITH POOLING"]
+        W2["Office has 20 shared phone lines<br/>Call comes in = Use available line<br/>Call ends = Line returned to pool<br/>Next call = Reuse existing line<br/>Cost: Low (lines already installed)"]
+    end
+    
+    Expensive["Database connections are expensive to create:<br/>- TCP handshake<br/>- Authentication<br/>- Session setup<br/>- Memory allocation"]
+    
+    Benefit["Pooling reuses connections = much faster!"]
+    
+    Without --> Expensive
+    With --> Expensive
+    Expensive --> Benefit
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONNECTION POOLING ANALOGY                      │
 │                                                              │
@@ -183,6 +285,8 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -190,7 +294,40 @@ Performance degrades for everyone
 
 ### Read Replica Architecture
 
+```mermaid
+flowchart TD
+    App3["APPLICATION"]
+    
+    subgraph WritePath["WRITE PATH"]
+        Primary2["Primary<br/>(writes)"]
+    end
+    
+    subgraph ReadPath["READ PATH"]
+        LB["Load Balancer"]
+        Replica1_2["Replica 1"]
+        Replica2_2["Replica 2"]
+        Replica3_2["Replica 3"]
+        Replica4_2["Replica 4"]
+        
+        LB --> Replica1_2
+        LB --> Replica2_2
+        LB --> Replica3_2
+        LB --> Replica4_2
+    end
+    
+    App3 -->|"writes"| WritePath
+    App3 -->|"reads"| ReadPath
+    
+    Primary2 -->|"Replication"| Replica1_2
+    Primary2 -->|"Replication"| Replica2_2
+    Primary2 -->|"Replication"| Replica3_2
+    Primary2 -->|"Replication"| Replica4_2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              READ REPLICA ARCHITECTURE                       │
 │                                                              │
@@ -223,10 +360,32 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Replication Lag
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Primary3 as Primary
+    participant Replica1_3 as Replica 1
+    participant Replica2_3 as Replica 2
+    
+    Note over Client,Replica2_3: REPLICATION LAG Timeline
+    Client->>Primary3: T=0ms: Write user.name = "Alice"
+    Primary3->>Client: T=1ms: Acknowledge write
+    Primary3->>Replica1_3: T=5ms: Send WAL to Replica 1
+    Replica1_3->>Replica1_3: T=10ms: Apply change (lag: 10ms)
+    Primary3->>Replica2_3: T=15ms: Send WAL to Replica 2
+    Replica2_3->>Replica2_3: T=50ms: Apply change (slower network, lag: 50ms)
+    
+    Note over Client,Replica2_3: If user reads from Replica 2 at T=20ms:<br/>→ Sees OLD value (stale read)<br/><br/>Causes of lag:<br/>- Network latency<br/>- Replica under load<br/>- Large transactions<br/>- Disk I/O on replica
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    REPLICATION LAG                           │
 │                                                              │
@@ -254,10 +413,33 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Connection Pooling Internals
 
+```mermaid
+flowchart TD
+    Config["Pool Configuration:<br/>- Minimum connections: 5 (always ready)<br/>- Maximum connections: 20 (cap)<br/>- Idle timeout: 10 minutes<br/>- Connection lifetime: 30 minutes"]
+    
+    subgraph PoolState["Pool State"]
+        Active["Active: [Conn1, Conn2, Conn3]<br/>(in use)"]
+        Idle["Idle: [Conn4, Conn5, Conn6, Conn7]<br/>(available)"]
+        Pending["Pending: 2 requests waiting"]
+    end
+    
+    Flow["Request flow:<br/>1. Request arrives<br/>2. Check idle pool<br/>   - If available: Return connection<br/>   - If empty and < max: Create new connection<br/>   - If at max: Wait in queue (with timeout)<br/>3. Execute query<br/>4. Return connection to idle pool"]
+    
+    Lifecycle["Connection lifecycle:<br/>- Created: TCP + Auth + Session setup (~50-100ms)<br/>- Reused: Just execute query (~1ms overhead)<br/>- Closed: After idle timeout or lifetime exceeded"]
+    
+    Config --> PoolState
+    PoolState --> Flow
+    Flow --> Lifecycle
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              CONNECTION POOL INTERNALS                       │
 │                                                              │
@@ -290,10 +472,31 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Read-After-Write Consistency Problem
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Primary4 as Primary
+    participant Replica4 as Replica
+    
+    Note over User,Replica4: READ-AFTER-WRITE PROBLEM
+    User->>Primary4: 1. Update profile name to "Alice Smith"
+    Primary4->>User: Returns "Success"
+    User->>Replica4: 2. View profile (load balanced)
+    Replica4->>Replica4: Hasn't received update yet
+    Replica4->>User: Returns old name "Alice Jones"
+    Note over User,Replica4: User reaction: "Where's my update?!" 😡
+    
+    Solutions["Solutions:<br/>A. Read from Primary after write<br/>   - For N seconds after write, read from Primary<br/>   - Simple but increases Primary load<br/><br/>B. Version tracking<br/>   - Track user's last write version<br/>   - Read from replica only if version >= last write<br/>   - More complex but scales better<br/><br/>C. Sticky sessions<br/>   - Route user to same replica<br/>   - Replica that received replication first<br/>   - Limits load balancing flexibility"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           READ-AFTER-WRITE PROBLEM                           │
 │                                                              │
@@ -328,10 +531,32 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Stale Read Handling
 
+```mermaid
+flowchart TD
+    Strategies["STALE READ HANDLING STRATEGIES"]
+    
+    S1["Strategy 1: Accept Staleness<br/>For non-critical reads (analytics, dashboards)<br/>Just read from any replica<br/>Staleness of seconds is acceptable"]
+    
+    S2["Strategy 2: Bounded Staleness<br/>Check replica lag before reading<br/>If lag > threshold, route to Primary<br/>Guarantees max staleness"]
+    
+    S3["Strategy 3: Causal Consistency<br/>Track dependencies between operations<br/>Ensure reads see causally related writes<br/>More complex but stronger guarantees"]
+    
+    S4["Strategy 4: Synchronous Replication<br/>Wait for replica to confirm before ack write<br/>Zero lag but slower writes<br/>Use for critical data only"]
+    
+    Strategies --> S1
+    Strategies --> S2
+    Strategies --> S3
+    Strategies --> S4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              STALE READ HANDLING STRATEGIES                  │
 │                                                              │
@@ -365,6 +590,7 @@ Performance degrades for everyone
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -1113,7 +1339,41 @@ Solution:
 
 ### When to Use What
 
+```mermaid
+flowchart TD
+    Q1_2["Is data frequently accessed<br/>and rarely changes?"]
+    Q1_Yes2["YES → Use caching<br/>(Redis, Memcached)"]
+    Q1_No2["NO → Continue"]
+    
+    Q2_2["Can you tolerate seconds of staleness?"]
+    Q2_Yes2["YES → Use read replicas"]
+    Q2_No2["NO → Continue"]
+    
+    Q3_2["Is it static content<br/>(images, CSS, JS)?"]
+    Q3_Yes2["YES → Use CDN"]
+    Q3_No2["NO → Continue"]
+    
+    Q4_2["Need to scale writes too?"]
+    Q4_Yes2["YES → Consider sharding"]
+    Q4_No2["NO → Single node might be enough"]
+    
+    Q1_2 -->|"YES"| Q1_Yes2
+    Q1_2 -->|"NO"| Q1_No2
+    Q1_No2 --> Q2_2
+    Q2_2 -->|"YES"| Q2_Yes2
+    Q2_2 -->|"NO"| Q2_No2
+    Q2_No2 --> Q3_2
+    Q3_2 -->|"YES"| Q3_Yes2
+    Q3_2 -->|"NO"| Q3_No2
+    Q3_No2 --> Q4_2
+    Q4_2 -->|"YES"| Q4_Yes2
+    Q4_2 -->|"NO"| Q4_No2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              READ SCALING DECISION TREE                      │
 ├─────────────────────────────────────────────────────────────┤
@@ -1136,6 +1396,7 @@ Solution:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

@@ -30,7 +30,17 @@ A single server has limits:
 
 ### What Systems Looked Like Before Load Balancers
 
+```mermaid
+flowchart TD
+    Users["All Users"] --> Server["Single Server<br/>- Web App<br/>- Database<br/>- Files"]
+    
+    Note1["Problems:<br/>1. Server overloaded at peak traffic<br/>2. Single point of failure (server down = site down)<br/>3. Can't scale beyond server's capacity<br/>4. Maintenance requires downtime"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SINGLE SERVER ARCHITECTURE                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -49,6 +59,7 @@ Problems:
 3. Can't scale beyond server's capacity
 4. Maintenance requires downtime
 ```
+</details>
 
 ### What Breaks Without Load Balancers
 
@@ -89,7 +100,22 @@ Think of a load balancer as a **restaurant host** managing multiple dining rooms
 - If one room closes for cleaning, redirects to others
 - Ensures even distribution across all rooms
 
+```mermaid
+flowchart TD
+    Host["Host<br/>(Load Balancer)"]
+    RoomA["Dining Room A<br/>(Server 1)"]
+    RoomB["Dining Room B<br/>(Server 2)"]
+    RoomC["Dining Room C<br/>(Server 3)"]
+    
+    Host --> RoomA
+    Host --> RoomB
+    Host --> RoomC
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    LOAD BALANCER AS RESTAURANT HOST                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -108,6 +134,7 @@ Think of a load balancer as a **restaurant host** managing multiple dining rooms
     │  (Server 1)   │       │  (Server 2)   │       │  (Server 3)   │
     └───────────────┘       └───────────────┘       └───────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -296,7 +323,37 @@ public class IPHashBalancer {
 
 Advanced hashing that minimizes redistribution when servers change.
 
+```mermaid
+flowchart TD
+    subgraph Ring["Consistent Hashing Ring"]
+        direction TB
+        Zero["0°"]
+        ServerA["Server A (30°)"]
+        ServerB["Server B (150°)"]
+        ServerC["Server C (200°)"]
+        Ninety["90°"]
+        OneEighty["180°"]
+        TwoSeventy["270°"]
+        
+        Zero --> ServerA
+        ServerA --> Ninety
+        Ninety --> ServerB
+        ServerB --> OneEighty
+        OneEighty --> ServerC
+        ServerC --> TwoSeventy
+        TwoSeventy --> ServerA
+    end
+    
+    Req1["Request hash = 100°<br/>→ Goes to Server B<br/>(next server clockwise)"]
+    Req2["Request hash = 220°<br/>→ Goes to Server A<br/>(next server clockwise)"]
+    
+    Note1["If Server B is removed:<br/>- Only requests between 90° and 150° are redistributed<br/>- Other requests unaffected"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CONSISTENT HASHING RING                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -321,6 +378,7 @@ If Server B is removed:
 - Only requests between 90° and 150° are redistributed
 - Other requests unaffected
 ```
+</details>
 
 **Pros**: Minimal redistribution when scaling
 **Cons**: More complex to implement
@@ -377,7 +435,33 @@ Load balancers must know which servers are healthy. Two approaches:
 
 Load balancer periodically probes each server.
 
+```mermaid
+sequenceDiagram
+    participant LB as Load Balancer
+    participant Server as Backend Server
+    
+    loop Every 5 seconds
+        LB->>Server: GET /health
+        Server->>LB: 200 OK {"status": "healthy", "db": "ok"}
+        Note over LB: [Server marked HEALTHY]
+    end
+    
+    LB->>Server: GET /health
+    Note over Server: [Timeout - no response]
+    Note over LB: [Failure count: 1/3]
+    
+    LB->>Server: GET /health
+    Server->>LB: 503 Service Unavailable
+    Note over LB: [Failure count: 2/3]
+    
+    Note over LB: ... after 3 failures ...
+    Note over LB: [Server marked UNHEALTHY - removed from pool]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    ACTIVE HEALTH CHECK FLOW                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -415,6 +499,7 @@ Load Balancer                                          Backend Server
       │                                                      │
       │  [Server marked UNHEALTHY - removed from pool]       │
 ```
+</details>
 
 **Configuration Parameters**:
 - **Interval**: How often to check (e.g., 5 seconds)
@@ -426,7 +511,38 @@ Load Balancer                                          Backend Server
 
 Monitor real traffic for failures. No extra probe requests.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant LB as Load Balancer
+    participant ServerA as Server A
+    participant ServerB as Server B
+    
+    Client->>LB: Request
+    LB->>ServerA: Request
+    ServerA->>LB: 500 error
+    Note over LB: [Error count for A: 1]
+    LB->>Client: 500 error
+    
+    Client->>LB: Request
+    LB->>ServerA: Request
+    ServerA->>LB: 502 error
+    Note over LB: [Error count for A: 2]
+    LB->>Client: 502 error
+    
+    Note over LB: ... after N errors in time window ...
+    Note over LB: [Server A marked UNHEALTHY]
+    
+    Client->>LB: Request
+    LB->>ServerB: Request (A skipped)
+    ServerB->>LB: 200 OK
+    LB->>Client: 200 OK
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    PASSIVE HEALTH CHECK FLOW                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -447,6 +563,7 @@ Client Request → Load Balancer → Server A
                       │
 Client Request → Load Balancer → Server B (A skipped)
 ```
+</details>
 
 **Pros**: No extra traffic, detects real failures
 **Cons**: Clients experience failures before detection
@@ -586,7 +703,28 @@ def456 → Server B
 
 Instead of sticky sessions, store sessions externally.
 
+```mermaid
+flowchart TD
+    LB["Load Balancer"]
+    ServerA["Server A"]
+    ServerB["Server B"]
+    ServerC["Server C"]
+    Redis["Redis Cluster<br/>(Session Store)"]
+    
+    LB --> ServerA
+    LB --> ServerB
+    LB --> ServerC
+    ServerA --> Redis
+    ServerB --> Redis
+    ServerC --> Redis
+    
+    Note1["Any server can handle any request - sessions stored in Redis"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    EXTERNALIZED SESSION STORAGE                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -611,6 +749,7 @@ Instead of sticky sessions, store sessions externally.
 
 Any server can handle any request - sessions stored in Redis
 ```
+</details>
 
 ```java
 // Spring Session with Redis
@@ -639,7 +778,19 @@ spring:
 
 When removing a server, existing connections should complete gracefully.
 
+```mermaid
+flowchart TD
+    T0["Time 0: Server A marked for removal<br/>Server A: 100 active connections<br/>Status: DRAINING<br/>(no new connections, existing continue)"]
+    T30["Time 30s: Connections completing<br/>Server A: 20 active connections<br/>Status: DRAINING"]
+    T60["Time 60s: All connections complete or timeout<br/>Server A: 0 active connections<br/>Status: REMOVED<br/>(safe to shut down)"]
+    
+    T0 --> T30 --> T60
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CONNECTION DRAINING                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -662,6 +813,7 @@ Time 60s: All connections complete or timeout
         │ Status: REMOVED (safe to shut down)                             │
         └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Configuration**:
 - **Drain timeout**: Maximum time to wait (e.g., 60 seconds)
@@ -979,7 +1131,27 @@ resource "aws_lb_listener_rule" "api" {
 
 **Solution**: High availability setup with multiple load balancers.
 
+```mermaid
+flowchart TD
+    DNS["DNS (Route53)<br/>Multiple A records"]
+    LBPrimary["LB Primary<br/>(Active)"]
+    LBSecondary["LB Secondary<br/>(Standby)"]
+    ServerA["Server A"]
+    ServerB["Server B"]
+    
+    DNS --> LBPrimary
+    DNS --> LBSecondary
+    LBPrimary <-->|"Heartbeat"| LBSecondary
+    LBPrimary -->|"Virtual IP (VIP)<br/>Failover via VRRP/Keepalived"| ServerA
+    LBPrimary --> ServerB
+    LBSecondary --> ServerA
+    LBSecondary --> ServerB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    HIGH AVAILABILITY LOAD BALANCER                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1007,6 +1179,7 @@ resource "aws_lb_listener_rule" "api" {
        │Server A │   │Server B │◄─────────────┘
        └─────────┘   └─────────┘
 ```
+</details>
 
 ### Pitfall 2: Not Preserving Client IP
 

@@ -26,7 +26,45 @@ Before looking at diagrams, let's understand each component and why it exists.
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    Clients["CLIENTS<br/>Rider App, Driver App, Admin Dashboard"]
+    Clients --> CDN
+    Clients --> LoadBalancer
+    Clients --> WSGateway
+    CDN["CDN (CloudFront)<br/>Static assets, map tiles"]
+    LoadBalancer["Load Balancer (AWS ALB)<br/>REST API traffic"]
+    WSGateway["WebSocket Gateway<br/>Real-time updates, Location streaming"]
+    LoadBalancer --> APIGateway
+    WSGateway --> APIGateway
+    APIGateway["API Gateway<br/>- Authentication<br/>- Rate Limiting<br/>- Request Routing"]
+    APIGateway --> LocationService
+    APIGateway --> MatchingService
+    APIGateway --> TripService
+    LocationService["Location Service<br/>- Update driver locations<br/>- Track riders"]
+    MatchingService["Matching Service<br/>- Find nearby drivers<br/>- Driver-rider matching"]
+    TripService["Trip Service<br/>- Ride state machine<br/>- Status transitions"]
+    LocationService --> PricingService
+    MatchingService --> PaymentService
+    TripService --> NotificationService
+    PricingService["Pricing Service<br/>- Fare calculation<br/>- Surge pricing<br/>- Promotions"]
+    PaymentService["Payment Service<br/>- Authorize<br/>- Capture<br/>- Refunds"]
+    NotificationService["Notification Service<br/>- Push notifications<br/>- SMS<br/>- Email"]
+    PricingService --> DataLayer
+    PaymentService --> DataLayer
+    NotificationService --> DataLayer
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis Cluster<br/>- Driver locs<br/>- Sessions<br/>- Surge data"]
+        PostgreSQL["PostgreSQL<br/>- Users<br/>- Rides<br/>- Payments"]
+        TimescaleDB["TimescaleDB<br/>- Location history<br/>- Analytics"]
+        Kafka["Kafka<br/>- Events<br/>- Logs"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                        │
 │                    (Rider App, Driver App, Admin Dashboard)                      │
@@ -86,6 +124,9 @@ Before looking at diagrams, let's understand each component and why it exists.
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  └────────────┘  │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

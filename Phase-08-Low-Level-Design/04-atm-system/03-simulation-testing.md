@@ -49,12 +49,35 @@ Initial State:
 - Savings Account: Balance $2000
 
 Step 1: Insert Card → Enter PIN (1234) → Authenticated
+
+```mermaid
+flowchart TD
+    A["ATM State: IDLE → CARD_INSERTED → AUTHENTICATED<br/>Display: 'Select Transaction'"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ ATM State: IDLE → CARD_INSERTED → AUTHENTICATED               │
 │ Display: "Select Transaction"                                  │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Select Transfer
+
+```mermaid
+flowchart TD
+    A["ATM State: AUTHENTICATED → TRANSACTION_IN_PROGRESS<br/>Display: 'Select Source Account'<br/>User selects: CHECKING<br/>Display: 'Select Destination Account'<br/>User selects: SAVINGS<br/>Display: 'Enter Transfer Amount'"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ ATM State: AUTHENTICATED → TRANSACTION_IN_PROGRESS            │
 │ Display: "Select Source Account"                               │
@@ -63,8 +86,21 @@ Step 2: Select Transfer
 │ User selects: SAVINGS                                          │
 │ Display: "Enter Transfer Amount"                               │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 3: Enter Amount ($1500)
+
+```mermaid
+flowchart TD
+    A["Validation:<br/>  - $1500 ≤ $5000 (source balance) ✓<br/>  - Source ≠ Destination ✓<br/>Execute Transfer:<br/>  - Checking: $5000 - $1500 = $3500<br/>  - Savings: $2000 + $1500 = $3500<br/>Log: TransferTransaction(CHECKING→SAVINGS, $1500, SUCCESS)<br/>Display: 'Transfer Successful'"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Validation:                                                    │
 │   - $1500 ≤ $5000 (source balance) ✓                         │
@@ -75,12 +111,28 @@ Step 3: Enter Amount ($1500)
 │ Log: TransferTransaction(CHECKING→SAVINGS, $1500, SUCCESS)   │
 │ Display: "Transfer Successful"                                 │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 4: Eject Card
+
+```mermaid
+flowchart TD
+    A["ATM State: TRANSACTION_IN_PROGRESS → IDLE<br/>Display: 'Thank you'"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ ATM State: TRANSACTION_IN_PROGRESS → IDLE                     │
 │ Display: "Thank you"                                           │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Final State:
 - Checking Balance: $3500
@@ -99,12 +151,35 @@ Initial State:
 - Failed Attempts: 0
 
 Step 1: Insert Card
+
+```mermaid
+flowchart TD
+    A["ATM State: IDLE → CARD_INSERTED<br/>Display: 'Enter PIN'"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ ATM State: IDLE → CARD_INSERTED                               │
 │ Display: "Enter PIN"                                           │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Enter Wrong PIN (9999) - Attempt 1
+
+```mermaid
+flowchart TD
+    A["card.validatePin('9999') → FALSE<br/>failedAttempts: 0 → 1<br/>Remaining attempts: 2<br/>Display: 'Incorrect PIN. 2 attempts remaining'<br/>ATM State: remains CARD_INSERTED"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ card.validatePin("9999") → FALSE                              │
 │ failedAttempts: 0 → 1                                         │
@@ -112,8 +187,21 @@ Step 2: Enter Wrong PIN (9999) - Attempt 1
 │ Display: "Incorrect PIN. 2 attempts remaining"                │
 │ ATM State: remains CARD_INSERTED                              │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 3: Enter Wrong PIN (1111) - Attempt 2
+
+```mermaid
+flowchart TD
+    A["card.validatePin('1111') → FALSE<br/>failedAttempts: 1 → 2<br/>Remaining attempts: 1<br/>Display: 'Incorrect PIN. 1 attempt remaining'<br/>ATM State: remains CARD_INSERTED"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ card.validatePin("1111") → FALSE                              │
 │ failedAttempts: 1 → 2                                         │
@@ -121,8 +209,21 @@ Step 3: Enter Wrong PIN (1111) - Attempt 2
 │ Display: "Incorrect PIN. 1 attempt remaining"                 │
 │ ATM State: remains CARD_INSERTED                              │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 4: Enter Wrong PIN (0000) - Attempt 3 (FINAL)
+
+```mermaid
+flowchart TD
+    A["card.validatePin('0000') → FALSE<br/>failedAttempts: 2 → 3<br/>failedAttempts >= MAX_ATTEMPTS (3)<br/><br/>CARD BLOCKED:<br/>  - card.setStatus(CardStatus.BLOCKED)<br/>  - Log: 'Card blocked due to too many failed PIN attempts'<br/>Card retained by ATM (simulated)<br/>Display: 'Card blocked. Please contact your bank.'<br/>ATM State: CARD_INSERTED → IDLE"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ card.validatePin("0000") → FALSE                              │
 │ failedAttempts: 2 → 3                                         │
@@ -134,6 +235,9 @@ Step 4: Enter Wrong PIN (0000) - Attempt 3 (FINAL)
 │ Display: "Card blocked. Please contact your bank."            │
 │ ATM State: CARD_INSERTED → IDLE                               │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Final State:
 - Card Status: BLOCKED
@@ -469,7 +573,24 @@ public class Card {
 
 **PIN validation flow:**
 
+```mermaid
+flowchart TD
+    start(["validatePin('1234')"])
+    start --> checkBlocked{"isBlocked?"}
+    checkBlocked -->|Yes| blocked["Return false"]
+    checkBlocked -->|No| checkMatch{"PIN match?"}
+    checkMatch -->|Yes| success["Reset attempts<br/>Return true"]
+    checkMatch -->|No| incAttempts["failedAttempts++"]
+    incAttempts --> checkAttempts{"attempts >= 3?"}
+    checkAttempts -->|Yes| doBlock["Block card"]
+    doBlock --> blocked
+    checkAttempts -->|No| blocked
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 validatePin("1234")
          │
          ▼
@@ -493,6 +614,8 @@ validatePin("1234")
           ▼
       Return false
 ```
+
+</details>
 
 ---
 
@@ -680,7 +803,28 @@ public class WithdrawalTransaction extends Transaction {
 
 **Withdrawal sequence with rollback:**
 
+```mermaid
+flowchart TD
+    start["execute()"]
+    start --> validate["Validate amount"]
+    validate --> invalid{"Amount invalid?"}
+    invalid -->|Yes| fail1["fail(), return false"]
+    invalid -->|No| checkCash["Check ATM cash"]
+    checkCash --> noCash{"Not enough cash?"}
+    noCash -->|Yes| fail2["fail(), return false"]
+    noCash -->|No| withdraw["Withdraw from account"]
+    withdraw --> withdrawFail{"Withdraw failed?"}
+    withdrawFail -->|Yes| fail3["fail(), return false"]
+    withdrawFail -->|No| dispense["Dispense cash"]
+    dispense --> dispenseFail{"Dispense failed?"}
+    dispenseFail -->|Yes| rollback["ROLLBACK: deposit back<br/>fail(), return false"]
+    dispenseFail -->|No| success["complete(), return true"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 execute()
     │
     ├── Validate amount
@@ -704,6 +848,8 @@ execute()
             │
             └──────► complete(), return true
 ```
+
+</details>
 
 ---
 
@@ -752,7 +898,22 @@ public class ATMController {
 
 **State transition on card insert:**
 
+```mermaid
+flowchart TD
+    idle["State: IDLE"]
+    idle --> insert["insertCard(card)"]
+    insert --> checkState{"state != IDLE?"}
+    checkState -->|Yes| busy["Display error<br/>return false"]
+    checkState -->|No| readCard["cardReader.readCard(card)"]
+    readCard --> invalid{"Card invalid / expired / blocked?"}
+    invalid -->|Yes| readFail["return false"]
+    invalid -->|No| success["currentCard = card<br/>state = CARD_INSERTED<br/>Display 'Enter PIN'"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 State: IDLE
     │
     │ insertCard(card)
@@ -771,6 +932,8 @@ State: IDLE
             ├── state = CARD_INSERTED
             └── Display "Enter PIN"
 ```
+
+</details>
 
 ```java
     public boolean authenticate(String pin) {
@@ -800,7 +963,23 @@ State: IDLE
 
 **Authentication flow:**
 
+```mermaid
+flowchart TD
+    start["authenticate('1234')"]
+    start --> checkState{"state != CARD_INSERTED?"}
+    checkState -->|Yes| badState["return false"]
+    checkState -->|No| validate["card.validatePin('1234')"]
+    validate --> success{"PIN valid?"}
+    success -->|Yes| auth["state = AUTHENTICATED<br/>Display 'Welcome'"]
+    success -->|No| handleFail["remaining > 0?"]
+    handleFail -->|Yes| retry["Display 'X attempts remaining'"]
+    handleFail -->|No| block["Retain card<br/>state = IDLE"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 authenticate("1234")
     │
     ├── state != CARD_INSERTED?
@@ -827,6 +1006,8 @@ authenticate("1234")
     │
     └── return result
 ```
+
+</details>
 
 ---
 

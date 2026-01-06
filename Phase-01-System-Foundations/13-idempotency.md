@@ -83,6 +83,25 @@ Mathematically: `f(f(x)) = f(x)`
 The HTTP specification defines which methods should be idempotent:
 
 ```
+```mermaid
+graph LR
+    subgraph "HTTP METHODS IDEMPOTENCY"
+        GET["GET: Yes<br>Reading doesn't change state"]
+        HEAD["HEAD: Yes<br>Same as GET, no body"]
+        OPTIONS["OPTIONS: Yes<br>Describes available methods"]
+        PUT["PUT: Yes<br>'Set to this value' (absolute)"]
+        DELETE["DELETE: Yes<br>'Remove this' (already gone = OK)"]
+        POST["POST: NO<br>'Create new' (each call = new)"]
+        PATCH["PATCH: NO*<br>'Modify' (depends on operation)<br>*Can be idempotent if designed carefully"]
+        
+        GET --> HEAD --> OPTIONS --> PUT --> DELETE --> POST --> PATCH
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────┬─────────────┬────────────────────────────────────┐
 │ Method   │ Idempotent? │ Why                                │
 ├──────────┼─────────────┼────────────────────────────────────┤
@@ -96,6 +115,8 @@ The HTTP specification defines which methods should be idempotent:
 └──────────┴─────────────┴────────────────────────────────────┘
 
 * PATCH can be idempotent if designed carefully
+```
+</details>
 ```
 
 ---
@@ -121,6 +142,32 @@ At-least-once delivery + Idempotent operations = Exactly-once semantics
 The most common pattern for making operations idempotent:
 
 ```
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client,Server: First Request
+    Client->>Server: POST /payment<br>Idempotency-Key: abc123<br>{amount: $100}
+    Server->>Server: Check: Have I seen abc123?
+    Note over Server: NO
+    Server->>Server: 1. Store abc123<br>2. Process payment<br>3. Store result
+    Server->>Client: 200 OK<br>{status: "completed"}
+    
+    Note over Client: Network timeout, client retries
+    
+    Note over Client,Server: Retry Request
+    Client->>Server: POST /payment<br>Idempotency-Key: abc123<br>{amount: $100}
+    Server->>Server: Check: Have I seen abc123?
+    Note over Server: YES
+    Server->>Server: Return stored result (no retry)
+    Server->>Client: 200 OK<br>{status: "completed"}
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    IDEMPOTENCY KEY FLOW                      │
 ├─────────────────────────────────────────────────────────────┤
@@ -171,6 +218,8 @@ The most common pattern for making operations idempotent:
 │    │ <─────────────────────────────│                         │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Storage for Idempotency Keys
@@ -1282,6 +1331,25 @@ Idempotency ensures that performing an operation multiple times has the same eff
 ## Quick Reference Card
 
 ```
+```mermaid
+graph TD
+    subgraph "IDEMPOTENCY CHEAT SHEET"
+        Def["DEFINITION<br>f(f(x)) = f(x)<br>Multiple executions = Same result as one execution"]
+        HTTP["HTTP METHODS<br>Idempotent: GET, PUT, DELETE, HEAD, OPTIONS<br>NOT Idempotent: POST, PATCH (usually)"]
+        Pattern["IMPLEMENTATION PATTERN<br>1. Client generates unique key (once, before first try)<br>2. Client sends key in header with every attempt<br>3. Server checks: key exists?<br>   - No: Acquire lock, process, store result<br>   - Yes (processing): Return 409 Conflict<br>   - Yes (completed): Return cached result"]
+        KeyGen["KEY GENERATION<br>UUID: Simple, must reuse for retries<br>Hash: Deterministic, same content = same key<br>Business ID: order_123_place, user_456_update"]
+        Storage["STORAGE<br>Redis: Fast, use SET NX for atomic lock<br>Database: Durable, use UNIQUE constraint<br>TTL: 24-48 hours typical"]
+        Mistakes["COMMON MISTAKES<br>✗ New key on each retry<br>✗ Ignoring 'processing' state<br>✗ Not handling failures<br>✗ Same key for different operations"]
+        Formula["FORMULA<br>At-least-once delivery + Idempotent ops = Exactly-once"]
+        
+        Def --> HTTP --> Pattern --> KeyGen --> Storage --> Mistakes --> Formula
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  IDEMPOTENCY CHEAT SHEET                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -1320,5 +1388,7 @@ Idempotency ensures that performing an operation multiple times has the same eff
 │ FORMULA                                                      │
 │   At-least-once delivery + Idempotent ops = Exactly-once    │
 └─────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 

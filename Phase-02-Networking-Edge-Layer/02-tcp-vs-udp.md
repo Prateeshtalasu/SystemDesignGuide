@@ -87,7 +87,21 @@ TCP and UDP represent a fundamental trade-off:
 
 Neither is "better." The right choice depends on what your application needs.
 
+```mermaid
+flowchart LR
+    UDP["UDP"] --> DNS["DNS Queries<br/>Fast Simple"]
+    UDP --> Gaming["Gaming Updates<br/>Fast but lossy OK"]
+    UDP --> VoIP["VoIP Calls<br/>Real-time tolerates loss"]
+    UDP --> Video["Video Stream<br/>Real-time tolerates some loss"]
+    
+    TCP["TCP"] --> HTTP["HTTP Requests<br/>Reliable ordered"]
+    TCP --> File["File Transfer<br/>100% reliable"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     THE RELIABILITY vs SPEED SPECTRUM                        │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -104,6 +118,7 @@ Neither is "better." The right choice depends on what your application needs.
    Simple     lossy OK      tolerates    tolerates   ordered     reliable
                             loss         some loss
 ```
+</details>
 
 ---
 
@@ -147,7 +162,21 @@ Key Fields:
 
 Before any data is sent, TCP establishes a connection:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: 1. SYN (seq=100)<br/>"I want to connect, my starting number is 100"
+    Server->>Client: 2. SYN-ACK (seq=300, ack=101)<br/>"OK, my starting number is 300, I expect 101 next"
+    Client->>Server: 3. ACK (seq=101, ack=301)<br/>"Got it, I expect 301 next, let's go!"
+    Note over Client,Server: CONNECTION ESTABLISHED
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         TCP 3-WAY HANDSHAKE                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -169,6 +198,7 @@ Before any data is sent, TCP establishes a connection:
        │           CONNECTION ESTABLISHED                    │
        │                                                     │
 ```
+</details>
 
 **Why 3 steps?**
 1. **SYN**: Client proves it can send
@@ -181,7 +211,24 @@ This ensures both sides can send and receive before wasting resources on data tr
 
 TCP tracks every byte sent using sequence numbers:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client: Client sends "HELLO" (5 bytes), starting at sequence 100
+    Client->>Server: DATA (seq=100, len=5, data="HELLO")
+    Server->>Client: ACK (ack=105)<br/>"I received up to byte 104, send 105 next"
+    Client->>Server: DATA (seq=105, len=6, data="WORLD!")
+    Server->>Client: ACK (ack=111)
+    
+    Note over Client,Server: Sequence numbers: 100-104 = "HELLO", 105-110 = "WORLD!"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SEQUENCE NUMBER TRACKING                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -207,12 +254,29 @@ Client sends "HELLO" (5 bytes), starting at sequence 100:
 Sequence numbers: 100, 101, 102, 103, 104 = "HELLO"
                   105, 106, 107, 108, 109, 110 = "WORLD!"
 ```
+</details>
 
 ### Retransmission: Handling Lost Packets
 
 When a packet is lost, TCP detects and retransmits:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: DATA (seq=100, "HELLO")
+    Server->>Client: ACK (ack=105)
+    Client-xServer: DATA (seq=105, "WORLD")<br/>LOST IN TRANSIT
+    Note over Client: ... timeout waiting for ACK ...
+    Client->>Server: DATA (seq=105, "WORLD") [RETRANSMIT]
+    Server->>Client: ACK (ack=110)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      TCP RETRANSMISSION                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -237,6 +301,7 @@ When a packet is lost, TCP detects and retransmits:
        │ <─────────────────────────────────────────────────  │
        │                                                     │
 ```
+</details>
 
 **How TCP knows to retransmit**:
 1. **Timeout**: No ACK received within RTO (Retransmission Timeout)
@@ -246,7 +311,23 @@ When a packet is lost, TCP detects and retransmits:
 
 The receiver tells the sender how much data it can handle:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: DATA (seq=100, 1000 bytes)
+    Server->>Client: ACK (ack=1100, window=500)<br/>"I can only accept 500 more bytes right now"
+    Client->>Server: DATA (seq=1100, 500 bytes)<br/>Client respects the window size
+    Server->>Client: ACK (ack=1600, window=0)<br/>"STOP! My buffer is full!"
+    Note over Client: ... client waits ...
+    Server->>Client: ACK (ack=1600, window=2000)<br/>"OK, I processed data, you can send more"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         FLOW CONTROL                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -275,12 +356,29 @@ The receiver tells the sender how much data it can handle:
        │ <─────────────────────────────────────────────────  │
        │                                                     │
 ```
+</details>
 
 ### Congestion Control: TCP Slow Start
 
 TCP doesn't blast data immediately. It probes the network capacity:
 
+```mermaid
+flowchart TD
+    T0["Time 0: cwnd = 1 MSS"] --> T1["Time 1: cwnd = 2 MSS"]
+    T1 --> T2["Time 2: cwnd = 4 MSS"]
+    T2 --> T3["Time 3: cwnd = 8 MSS"]
+    T3 --> T4["Time 4: cwnd = 16 MSS"]
+    T4 -->|"packet loss detected"| T5["Time 5: cwnd = 8 MSS<br/>(cut in half)"]
+    T5 -->|"enters congestion avoidance<br/>(linear growth)"| T6["Time 6: cwnd = 9 MSS"]
+    T6 --> T7["Time 7: cwnd = 10 MSS"]
+    
+    Note1["MSS = Maximum Segment Size<br/>(typically 1460 bytes)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      TCP SLOW START                                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -300,6 +398,7 @@ Time 7:  cwnd = 10 MSS    │██████████
 
 MSS = Maximum Segment Size (typically 1460 bytes)
 ```
+</details>
 
 **Why this matters**: On a new connection, TCP starts slow. This is why the first page load feels slower than subsequent ones, the connection is still "warming up."
 
@@ -307,7 +406,23 @@ MSS = Maximum Segment Size (typically 1460 bytes)
 
 Closing a TCP connection gracefully:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: FIN (seq=500)<br/>"I'm done sending"
+    Server->>Client: ACK (ack=501)<br/>"Got it"
+    Note over Server: ... server may still send data ...
+    Server->>Client: FIN (seq=700)<br/>"I'm also done sending"
+    Client->>Server: ACK (ack=701)<br/>"Got it, connection closed"
+    Note over Client,Server: CONNECTION CLOSED
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    TCP 4-WAY TERMINATION                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -335,6 +450,7 @@ Closing a TCP connection gracefully:
        │           CONNECTION CLOSED                         │
        │                                                     │
 ```
+</details>
 
 ---
 

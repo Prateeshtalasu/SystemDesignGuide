@@ -127,6 +127,24 @@ Inverted Index (Term-centric):
 ### Conceptual Structure
 
 ```
+```mermaid
+flowchart LR
+    subgraph TermDict["Term Dictionary (in memory)"]
+        T1["Term: pizza<br/>Doc Freq: 45,000,000<br/>Posting Ptr: 0x00001000"]
+        T2["Term: restaurant<br/>Doc Freq: 89,000,000<br/>Posting Ptr: 0x00045000"]
+        T3["Term: new<br/>Doc Freq: 2.1B<br/>Posting Ptr: 0x00089000"]
+        T4["Term: york<br/>Doc Freq: 890,000,000<br/>Posting Ptr: 0x00123000"]
+    end
+    
+    subgraph PostingList["Posting List (on disk, memory-mapped)"]
+        PL["Term: 'pizza'<br/>Doc Freq: 45,000,000<br/><br/>Doc ID | Term Freq | Positions | Score<br/>12345678 | 5 | [12,45,89] | 0.85<br/>12345679 | 3 | [5,23,67] | 0.72<br/>... | ... | ... | ..."]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Term Dictionary (in memory):
 ┌─────────────┬────────────┬──────────────┐
 │ Term        │ Doc Freq   │ Posting Ptr  │
@@ -148,6 +166,10 @@ Posting List (on disk, memory-mapped):
 │ 12345679    │ 3           │ [5,23,67]   │ 0.72         │
 │ ...         │ ...         │ ...         │ ...          │
 └─────────────┴─────────────┴─────────────┴──────────────┘
+```
+
+</details>
+```
 ```
 
 ### Index Implementation
@@ -367,6 +389,51 @@ ORDER BY (timestamp, query_id);
 ## High-Level Architecture
 
 ```
+```mermaid
+flowchart TB
+    Users["USERS<br/>Web Browsers, Mobile Apps, API"]
+    Users --> QueryPath
+    subgraph QueryPath["QUERY PATH (Online)"]
+        CDN["CDN (Cache)"]
+        LoadBalancer["Load Balancer"]
+        QueryCoordinator["Query Coordinator"]
+        ResultsCache["Results Cache"]
+        CDN --> LoadBalancer
+        LoadBalancer --> QueryCoordinator
+        QueryCoordinator --> ResultsCache
+        QueryCoordinator --> Shard1
+        QueryCoordinator --> Shard2
+        QueryCoordinator --> ShardN
+        Shard1["Index Shard 1 (Replica)"]
+        Shard2["Index Shard 2 (Replica)"]
+        ShardN["Index Shard N (Replica)"]
+    end
+    
+    subgraph IndexingPath["INDEXING PATH (Offline)"]
+        WebCrawler["Web Crawler"]
+        DocProcessor["Document Processor"]
+        Indexer["Indexer"]
+        IndexBuilder["Index Builder"]
+        URLFrontier["URL Frontier"]
+        IndexShards["Index Shards"]
+        WebCrawler --> DocProcessor
+        DocProcessor --> Indexer
+        Indexer --> IndexBuilder
+        WebCrawler --> URLFrontier
+        IndexBuilder --> IndexShards
+    end
+    
+    subgraph OfflineProcessing["OFFLINE PROCESSING"]
+        PageRank["PageRank Computer (MapReduce)"]
+        SpamDetector["Spam Detector"]
+        QualityScorer["Quality Scorer"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    USERS                                             │
 │                         (Web Browsers, Mobile Apps, API)                            │
@@ -414,11 +481,52 @@ ORDER BY (timestamp, query_id);
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+```
+
 ---
 
 ## Detailed Crawler Architecture
 
+```mermaid
+flowchart TB
+    SeedURLs["Seed URLs (Initial Set)"]
+    SeedURLs --> URLFrontier
+    subgraph URLFrontier["URL FRONTIER"]
+        PriorityQueues["PRIORITY QUEUES<br/>Priority 1 (News) | Priority 2 (Popular) | Priority 3 (Normal) | Priority N (Low)"]
+        DomainQueues["DOMAIN QUEUES (Politeness)<br/>example.com [url1,url2] | google.com [url3,url4] | cnn.com [url5,url6] | ..."]
+    end
+    URLFrontier --> Pod1
+    URLFrontier --> Pod2
+    URLFrontier --> PodN
+    subgraph Pod1["Crawler Pod 1"]
+        DNS1["DNS Resolver"]
+        HTTP1["HTTP Client"]
+        Robots1["robots.txt Cache"]
+    end
+    subgraph Pod2["Crawler Pod 2"]
+        DNS2["DNS Resolver"]
+        HTTP2["HTTP Client"]
+        Robots2["robots.txt Cache"]
+    end
+    subgraph PodN["Crawler Pod N"]
+        DNSN["DNS Resolver"]
+        HTTPN["HTTP Client"]
+        RobotsN["robots.txt Cache"]
+    end
+    Pod1 --> Kafka
+    Pod2 --> Kafka
+    PodN --> Kafka
+    Kafka["Downloaded Pages (Kafka Topic)"]
+    Kafka --> DocStore
+    DocStore["Document Store (S3 / HDFS)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              WEB CRAWLER SYSTEM                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -480,13 +588,42 @@ ORDER BY (timestamp, query_id);
                             └───────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Query Processing Flow
 
 ### Sequence Diagram
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CDN
+    participant QueryCoordinator as Query Coordinator
+    participant Cache as Cache (Redis)
+    participant IndexShards as Index Shards
+    participant RankingEngine as Ranking Engine
+    
+    Client->>CDN: GET /search?q=pizza
+    CDN->>QueryCoordinator: Cache MISS
+    QueryCoordinator->>Cache: Check cache
+    Cache-->>QueryCoordinator: MISS
+    QueryCoordinator->>RankingEngine: Parse & expand query
+    QueryCoordinator->>IndexShards: Broadcast to all shards
+    IndexShards-->>QueryCoordinator: Top K results per shard
+    QueryCoordinator->>RankingEngine: Merge & re-rank
+    RankingEngine-->>QueryCoordinator: Final ranked results
+    QueryCoordinator->>Cache: Cache results
+    QueryCoordinator-->>CDN: Results
+    CDN-->>Client: Results
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
 │Client│     │ CDN │     │   Query    │     │   Cache    │     │   Index    │     │  Ranking   │
 │      │     │     │     │Coordinator │     │  (Redis)   │     │  Shards    │     │  Engine    │
@@ -527,6 +664,9 @@ ORDER BY (timestamp, query_id);
    │            │              │                  │                  │                  │
    │ Results    │              │                  │                  │                  │
    │<───────────│              │                  │                  │                  │
+```
+
+</details>
 ```
 
 ### Step-by-Step Explanation

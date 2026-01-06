@@ -31,7 +31,28 @@ In a microservices architecture, you might have dozens or hundreds of services. 
 
 ### What Systems Looked Like Before API Gateways
 
+```mermaid
+flowchart TD
+    Mobile["Mobile App"]
+    UserSvc["User Service<br/>/api/users<br/>Auth: JWT<br/>Rate: 100/s"]
+    OrderSvc["Order Service<br/>/api/orders<br/>Auth: JWT<br/>Rate: 50/s"]
+    ProductSvc["Product Svc<br/>/api/products<br/>Auth: JWT<br/>Rate: 200/s"]
+    PaymentSvc["Payment Svc<br/>/api/pay<br/>Auth: JWT<br/>Rate: 10/s"]
+    ReviewSvc["Review Svc<br/>/api/reviews<br/>Auth: JWT<br/>Rate: 100/s"]
+    
+    Mobile --> UserSvc
+    Mobile --> OrderSvc
+    Mobile --> ProductSvc
+    Mobile --> PaymentSvc
+    Mobile --> ReviewSvc
+    
+    Note1["Problems:<br/>1. Client must know all service endpoints<br/>2. Each service implements auth (duplication)<br/>3. Each service implements rate limiting (duplication)<br/>4. Cross-cutting concerns scattered everywhere<br/>5. Hard to change service locations<br/>6. No central logging/monitoring"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    DIRECT CLIENT-TO-SERVICE COMMUNICATION                    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -58,6 +79,7 @@ Problems:
 5. Hard to change service locations
 6. No central logging/monitoring
 ```
+</details>
 
 ### What Breaks Without an API Gateway
 
@@ -103,7 +125,24 @@ Think of an API Gateway as a **hotel concierge**:
 - Concierge coordinates between departments
 - Guest has single point of contact
 
+```mermaid
+flowchart TD
+    Guest["Guest<br/>(Client)"]
+    Concierge["Concierge<br/>(API Gateway)<br/>- Verify ID<br/>- Route request<br/>- Aggregate<br/>- Track usage"]
+    Restaurant["Restaurant<br/>(Service A)"]
+    Spa["Spa<br/>(Service B)"]
+    CarService["Car Service<br/>(Service C)"]
+    
+    Guest --> Concierge
+    Concierge --> Restaurant
+    Concierge --> Spa
+    Concierge --> CarService
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    API GATEWAY AS CONCIERGE                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -131,6 +170,7 @@ Think of an API Gateway as a **hotel concierge**:
 │  (Service A)  │            │  (Service B)  │            │  (Service C)  │
 └───────────────┘            └───────────────┘            └───────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -148,7 +188,24 @@ API Gateway is a **single entry point** that handles cross-cutting concerns:
 
 ### API Gateway Architecture
 
+```mermaid
+flowchart TD
+    Clients["Clients<br/>(Web, Mobile, Third Party)"]
+    Gateway["API Gateway<br/>┌─────────────┐<br/>│   Router    │<br/>└─────────────┘<br/>┌─────────────┐<br/>│    Auth     │<br/>└─────────────┘<br/>┌─────────────┐<br/>│Rate Limiter │<br/>└─────────────┘<br/>┌─────────────┐<br/>│ Transformer │<br/>└─────────────┘<br/>┌─────────────┐<br/>│  Logging    │<br/>└─────────────┘"]
+    UserSvc["User Service"]
+    OrderSvc["Order Service"]
+    ProductSvc["Product Service"]
+    
+    Clients --> Gateway
+    Gateway --> UserSvc
+    Gateway --> OrderSvc
+    Gateway --> ProductSvc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         API GATEWAY ARCHITECTURE                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -186,10 +243,30 @@ API Gateway is a **single entry point** that handles cross-cutting concerns:
 │ User Service  │            │ Order Service │            │Product Service│
 └───────────────┘            └───────────────┘            └───────────────┘
 ```
+</details>
 
 ### Request Flow Through API Gateway
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as API Gateway
+    participant Backend as Backend Service
+    
+    Client->>Gateway: 1. POST /api/orders<br/>Authorization: Bearer xyz
+    Note over Gateway: 2. Validate JWT token<br/>[Auth middleware]
+    Note over Gateway: 3. Check rate limit<br/>[Rate limit middleware]
+    Note over Gateway: 4. Route to Order Service<br/>[Router]
+    Gateway->>Backend: 5. POST /orders<br/>X-User-Id: 123
+    Backend->>Gateway: 6. 201 Created<br/>{"orderId": "456"}
+    Note over Gateway: 7. Log request/response<br/>[Logging middleware]
+    Gateway->>Client: 8. 201 Created<br/>{"orderId": "456"}
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    API GATEWAY REQUEST FLOW                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -219,6 +296,8 @@ Client                      API Gateway                        Backend Service
    │                             │                                   │
    │                             │  7. Log request/response          │
    │                             │  [Logging middleware]             │
+```
+</details>
    │                             │                                   │
    │  8. 201 Created             │                                   │
    │  {"orderId": "456"}         │                                   │

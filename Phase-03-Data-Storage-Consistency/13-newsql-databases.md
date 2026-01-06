@@ -47,7 +47,25 @@ Neither option works!
 
 ### The Traditional Trade-off
 
+```mermaid
+flowchart TD
+    Dilemma["THE SCALABILITY DILEMMA"]
+    
+    TradSQL["Traditional SQL:<br/>Single powerful server<br/>- All data in one place<br/>- ACID is straightforward<br/>- Complex queries work<br/>- But: Can't scale beyond one machine"]
+    
+    ShardedSQL["Sharded SQL:<br/>Data split across servers<br/>- Each shard is independent<br/>- Cross-shard transactions are hard<br/>- JOINs across shards are slow<br/>- Application manages routing"]
+    
+    NoSQLNode["NoSQL:<br/>Distributed by design<br/>- Scales horizontally<br/>- But: No ACID (eventual consistency)<br/>- No complex queries<br/>- Application handles consistency"]
+    
+    Dilemma --> TradSQL
+    Dilemma --> ShardedSQL
+    Dilemma --> NoSQLNode
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              THE SCALABILITY DILEMMA                         │
 │                                                              │
@@ -80,10 +98,32 @@ Neither option works!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What NewSQL Promises
 
+```mermaid
+flowchart TD
+    Promise["NEWSQL PROMISE"]
+    
+    Dist["Distributed architecture (like NoSQL):<br/>- Horizontal scalability<br/>- Automatic sharding<br/>- Geographic distribution"]
+    
+    Plus["PLUS"]
+    
+    SQLACID["SQL and ACID (like traditional SQL):<br/>- Full SQL support<br/>- ACID transactions<br/>- Strong consistency<br/>- Familiar tooling"]
+    
+    Best["\"The best of both worlds\""]
+    
+    Promise --> Dist
+    Dist --> Plus
+    Plus --> SQLACID
+    SQLACID --> Best
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  NEWSQL PROMISE                              │
 │                                                              │
@@ -106,6 +146,7 @@ Neither option works!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples
 
@@ -123,7 +164,15 @@ Neither option works!
 
 **Traditional SQL = Single Branch Bank**
 
+```mermaid
+flowchart TD
+    SingleBank["SINGLE BRANCH BANK<br/><br/>All transactions happen at headquarters<br/>- One ledger book<br/>- Transactions are simple (one book)<br/>- But customers far away have high latency<br/>- If HQ is down, everything stops"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 SINGLE BRANCH BANK                           │
 │                                                              │
@@ -135,10 +184,19 @@ Neither option works!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **NoSQL = Independent Branch Banks**
 
+```mermaid
+flowchart TD
+    IndepBanks["INDEPENDENT BRANCH BANKS<br/><br/>Each branch has its own ledger<br/>- Fast local transactions<br/>- Branches sync periodically<br/>- But: Transfer between branches is complicated<br/>- Balances might be temporarily inconsistent<br/>- 'Eventually' everything matches up"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              INDEPENDENT BRANCH BANKS                        │
 │                                                              │
@@ -151,10 +209,19 @@ Neither option works!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **NewSQL = Synchronized Global Bank**
 
+```mermaid
+flowchart TD
+    GlobalBank["SYNCHRONIZED GLOBAL BANK<br/><br/>Multiple branches, one synchronized ledger<br/>- Each branch can accept transactions<br/>- Branches coordinate in real-time<br/>- Every branch sees consistent balances<br/>- Transfer between branches is seamless<br/>- If one branch is down, others continue<br/><br/>How?<br/>Consensus protocol (all branches agree)<br/>+ Synchronized clocks (ordering transactions)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SYNCHRONIZED GLOBAL BANK                        │
 │                                                              │
@@ -170,6 +237,7 @@ Neither option works!
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

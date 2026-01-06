@@ -106,7 +106,39 @@ Total time: 50 resources × 100ms RTT = 5000ms minimum
 - Pothole on one road doesn't affect others
 - Roads can be rerouted mid-journey (connection migration)
 
+```mermaid
+flowchart TD
+    subgraph HTTP10["HTTP/1.0"]
+        R1["Request1"] -->|"New connection"| Res1["Response1"]
+        R2["Request2"] -->|"New connection"| Res2["Response2"]
+        R3["Request3"] -->|"New connection"| Res3["Response3"]
+    end
+    
+    subgraph HTTP11["HTTP/1.1"]
+        R1_1["Request1"] --> Res1_1["Response1"]
+        Res1_1 --> R2_1["Request2"]
+        R2_1 --> Res2_1["Response2"]
+        Res2_1 --> R3_1["Request3"]
+        Note1["Same connection, but sequential"]
+    end
+    
+    subgraph HTTP2["HTTP/2"]
+        R1_2["Req1"] & R2_2["Req2"] & R3_2["Req3"] -->|"Multiplexed"| Res1_2["Resp1"] & Res2_2["Resp2"] & Res3_2["Resp3"]
+        Note2["Single connection"]
+    end
+    
+    subgraph HTTP3["HTTP/3"]
+        R1_3["Req1"] --> Res1_3["Resp1"]
+        R2_3["Req2"] --> Res2_3["Resp2"]
+        R3_3["Req3"] --> Res3_3["Resp3"]
+        Note3["Independent streams, no blocking"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                     HTTP EVOLUTION VISUALIZATION                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -126,6 +158,7 @@ HTTP/3:    [Req1]═══> [Resp1]
            [Req2]═══> [Resp2]    (Independent streams, no blocking)
            [Req3]═══> [Resp3]
 ```
+</details>
 
 ---
 

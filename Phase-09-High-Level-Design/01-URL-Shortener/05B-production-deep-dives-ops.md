@@ -202,7 +202,41 @@ public long calculateBackoff(int attempt, long baseMs) {
 
 **Architecture Overview:**
 
+```mermaid
+flowchart TB
+    subgraph PrimaryRegion["PRIMARY REGION: us-east-1"]
+        subgraph AZ1a["Availability Zone 1a"]
+            ALB1a["ALB"]
+            URLService1a["URL Service<br/>(Pods 1-5)"]
+            ALB1a --> URLService1a
+        end
+        subgraph AZ1b["Availability Zone 1b"]
+            ALB1b["ALB"]
+            URLService1b["URL Service<br/>(Pods 6-10)"]
+            ALB1b --> URLService1b
+        end
+        URLService1a --> PostgreSQL
+        URLService1b --> PostgreSQL
+        PostgreSQL["PostgreSQL Primary (AZ 1a)"]
+        PostgreSQL -->|"sync repl"| PGReplica1b["PostgreSQL Replica (1b)"]
+        PostgreSQL -->|"async repl"| PGReplica1c["PostgreSQL Replica (1c)"]
+        RedisCluster["Redis Cluster<br/>(3 primary + 3 replica across AZs)"]
+        URLService1a --> RedisCluster
+        URLService1b --> RedisCluster
+    end
+    PrimaryRegion -->|"async replication"| DRRegion
+    subgraph DRRegion["DR REGION: us-west-2"]
+        PGReplicaDR["PostgreSQL Replica<br/>(async replication from us-east-1)"]
+        RedisReplicaDR["Redis Replica<br/>(async replication from us-east-1)"]
+        URLServiceDR["URL Service<br/>(2 pods, minimal for DR readiness)"]
+        ALBDR["ALB (standby, routes traffic only during failover)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    PRIMARY REGION: us-east-1                         │
 │  ┌───────────────────────────────────────────────────────────────┐  │
@@ -241,6 +275,9 @@ public long calculateBackoff(int attempt, long baseMs) {
 │  │  ALB (standby, routes traffic only during failover)             │ │
 │  └─────────────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 **Replication Strategy:**
@@ -1007,7 +1044,21 @@ T+20s:   All requests succeeding again
 
 ### High-Load / Contention Scenario: Viral URL Traffic Spike
 
+```mermaid
+flowchart TD
+    Start["Scenario: Celebrity tweets a short URL, causing 1M redirects in 5 minutes<br/>Time: Peak traffic event<br/><br/>T+0s: Celebrity tweets short URL 'abc123'<br/>- URL was created weeks ago (cold cache case)<br/>- Expected: ~100 redirects/day normal traffic"]
+    Start --> TrafficSpike
+    TrafficSpike["T+0-30s: Traffic Spike Begins<br/>- 10,000 requests/second hit CDN<br/>- CDN cache: MISS (URL not popular before)<br/>- All requests forward to origin"]
+    TrafficSpike --> OriginHandling
+    OriginHandling["Origin Load Handling:<br/><br/>1. Load Balancer:<br/>   - Distributes across 10 URL Service pods<br/>   - Each pod: ~1,000 requests/second<br/><br/>2. URL Service (per pod):<br/>   - Redis: GET url:abc123<br/>   - Cache HIT (warm cache from initial requests)<br/>   - Latency: ~2ms per request<br/>   - Publish to Kafka (async, < 1ms)<br/><br/>3. CDN Caching:<br/>   - First 100 requests miss, forward to origin<br/>   - Origin responds with 301 redirect<br/>   - CDN caches redirect (1 hour TTL)<br/>   - Next 999,900 requests: CDN HIT (< 10ms latency)"]
+    OriginHandling --> KafkaBackpressure
+    KafkaBackpressure["Kafka Analytics Backpressure:<br/><br/>- 1M events published to Kafka<br/>- Partition: hash(abc123) % 12 = partition 5<br/>- Consumer lag builds: 500K events queued<br/><br/>Protection:<br/>- Kafka buffers (7-day retention)<br/>- Consumers auto-scale (K8s HPA)<br/>- Analytics delayed but not lost<br/><br/>Result:<br/>- All 1M redirects succeed (< 50ms p99)<br/>- 99.99% served from CDN after warm-up<br/>- Analytics processes within 10 minutes"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Scenario: Celebrity tweets a short URL, causing 1M redirects in 5 minutes
 Time: Peak traffic event
 
@@ -1066,9 +1117,28 @@ Time: Peak traffic event
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### Edge Case Scenario: Expired URL Access Attempt
 
+```mermaid
+flowchart TD
+    Start["Scenario: User tries to access expired URL with race condition<br/>Edge Case: URL expires between cache check and redirect<br/><br/>T+0ms: User clicks expired URL 'xyz789'<br/>- URL expired 1 second ago<br/>- Redis cache still has entry (TTL not expired yet)"]
+    Start --> Step1
+    Step1["Step 1: CDN Cache Check<br/>- CDN: Cache MISS (expired URLs not cached)<br/>- Request forwarded to origin"]
+    Step1 --> Step2
+    Step2["Step 2: Redis Cache Check<br/>- GET url:xyz789 → Returns cached value<br/>- Cache entry exists (hasn't expired in Redis yet)<br/>- Service parses: 'https://example.com/old|301|expired'<br/>- Checks expiration timestamp: EXPIRED"]
+    Step2 --> Step3
+    Step3["Step 3: Database Validation (Double-Check)<br/>- SELECT * FROM urls WHERE short_code='xyz789'<br/>- Database confirms: expired_at < NOW()<br/>- Record marked as expired"]
+    Step3 --> Step4
+    Step4["Step 4: Response Handling<br/><br/>Option A: Soft Delete (Recommended)<br/>- Return 301 to landing page: '/expired?url=xyz789'<br/>- Shows 'This link has expired' message<br/>- User experience: Graceful degradation<br/><br/>Option B: Hard Delete<br/>- Return 404 Not Found<br/>- Cache entry deleted from Redis<br/>- User experience: Broken link"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Scenario: User tries to access expired URL with race condition
 Edge Case: URL expires between cache check and redirect
 
@@ -1116,6 +1186,10 @@ Edge Case: URL expires between cache check and redirect
 │ - Cache entry deleted from Redis                           │
 │ - User experience: Broken link                             │
 └─────────────────────────────────────────────────────────────┘
+```
+
+</details>
+```
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────┐

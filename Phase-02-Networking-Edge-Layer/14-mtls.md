@@ -31,7 +31,28 @@ In a microservices architecture, services communicate over the network. This cre
 
 ### What Systems Looked Like Before mTLS
 
+```mermaid
+flowchart TD
+    subgraph Traditional["Traditional Setup (No mTLS)"]
+        Order1["Order Service"]
+        Payment1["Payment Service"]
+        Order1 -->|"HTTP (plaintext)"| Payment1
+        Problems1["Problems:<br/>1. Traffic is unencrypted (anyone can read)<br/>2. No authentication (anyone can call Payment Service)<br/>3. No integrity (traffic can be modified)<br/>4. No identity verification (is this really Payment Service?)"]
+    end
+    
+    subgraph RegularTLS["With Regular TLS (One-Way)"]
+        Order2["Order Service<br/>(Client)"]
+        Payment2["Payment Service<br/>(Server)<br/>[Certificate]"]
+        Order2 -->|"HTTPS (encrypted)"| Payment2
+        Problems2["Problems:<br/>- Order Service is NOT authenticated<br/>- Payment Service doesn't know WHO is calling<br/>- Any client can connect if they trust the CA"]
+        WhatHappens["What happens:<br/>1. Payment Service presents certificate<br/>2. Order Service verifies certificate<br/>3. Encrypted channel established"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    INSECURE SERVICE COMMUNICATION                            │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -71,6 +92,7 @@ Problems:
 - Payment Service doesn't know WHO is calling
 - Any client can connect if they trust the CA
 ```
+</details>
 
 ### What Breaks Without mTLS
 
@@ -106,7 +128,31 @@ Attackers inserted malicious code that communicated with internal services. mTLS
 - YOU show your ID badge
 - Both parties verified before entry
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client,Server: Regular TLS (One-Way Authentication)
+    Client->>Server: "Hello"
+    Server->>Client: Server Certificate (Server proves identity)
+    Client->>Server: "Certificate looks good" (Client trusts server)
+    Client<->>Server: Encrypted Communication
+    Note over Client,Server: Server is authenticated, client is NOT.
+    
+    Note over Client,Server: mTLS (Mutual Authentication)
+    Client->>Server: "Hello"
+    Server->>Client: Server Certificate (Server proves identity)
+    Client->>Server: Client Certificate (Client proves identity)
+    Server->>Client: "Certificate looks good" (Server trusts client)
+    Client<->>Server: Encrypted Communication
+    Note over Client,Server: BOTH parties are authenticated.
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    TLS vs mTLS                                               │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -144,6 +190,7 @@ Client                                Server
 
 BOTH parties are authenticated.
 ```
+</details>
 
 ### The Key Insight
 
@@ -159,7 +206,30 @@ mTLS provides:
 
 ### Certificate Chain of Trust
 
+```mermaid
+flowchart TD
+    RootCA["Root CA Certificate<br/>(Self-signed, highly protected)<br/>Subject: 'MyCompany Root CA'<br/>Issuer: 'MyCompany Root CA'<br/>Validity: 10 years"]
+    
+    IntermediateCA["Intermediate CA Certificate<br/>(Used for day-to-day signing)<br/>Subject: 'MyCompany Intermediate'<br/>Issuer: 'MyCompany Root CA'<br/>Validity: 3 years"]
+    
+    OrderCert["Order Service Certificate<br/>Subject: order<br/>Issuer: Inter.<br/>Validity: 1 year"]
+    
+    PaymentCert["Payment Service Certificate<br/>Subject: payment<br/>Issuer: Inter.<br/>Validity: 1 year"]
+    
+    InventoryCert["Inventory Svc Certificate<br/>Subject: inv<br/>Issuer: Inter.<br/>Validity: 1 year"]
+    
+    RootCA -->|"Signs"| IntermediateCA
+    IntermediateCA -->|"Signs"| OrderCert
+    IntermediateCA -->|"Signs"| PaymentCert
+    IntermediateCA -->|"Signs"| InventoryCert
+    
+    Note1["Verification Process:<br/>1. Service presents its certificate<br/>2. Verifier checks certificate signature against Intermediate CA<br/>3. Verifier checks Intermediate CA signature against Root CA<br/>4. Root CA is in trusted store → Chain is valid"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CERTIFICATE CHAIN OF TRUST                                │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -202,10 +272,28 @@ Verification Process:
 3. Verifier checks Intermediate CA signature against Root CA
 4. Root CA is in trusted store → Chain is valid
 ```
+</details>
 
 ### mTLS Handshake Flow
 
+```mermaid
+sequenceDiagram
+    participant Client as Order Service (Client)
+    participant Server as Payment Service (Server)
+    
+    Client->>Server: 1. ClientHello<br/>- Supported cipher suites<br/>- Random number<br/>- Supported TLS versions
+    Server->>Client: 2. ServerHello + Certificate + CertificateRequest<br/>- Selected cipher suite<br/>- Server's certificate<br/>- Request for client certificate
+    Note over Client: 3. Verify Server Certificate<br/>- Check signature chain<br/>- Check validity period<br/>- Check revocation status
+    Client->>Server: 4. Client Certificate + Finished<br/>- Client's certificate<br/>- Proof of private key ownership
+    Note over Server: 5. Verify Client Certificate<br/>- Check signature chain<br/>- Check validity period<br/>- Check revocation status
+    Server->>Client: 6. Finished
+    Note over Client,Server: ═══════════ Encrypted Application Data ═══════════<br/>Total: 1-RTT for TLS 1.3 (vs 2-RTT for TLS 1.2)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    mTLS HANDSHAKE (TLS 1.3)                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -247,6 +335,7 @@ Order Service (Client)                              Payment Service (Server)
 
 Total: 1-RTT for TLS 1.3 (vs 2-RTT for TLS 1.2)
 ```
+</details>
 
 ### Certificate Contents
 
@@ -294,7 +383,33 @@ Certificate:
 
 ### SPIFFE/SPIRE Identity Framework
 
+```mermaid
+flowchart TD
+    SPIREServer["SPIRE Server<br/>- Issues SVIDs<br/>- Manages trust bundles<br/>- Defines workload registration"]
+    
+    Agent1["SPIRE Agent<br/>(Node 1)"]
+    Agent2["SPIRE Agent<br/>(Node 2)"]
+    Agent3["SPIRE Agent<br/>(Node 3)"]
+    
+    OrderService["Order Service<br/>SVID: spiffe://.../order-svc"]
+    PaymentService["Payment Service<br/>SVID: spiffe://.../payment-svc"]
+    InventoryService["Inventory Svc<br/>SVID: spiffe://.../inventory"]
+    
+    SPIREServer -->|"Attestation"| Agent1
+    SPIREServer -->|"Attestation"| Agent2
+    SPIREServer -->|"Attestation"| Agent3
+    
+    Agent1 --> OrderService
+    Agent2 --> PaymentService
+    Agent3 --> InventoryService
+    
+    Note1["SPIFFE (Secure Production Identity Framework For Everyone):<br/>- Standard for service identity<br/>- SPIFFE ID format: spiffe://trust-domain/path<br/><br/>Examples:<br/>  spiffe://mycompany.com/ns/production/sa/payment-service<br/>  spiffe://mycompany.com/region/us-east/service/order-service<br/><br/>SVID (SPIFFE Verifiable Identity Document):<br/>- X.509 certificate with SPIFFE ID in SAN<br/>- Short-lived (hours, not years)<br/>- Automatically rotated"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SPIFFE IDENTITY                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -336,6 +451,7 @@ SPIRE (SPIFFE Runtime Environment):
 │ .../order-svc   │     │ .../payment-svc │     │ .../inventory   │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
+</details>
 
 ---
 
@@ -343,7 +459,28 @@ SPIRE (SPIFFE Runtime Environment):
 
 ### Certificate Lifecycle
 
+```mermaid
+flowchart TD
+    Step1["1. Generation<br/>- Generate private key (keep secret!)<br/>- Create Certificate Signing Request (CSR)<br/>- CSR contains: subject, public key, requested extensions"]
+    
+    Step2["2. Signing<br/>- CA validates request<br/>- CA signs certificate with its private key<br/>- Certificate issued to service"]
+    
+    Step3["3. Distribution<br/>- Certificate + private key deployed to service<br/>- Trust bundle (CA certificates) distributed to all services"]
+    
+    Step4["4. Rotation (Before Expiry)<br/>- Generate new key pair<br/>- Request new certificate<br/>- Deploy new certificate<br/>- Old certificate still valid during transition"]
+    
+    Step5["5. Revocation (If Compromised)<br/>- Add to Certificate Revocation List (CRL)<br/>- Or use OCSP (Online Certificate Status Protocol)<br/>- Services check revocation status during handshake"]
+    
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CERTIFICATE LIFECYCLE                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -378,10 +515,41 @@ SPIRE (SPIFFE Runtime Environment):
    - Or use OCSP (Online Certificate Status Protocol)
    - Services check revocation status during handshake
 ```
+</details>
 
 ### Certificate Rotation Strategies
 
+```mermaid
+flowchart TD
+    subgraph Manual["Manual Rotation (Don't Do This)"]
+        M1["1. Generate new certificate"]
+        M2["2. Update secret/config"]
+        M3["3. Restart all services"]
+        M4["4. Hope nothing breaks"]
+        MProblems["Problems:<br/>- Human error<br/>- Downtime during rotation<br/>- Often forgotten until expiry"]
+        M1 --> M2 --> M3 --> M4
+    end
+    
+    subgraph Automated["Automated Rotation (Best Practice)"]
+        Day0["Day 0: Certificate issued"]
+        Day60["Day 60: Rotation starts (2/3 of validity)<br/>- New certificate requested<br/>- New certificate deployed<br/>- Old certificate still valid"]
+        Day75["Day 75: Grace period ends<br/>- All services should have new cert<br/>- Old certificate still valid (safety)"]
+        Day90["Day 90: Certificate expires<br/>If rotation failed, old cert stops working<br/>(but you have 30 days to notice!)"]
+        Day0 --> Day60 --> Day75 --> Day90
+    end
+    
+    subgraph Rolling["Rolling Rotation (Zero Downtime)"]
+        Pod1["Service Pod 1<br/>Has Cert A (valid until Day 90)"]
+        Pod2["Service Pod 2<br/>Gets Cert B (valid until Day 180)"]
+        Pod3["Service Pod 3<br/>Gets Cert B"]
+        Note1["Both Cert A and Cert B are valid<br/>Clients accept both<br/>Gradual rollout, no downtime"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    CERTIFICATE ROTATION                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -437,6 +605,7 @@ Both Cert A and Cert B are valid
 Clients accept both
 Gradual rollout, no downtime
 ```
+</details>
 
 ---
 
@@ -853,7 +1022,44 @@ spec:
 
 ### Common Patterns
 
+```mermaid
+flowchart TD
+    subgraph Pattern1["Pattern 1: Application-Level mTLS"]
+        Order1["Order Service<br/>[TLS Config]"]
+        Payment1["Payment Service<br/>[TLS Config]"]
+        Order1 <-->|"mTLS"| Payment1
+        Note1["- Application handles TLS<br/>- More control<br/>- More complexity"]
+    end
+    
+    subgraph Pattern2["Pattern 2: Sidecar Proxy (Service Mesh)"]
+        subgraph Pod1["Pod"]
+            Order2["Order Service<br/>(plaintext)"]
+            Envoy1["Envoy Sidecar<br/>[mTLS]"]
+            Order2 -->|"localhost"| Envoy1
+        end
+        subgraph Pod2["Pod"]
+            Payment2["Payment Service<br/>(plaintext)"]
+            Envoy2["Envoy Sidecar<br/>[mTLS]"]
+            Envoy2 -->|"localhost"| Payment2
+        end
+        Envoy1 <-->|"mTLS"| Envoy2
+        Note2["- Transparent to application<br/>- Centralized certificate management<br/>- Consistent policy enforcement"]
+    end
+    
+    subgraph Pattern3["Pattern 3: API Gateway Termination"]
+        External["External"]
+        Gateway["API Gateway"]
+        Internal["Internal Services"]
+        External -->|"HTTPS<br/>(public cert)"| Gateway
+        Gateway -->|"mTLS<br/>(internal certs)"| Internal
+        Note3["- Gateway terminates external TLS<br/>- Internal traffic uses mTLS<br/>- Different trust domains"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    MTLS DEPLOYMENT PATTERNS                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -902,6 +1108,7 @@ External         API Gateway              Internal Services
 - Internal traffic uses mTLS
 - Different trust domains
 ```
+</details>
 
 ---
 

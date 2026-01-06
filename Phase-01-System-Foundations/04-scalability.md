@@ -60,7 +60,7 @@ graph LR
     subgraph "VERTICAL SCALING (Scale Up)"
         Before[Small Kitchen<br>1 stove<br>1 chef<br>10 seats]
         After[HUGE Kitchen<br>4 stoves<br>1 SUPER chef<br>40 seats]
-        Before -->|"──►"| After
+        Before --> After
         Note1["Same restaurant, but BIGGER and more POWERFUL<br>Problem: There's a limit to how big one kitchen can be"]
     end
     

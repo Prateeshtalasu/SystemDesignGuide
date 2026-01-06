@@ -35,7 +35,17 @@ Imagine you built a simple online store. It runs on one computer (server) in you
 
 In the early days, all applications ran on **one big computer** (called a **monolith**):
 
+```mermaid
+graph TD
+    subgraph "SINGLE SERVER"
+        Server["Your Entire Application<br>- User Interface<br>- Business Logic<br>- Database<br>- File Storage"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────┐
 │         SINGLE SERVER           │
 │  ┌───────────────────────────┐  │
@@ -47,6 +57,7 @@ In the early days, all applications ran on **one big computer** (called a **mono
 │  └───────────────────────────┘  │
 └─────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Distribution?
 
@@ -80,7 +91,17 @@ In the early days, all applications ran on **one big computer** (called a **mono
 
 Think of a **single server system** as a **one-person restaurant**:
 
+```mermaid
+graph TD
+    subgraph "ONE-PERSON RESTAURANT"
+        Chef["Chef = Takes orders<br>Chef = Cooks food<br>Chef = Serves tables<br>Chef = Washes dishes<br>Chef = Handles payments<br><br>If chef gets sick → Restaurant CLOSED"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────┐
 │           ONE-PERSON RESTAURANT         │
 │                                         │
@@ -93,10 +114,27 @@ Think of a **single server system** as a **one-person restaurant**:
 │    If chef gets sick → Restaurant CLOSED│
 └─────────────────────────────────────────┘
 ```
+</details>
 
 Now think of a **distributed system** as a **professional restaurant**:
 
+```mermaid
+graph LR
+    subgraph "PROFESSIONAL RESTAURANT"
+        Waiter["Waiter<br>(takes orders)"]
+        Chef2["Chef<br>(cooks)"]
+        Cashier["Cashier<br>(bills)"]
+        Cleaner["Cleaner<br>(dishes)"]
+        Benefits["If one waiter is sick → Other waiters cover<br>Busy night? → Add more waiters<br>Chef overloaded? → Add another chef"]
+        
+        Waiter --> Chef2 --> Cashier --> Cleaner --> Benefits
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              PROFESSIONAL RESTAURANT                     │
 │                                                          │
@@ -111,6 +149,7 @@ Now think of a **distributed system** as a **professional restaurant**:
 │   Chef overloaded? → Add another chef                   │
 └─────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Work is divided among specialists who communicate with each other.
 
@@ -143,18 +182,56 @@ Let's break this down word by word:
 
 **1. Multiple Computers Working Together**
 
+```mermaid
+graph LR
+    subgraph "Multiple Computers Working Together"
+        ServerA["Server A<br>(Orders)"]
+        ServerB["Server B<br>(Payment)"]
+        ServerC["Server C<br>(Shipping)"]
+        
+        ServerA --> ServerB --> ServerC
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────┐     ┌──────────┐     ┌──────────┐
 │ Server A │     │ Server B │     │ Server C │
 │ (Orders) │────▶│ (Payment)│────▶│(Shipping)│
 └──────────┘     └──────────┘     └──────────┘
 ```
+</details>
 
 **2. No Shared Memory**
 
 Unlike threads in a single program that share memory, distributed computers must communicate over the network.
 
+```mermaid
+graph TD
+    subgraph "Single Computer (Shared Memory)"
+        Thread1["Thread 1"]
+        Thread2["Thread 2"]
+        SharedMem["[Shared Memory]"]
+        
+        Thread1 --> SharedMem
+        Thread2 --> SharedMem
+    end
+    
+    subgraph "Distributed System (Network Communication)"
+        ComputerA["Computer A<br>[Memory A]"]
+        ComputerB["Computer B<br>[Memory B]"]
+        Network["Network"]
+        
+        ComputerA <-->|Network| ComputerB
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Single Computer (Shared Memory):
 ┌─────────────────────────────┐
 │  Thread 1    Thread 2       │
@@ -170,12 +247,28 @@ Distributed System (Network Communication):
 │ [Memory A]│ Network │ [Memory B]│
 └───────────┘         └───────────┘
 ```
+</details>
 
 **3. No Global Clock**
 
 Each computer has its own clock. They can drift apart. This creates ordering problems.
 
+```mermaid
+sequenceDiagram
+    participant ClockA as Computer A's clock<br>10:00:00.000
+    participant ClockB as Computer B's clock<br>10:00:00.150 (150ms ahead!)
+    participant Message
+    
+    Note over ClockA,ClockB: Clock Drift Problem
+    ClockA->>Message: A sends message at '10:00:00.100' (A's time)
+    Message->>ClockB: B receives it at '10:00:00.050' (B's time)
+    Note over ClockB: B thinks: 'I received a message from the FUTURE?!'
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Computer A's clock: 10:00:00.000
 Computer B's clock: 10:00:00.150  ← 150ms ahead!
 
@@ -183,6 +276,7 @@ If A sends message at "10:00:00.100" (A's time)
 B receives it at "10:00:00.050" (B's time)
 B thinks: "I received a message from the FUTURE?!"
 ```
+</details>
 
 ### Difference from Monolithic
 
@@ -236,12 +330,30 @@ Let's trace what happens when you open amazon.com and buy a book.
 
 ### The Simplest Distributed System
 
+```mermaid
+graph LR
+    subgraph "The Simplest Distributed System"
+        You["You<br>(Browser)"]
+        WebServer["Web Server<br>(Application)"]
+        Database["Database"]
+        
+        You --> WebServer
+        WebServer --> Database
+        Database --> WebServer
+        WebServer --> You
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────┐         ┌────────────────┐         ┌──────────┐
 │  You   │────────▶│  Web Server    │────────▶│ Database │
 │(Browser)│◀────────│  (Application) │◀────────│          │
 └────────┘         └────────────────┘         └──────────┘
 ```
+</details>
 
 Even this simple setup is distributed: 3 different computers communicating over a network.
 
@@ -267,7 +379,26 @@ Content-Type: application/json
 
 Amazon has thousands of servers. A load balancer decides which one handles your request.
 
+```mermaid
+graph TD
+    subgraph "Load Balancer Routing"
+        LB["Load Balancer<br>(picks server)"]
+        Server1["Server 1<br>(busy)"]
+        Server2["Server 2<br>(free)"]
+        Server3["Server 3<br>(busy)"]
+        Request["Your request goes here"]
+        
+        LB --> Server1
+        LB --> Server2
+        LB --> Server3
+        Server2 --> Request
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────┐
                     │  Load Balancer  │
                     │  (picks server) │
@@ -282,10 +413,29 @@ Amazon has thousands of servers. A load balancer decides which one handles your 
                              │
                     Your request goes here
 ```
+</details>
 
 **Step 3: Order Service processes request**
 
+```mermaid
+graph TD
+    subgraph "ORDER SERVICE"
+        OrderService["Order Service"]
+        Step1["1. Validate user exists<br>→ calls User Service"]
+        Step2["2. Check book in stock<br>→ calls Inventory Service"]
+        Step3["3. Calculate price<br>→ calls Pricing Service"]
+        Step4["4. Process payment<br>→ calls Payment Service"]
+        Step5["5. Create order record<br>→ writes to Order Database"]
+        Step6["6. Trigger shipping<br>→ sends message to Queue"]
+        
+        OrderService --> Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     ORDER SERVICE                            │
 │                                                              │
@@ -298,10 +448,23 @@ Amazon has thousands of servers. A load balancer decides which one handles your 
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Step 4: Services communicate**
 
+```mermaid
+sequenceDiagram
+    participant OrderService
+    participant InventoryService
+    
+    OrderService->>InventoryService: POST /inventory/check<br>{"bookId": "978-0134685991"}
+    InventoryService-->>OrderService: {"available": true, "qty": 47}
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Service                    Inventory Service
      │                                  │
      │  POST /inventory/check           │
@@ -312,10 +475,26 @@ Order Service                    Inventory Service
      │◀─────────────────────────────────│
      │                                  │
 ```
+</details>
 
 **Step 5: Payment processed**
 
+```mermaid
+sequenceDiagram
+    participant OrderService
+    participant PaymentService
+    participant BankAPI
+    
+    OrderService->>PaymentService: POST /payment/charge<br>{"userId": "12345", "amount": 49.99}
+    PaymentService->>BankAPI: External API call
+    BankAPI-->>PaymentService: {"approved": true}
+    PaymentService-->>OrderService: {"transactionId": "TXN123"}
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Service                    Payment Service                 Bank API
      │                                  │                            │
      │  POST /payment/charge            │                            │
@@ -330,10 +509,27 @@ Order Service                    Payment Service                 Bank API
      │  {"transactionId": "TXN123"}     │                            │
      │◀─────────────────────────────────│                            │
 ```
+</details>
 
 **Step 6: Async shipping notification**
 
+```mermaid
+sequenceDiagram
+    participant OrderService
+    participant MessageQueue
+    participant ShippingService
+    
+    Note over OrderService: Order Service continues,<br>doesn't wait
+    OrderService->>MessageQueue: PUBLISH to "orders" topic<br>{"orderId": "ORD456", "address": "123 Main St"}
+    ShippingService->>MessageQueue: SUBSCRIBE to "orders"
+    MessageQueue->>ShippingService: Deliver message
+    Note over ShippingService: Process shipping
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Service                    Message Queue                 Shipping Service
      │                                  │                            │
      │  PUBLISH to "orders" topic       │                            │
@@ -349,12 +545,26 @@ Order Service                    Message Queue                 Shipping Service
      │                                  │                            │
      │                                  │         Process shipping   │
 ```
+</details>
 
 ### What the Bytes Actually Look Like
 
 When Order Service calls Inventory Service, here's the actual network traffic:
 
+```mermaid
+graph TD
+    subgraph "TCP Packet (simplified)"
+        Header["TCP/IP Header<br>Source IP: 10.0.1.15 (Order Service)<br>Dest IP: 10.0.2.23 (Inventory Service)<br>Source Port: 52431<br>Dest Port: 8080"]
+        Payload["HTTP Payload:<br>POST /inventory/check HTTP/1.1<br>Host: inventory-service.internal<br>Content-Type: application/json<br>X-Request-ID: abc-123-def<br><br>Body: {'bookId':'978-0134685991','warehouseId':'WH-EAST-1'}"]
+        
+        Header --> Payload
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 TCP Packet (simplified):
 ┌──────────────────────────────────────────────────────────────┐
 │ Source IP: 10.0.1.15 (Order Service)                         │
@@ -371,6 +581,7 @@ TCP Packet (simplified):
 │ {"bookId":"978-0134685991","warehouseId":"WH-EAST-1"}       │
 └──────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -380,7 +591,23 @@ TCP Packet (simplified):
 
 **Netflix Architecture**:
 
+```mermaid
+graph TD
+    subgraph "NETFLIX ARCHITECTURE"
+        UserApp["User App"]
+        Zuul["Zuul<br>(Gateway)"]
+        Microservices["Microservices (700+)<br>- User Service<br>- Recommendation Service<br>- Streaming Service<br>- Billing Service"]
+        DataStores["Data Stores<br>- Cassandra (user data)<br>- EVCache (caching)<br>- Kafka (events)"]
+        
+        UserApp --> Zuul --> Microservices
+        Microservices --> DataStores
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        NETFLIX ARCHITECTURE                          │
 │                                                                      │
@@ -400,12 +627,46 @@ TCP Packet (simplified):
 │                                     └──────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 Netflix has 700+ microservices handling 200+ million subscribers.
 
 **Uber Architecture**:
 
+```mermaid
+graph TD
+    subgraph "UBER ARCHITECTURE"
+        DriverApp["Driver App"]
+        RiderApp["Rider App"]
+        WebApp["Web App"]
+        Gateway["Gateway"]
+        Matching["Matching Service"]
+        Pricing["Pricing Service"]
+        Maps["Maps Service"]
+        Payment["Payment Service"]
+        Notification["Notification Service"]
+        Communication["All services communicate via:<br>- gRPC (synchronous)<br>- Kafka (asynchronous events)<br>- Redis (caching)"]
+        
+        DriverApp --> Gateway
+        RiderApp --> Gateway
+        WebApp --> Gateway
+        Gateway --> Matching
+        Gateway --> Pricing
+        Gateway --> Maps
+        Gateway --> Payment
+        Gateway --> Notification
+        Matching --> Communication
+        Pricing --> Communication
+        Maps --> Communication
+        Payment --> Communication
+        Notification --> Communication
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         UBER ARCHITECTURE                            │
 │                                                                      │
@@ -425,6 +686,7 @@ Netflix has 700+ microservices handling 200+ million subscribers.
 │   - Redis (caching)                                                 │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Workflows and Tooling
 

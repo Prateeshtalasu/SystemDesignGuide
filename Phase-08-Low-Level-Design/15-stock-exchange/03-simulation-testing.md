@@ -153,6 +153,16 @@ Spread: $0.50
 Incoming: BUY 250 shares @ MARKET
 
 Step 1: Match against best ask ($151.00)
+
+```mermaid
+flowchart TD
+    A["Match: 100 shares @ $151.00<br/>Trade: Buyer pays $151.00 × 100 = $15,100<br/><br/>Incoming order: 250 - 100 = 150 remaining<br/>Ask at $151.00: FILLED (removed)"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Match: 100 shares @ $151.00                                     │
 │ Trade: Buyer pays $151.00 × 100 = $15,100                      │
@@ -160,8 +170,21 @@ Step 1: Match against best ask ($151.00)
 │ Incoming order: 250 - 100 = 150 remaining                      │
 │ Ask at $151.00: FILLED (removed)                               │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Match against next best ask ($151.50)
+
+```mermaid
+flowchart TD
+    A["Match: 150 shares @ $151.50<br/>Trade: Buyer pays $151.50 × 150 = $22,725<br/><br/>Incoming order: 150 - 150 = 0 remaining (FILLED)<br/>Ask at $151.50: 200 - 150 = 50 remaining"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Match: 150 shares @ $151.50                                     │
 │ Trade: Buyer pays $151.50 × 150 = $22,725                      │
@@ -169,6 +192,9 @@ Step 2: Match against next best ask ($151.50)
 │ Incoming order: 150 - 150 = 0 remaining (FILLED)               │
 │ Ask at $151.50: 200 - 150 = 50 remaining                       │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result:
   Trades: 

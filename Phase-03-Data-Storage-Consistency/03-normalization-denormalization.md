@@ -21,7 +21,21 @@ Imagine you're storing order data for an e-commerce site:
 
 **Approach A: Everything in One Table (Denormalized)**
 
+```mermaid
+flowchart LR
+    subgraph Denormalized["orders table (Denormalized)"]
+        Row1["order_id: 1<br/>user_name: Alice<br/>user_email: alice@email.com<br/>user_addr: 123 Main<br/>product_name: Laptop<br/>product_price: 999.99"]
+        Row2["order_id: 2<br/>user_name: Alice<br/>user_email: alice@email.com<br/>user_addr: 123 Main<br/>product_name: Mouse<br/>product_price: 29.99"]
+        Row3["order_id: 3<br/>user_name: Alice<br/>user_email: alice@email.com<br/>user_addr: 123 Main<br/>product_name: Keyboard<br/>product_price: 79.99"]
+        Row4["order_id: 4<br/>user_name: Bob<br/>user_email: bob@email.com<br/>user_addr: 456 Oak<br/>product_name: Laptop<br/>product_price: 999.99"]
+        Row5["order_id: 5<br/>user_name: Bob<br/>user_email: bob@email.com<br/>user_addr: 456 Oak<br/>product_name: Laptop<br/>product_price: 999.99"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 orders table:
 ┌─────────┬───────────┬─────────────────┬───────────┬──────────────┬─────────────┐
 │order_id │ user_name │ user_email      │ user_addr │ product_name │ product_price│
@@ -33,6 +47,7 @@ orders table:
 │ 5       │ Bob       │ bob@email.com   │ 456 Oak   │ Laptop       │ 999.99      │
 └─────────┴───────────┴─────────────────┴───────────┴──────────────┴─────────────┘
 ```
+</details>
 
 **Problems**:
 1. **Data Redundancy**: Alice's info repeated 3 times, Laptop price repeated 3 times
@@ -43,7 +58,43 @@ orders table:
 
 **Approach B: Separate Tables (Normalized)**
 
+```mermaid
+flowchart TD
+    subgraph Users["users table"]
+        U1["user_id: 1<br/>name: Alice<br/>email: alice@.."]
+        U2["user_id: 2<br/>name: Bob<br/>email: bob@..."]
+    end
+    
+    subgraph Products["products table"]
+        P1["product_id: 1<br/>name: Laptop<br/>price: 999.99"]
+        P2["product_id: 2<br/>name: Mouse<br/>price: 29.99"]
+        P3["product_id: 3<br/>name: Keyboard<br/>price: 79.99"]
+    end
+    
+    subgraph Orders["orders table"]
+        O1["order_id: 1<br/>user_id: 1<br/>product_id: 1"]
+        O2["order_id: 2<br/>user_id: 1<br/>product_id: 2"]
+        O3["order_id: 3<br/>user_id: 1<br/>product_id: 3"]
+        O4["order_id: 4<br/>user_id: 2<br/>product_id: 1"]
+        O5["order_id: 5<br/>user_id: 2<br/>product_id: 1"]
+    end
+    
+    O1 -.->|"FK"| U1
+    O1 -.->|"FK"| P1
+    O2 -.->|"FK"| U1
+    O2 -.->|"FK"| P2
+    O3 -.->|"FK"| U1
+    O3 -.->|"FK"| P3
+    O4 -.->|"FK"| U2
+    O4 -.->|"FK"| P1
+    O5 -.->|"FK"| U2
+    O5 -.->|"FK"| P1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 users table:                    products table:
 ┌─────────┬───────┬─────────┐   ┌────────────┬────────┬───────┐
 │ user_id │ name  │ email   │   │ product_id │ name   │ price │
@@ -64,6 +115,7 @@ orders table:
 │ 5        │ 2       │ 1          │
 └──────────┴─────────┴────────────┘
 ```
+</details>
 
 **Benefits**:
 1. **No Redundancy**: Each fact stored once
@@ -101,7 +153,21 @@ Edgar Codd introduced the relational model and normalization in 1970 to solve th
 
 **Denormalized = One Giant Spreadsheet**
 
+```mermaid
+flowchart TD
+    subgraph OneSheet["EVERYTHING IN ONE SHEET"]
+        Row1["Order ID: 1<br/>Customer Name: Alice<br/>Customer Email: alice@..<br/>Customer Address: 123 Main<br/>Product Name: Laptop<br/>Product Price: 999.99"]
+        Row2["Order ID: 2<br/>Customer Name: Alice<br/>Customer Email: alice@..<br/>Customer Address: 123 Main<br/>Product Name: Mouse<br/>Product Price: 29.99"]
+        Row3["Order ID: 3<br/>Customer Name: Alice<br/>Customer Email: alice@..<br/>Customer Address: 123 Main<br/>Product Name: Keyboard<br/>Product Price: 79.99"]
+        
+        Problem["Problem: Alice's info is copied everywhere!<br/>If Alice moves, you must update every row."]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVERYTHING IN ONE SHEET                         │
 │                                                              │
@@ -116,10 +182,41 @@ Edgar Codd introduced the relational model and normalization in 1970 to solve th
 │  If Alice moves, you must update every row.                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Normalized = Multiple Linked Sheets**
 
+```mermaid
+flowchart TD
+    subgraph Customers["CUSTOMERS SHEET"]
+        C1["ID: 1<br/>Name: Alice<br/>Email: alice@"]
+        C2["ID: 2<br/>Name: Bob<br/>Email: bob@"]
+    end
+    
+    subgraph Products2["PRODUCTS SHEET"]
+        P1["ID: 1<br/>Name: Laptop<br/>Price: 999.99"]
+        P2["ID: 2<br/>Name: Mouse<br/>Price: 29.99"]
+    end
+    
+    subgraph Orders2["ORDERS SHEET"]
+        O1["Order ID: 1<br/>Cust ID: 1<br/>Prod ID: 1"]
+        O2["Order ID: 2<br/>Cust ID: 1<br/>Prod ID: 2"]
+        O3["Order ID: 3<br/>Cust ID: 1<br/>Prod ID: 3"]
+    end
+    
+    C1 -->|"FK"| O1
+    C1 -->|"FK"| O2
+    C1 -->|"FK"| O3
+    P1 -->|"FK"| O1
+    P2 -->|"FK"| O2
+    
+    Note["Each fact stored ONCE. Sheets linked by IDs."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────────────────┐     ┌────────────────────┐
 │   CUSTOMERS SHEET  │     │   PRODUCTS SHEET   │
 │                    │     │                    │
@@ -141,6 +238,7 @@ Edgar Codd introduced the relational model and normalization in 1970 to solve th
 
 Each fact stored ONCE. Sheets linked by IDs.
 ```
+</details>
 
 ### The Key Insight
 
@@ -166,7 +264,18 @@ Normal forms are progressive levels of data organization. Each level eliminates 
 **Rule**: Each column contains only atomic (indivisible) values. No repeating groups.
 
 **Violation**:
+```mermaid
+flowchart LR
+    subgraph Violation["Violation (Not 1NF)"]
+        V1["user_id: 1<br/>phone_numbers: 555-1234, 555-5678, 555-9999<br/>(Multiple values in one cell!)"]
+        V2["user_id: 2<br/>phone_numbers: 555-4321"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┬────────────────────────────┐
 │ user_id │ phone_numbers              │
 ├─────────┼────────────────────────────┤
@@ -174,9 +283,23 @@ Normal forms are progressive levels of data organization. Each level eliminates 
 │ 2       │ 555-4321                    │
 └─────────┴────────────────────────────┘
 ```
+</details>
 
 **Fixed (1NF)**:
+```mermaid
+flowchart LR
+    subgraph Fixed1NF["Fixed (1NF)"]
+        F1["user_id: 1<br/>phone_number: 555-1234"]
+        F2["user_id: 1<br/>phone_number: 555-5678"]
+        F3["user_id: 1<br/>phone_number: 555-9999"]
+        F4["user_id: 2<br/>phone_number: 555-4321"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┬──────────────┐
 │ user_id │ phone_number │
 ├─────────┼──────────────┤
@@ -186,9 +309,33 @@ Normal forms are progressive levels of data organization. Each level eliminates 
 │ 2       │ 555-4321     │
 └─────────┴──────────────┘
 ```
+</details>
 
 Or better, a separate table:
+```mermaid
+flowchart TD
+    subgraph Users3["users"]
+        U1["user_id: 1<br/>name: Alice"]
+        U2["user_id: 2<br/>name: Bob"]
+    end
+    
+    subgraph UserPhones["user_phones"]
+        P1["user_id: 1<br/>phone_number: 555-1234"]
+        P2["user_id: 1<br/>phone_number: 555-5678"]
+        P3["user_id: 1<br/>phone_number: 555-9999"]
+        P4["user_id: 2<br/>phone_number: 555-4321"]
+    end
+    
+    U1 -.->|"FK"| P1
+    U1 -.->|"FK"| P2
+    U1 -.->|"FK"| P3
+    U2 -.->|"FK"| P4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 users:                    user_phones:
 ┌─────────┬───────┐      ┌─────────┬──────────────┐
 │ user_id │ name  │      │ user_id │ phone_number │
@@ -199,6 +346,7 @@ users:                    user_phones:
                          │ 2       │ 555-4321     │
                          └─────────┴──────────────┘
 ```
+</details>
 
 #### Second Normal Form (2NF)
 
@@ -207,7 +355,21 @@ users:                    user_phones:
 This matters when you have a composite primary key.
 
 **Violation**:
+```mermaid
+flowchart LR
+    subgraph Violation2NF["Violation (Not 2NF)"]
+        V1["order_id: 1, product_id: 101<br/>quantity: 2<br/>product_name: Laptop<br/>product_price: 999.99"]
+        V2["order_id: 1, product_id: 102<br/>quantity: 1<br/>product_name: Mouse<br/>product_price: 29.99"]
+        V3["order_id: 2, product_id: 101<br/>quantity: 1<br/>product_name: Laptop<br/>product_price: 999.99"]
+    end
+    
+    Problem["Problem: product_name and product_price depend only on product_id,<br/>not on the full key (order_id + product_id).<br/>Laptop info is duplicated!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 order_items table (composite key: order_id + product_id):
 ┌──────────┬────────────┬──────────┬───────────────┬──────────────┐
 │ order_id │ product_id │ quantity │ product_name  │ product_price│
@@ -221,9 +383,33 @@ Problem: product_name and product_price depend only on product_id,
          not on the full key (order_id + product_id).
          Laptop info is duplicated!
 ```
+</details>
 
 **Fixed (2NF)**:
+```mermaid
+flowchart TD
+    subgraph OrderItems["order_items"]
+        OI1["order_id: 1<br/>product_id: 101<br/>quantity: 2"]
+        OI2["order_id: 1<br/>product_id: 102<br/>quantity: 1"]
+        OI3["order_id: 2<br/>product_id: 101<br/>quantity: 1"]
+    end
+    
+    subgraph Products4["products"]
+        P101["product_id: 101<br/>name: Laptop<br/>price: 999.99"]
+        P102["product_id: 102<br/>name: Mouse<br/>price: 29.99"]
+    end
+    
+    OI1 -.->|"FK"| P101
+    OI2 -.->|"FK"| P102
+    OI3 -.->|"FK"| P101
+    
+    Note["Now product info is stored once, referenced by product_id."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 order_items:                      products:
 ┌──────────┬────────────┬────────┐  ┌────────────┬────────┬───────┐
 │ order_id │ product_id │quantity│  │ product_id │ name   │ price │
@@ -235,13 +421,28 @@ order_items:                      products:
 
 Now product info is stored once, referenced by product_id.
 ```
+</details>
 
 #### Third Normal Form (3NF)
 
 **Rule**: Must be in 2NF AND no non-key column depends on another non-key column (no transitive dependencies).
 
 **Violation**:
+```mermaid
+flowchart LR
+    subgraph Violation3NF["Violation (Not 3NF)"]
+        E1["employee_id: 1<br/>name: Alice<br/>department_id: 10<br/>department_name: Engineering"]
+        E2["employee_id: 2<br/>name: Bob<br/>department_id: 10<br/>department_name: Engineering"]
+        E3["employee_id: 3<br/>name: Carol<br/>department_id: 20<br/>department_name: Marketing"]
+    end
+    
+    Problem["Problem: department_name depends on department_id, not on employee_id.<br/>This is a transitive dependency:<br/>employee_id → department_id → department_name"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 employees table:
 ┌─────────────┬───────┬───────────────┬─────────────────┐
 │ employee_id │ name  │ department_id │ department_name │
@@ -255,9 +456,33 @@ Problem: department_name depends on department_id, not on employee_id.
          This is a transitive dependency:
          employee_id → department_id → department_name
 ```
+</details>
 
 **Fixed (3NF)**:
+```mermaid
+flowchart TD
+    subgraph Employees["employees"]
+        Emp1["employee_id: 1<br/>name: Alice<br/>dept_id: 10"]
+        Emp2["employee_id: 2<br/>name: Bob<br/>dept_id: 10"]
+        Emp3["employee_id: 3<br/>name: Carol<br/>dept_id: 20"]
+    end
+    
+    subgraph Departments["departments"]
+        Dept10["department_id: 10<br/>name: Engineering"]
+        Dept20["department_id: 20<br/>name: Marketing"]
+    end
+    
+    Emp1 -.->|"FK"| Dept10
+    Emp2 -.->|"FK"| Dept10
+    Emp3 -.->|"FK"| Dept20
+    
+    Note["Now department_name is stored once per department."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 employees:                        departments:
 ┌─────────────┬───────┬───────────┐  ┌───────────────┬─────────────┐
 │ employee_id │ name  │ dept_id   │  │ department_id │ name        │
@@ -269,6 +494,7 @@ employees:                        departments:
 
 Now department_name is stored once per department.
 ```
+</details>
 
 #### Boyce-Codd Normal Form (BCNF)
 
@@ -310,7 +536,23 @@ instructor_courses:              student_instructors:
 
 ### When to Stop Normalizing
 
+```mermaid
+flowchart TD
+    NF1["1NF: Always do this.<br/>Atomic values are fundamental."]
+    NF2["2NF: Do this for tables with composite keys."]
+    NF3["3NF: Do this for most OLTP (transactional) systems.<br/>This is the 'sweet spot' for most applications."]
+    BCNF["BCNF: Do this when you have complex dependencies.<br/>Rare in practice."]
+    NF45["4NF, 5NF: Academic. Rarely needed in real systems."]
+    
+    Stop["STOP when:<br/>- Further normalization doesn't eliminate real redundancy<br/>- Query performance becomes unacceptable<br/>- The complexity outweighs the benefits"]
+    
+    NF1 --> NF2 --> NF3 --> BCNF --> NF45 --> Stop
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              NORMALIZATION DECISION GUIDE                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -334,6 +576,7 @@ instructor_courses:              student_instructors:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Denormalization Techniques
 
@@ -634,7 +877,25 @@ WHERE year = 2024 AND month = 1;
 
 ### Decision Framework
 
+```mermaid
+flowchart TD
+    Decision["NORMALIZE vs DENORMALIZE DECISION"]
+    
+    Normalize["NORMALIZE when:<br/>- Data integrity is critical (financial, medical)<br/>- Write-heavy workload<br/>- Data changes frequently<br/>- Storage is a concern<br/>- You need flexibility for ad-hoc queries"]
+    
+    Denormalize["DENORMALIZE when:<br/>- Read-heavy workload (10:1 or higher read:write)<br/>- Query performance is critical<br/>- Data is relatively static<br/>- You have well-known query patterns<br/>- You can tolerate some data staleness"]
+    
+    Hybrid["HYBRID approach (most common):<br/>- Normalize source of truth (OLTP)<br/>- Denormalize for read paths (caches, views)<br/>- Use materialized views or CDC for sync"]
+    
+    Decision --> Normalize
+    Decision --> Denormalize
+    Decision --> Hybrid
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           NORMALIZE vs DENORMALIZE DECISION                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -660,12 +921,31 @@ WHERE year = 2024 AND month = 1;
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Production Patterns
 
 **Pattern 1: CQRS (Command Query Responsibility Segregation)**
 
+```mermaid
+flowchart LR
+    subgraph Writes["WRITES (Commands)"]
+        NormalizedDB["Normalized Database<br/>(PostgreSQL)"]
+    end
+    
+    subgraph Reads["READS (Queries)"]
+        DenormalizedStore["Denormalized Read Models<br/>(Elasticsearch,<br/>Redis, etc.)"]
+    end
+    
+    NormalizedDB -->|"Sync (CDC)"| DenormalizedStore
+    
+    Notes["- Writes go to normalized DB (ACID, integrity)<br/>- Reads come from denormalized stores (fast)<br/>- Sync via Change Data Capture or events"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      CQRS PATTERN                            │
 │                                                              │
@@ -682,6 +962,7 @@ WHERE year = 2024 AND month = 1;
 │  - Sync via Change Data Capture or events                   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Pattern 2: Materialized Views for Hot Paths**
 

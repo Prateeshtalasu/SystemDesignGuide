@@ -504,7 +504,60 @@ Authorization: Bearer api_key_xxxxx
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string email
+        string password_hash
+        string tier
+        timestamp created_at
+    }
+    api_keys {
+        int id PK
+        int user_id FK
+        string key_hash
+        json permissions
+        timestamp created_at
+    }
+    urls {
+        string short_code PK
+        string original_url
+        int user_id FK
+        int api_key_id FK
+        timestamp created_at
+        timestamp expires_at
+        bigint click_count
+        json metadata
+    }
+    clicks {
+        bigint id PK
+        string short_code FK
+        timestamp clicked_at
+        string ip_hash
+        string referrer
+        string country_code
+    }
+    daily_stats {
+        string short_code PK
+        date date PK
+        int click_count
+        int unique_visitors
+        json top_referrers
+        json country_breakdown
+    }
+    
+    users ||--o{ api_keys : "has"
+    users ||--o{ urls : "creates"
+    api_keys ||--o{ urls : "used_by"
+    urls ||--o{ clicks : "has"
+    urls ||--o{ daily_stats : "has"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐       ┌─────────────────┐
 │     users       │       │    api_keys     │
 ├─────────────────┤       ├─────────────────┤
@@ -543,6 +596,9 @@ Authorization: Bearer api_key_xxxxx
                 │ referrer        │       │ top_referrers   │
                 │ country_code    │       │ country_breakdown│
                 └─────────────────┘       └─────────────────┘
+```
+
+</details>
 ```
 
 ---

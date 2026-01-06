@@ -70,7 +70,30 @@ Problems:
 
 **Without Transactions = Open Office with Cash**
 
+```mermaid
+flowchart TD
+    subgraph Office["OPEN OFFICE"]
+        Clerks["Multiple clerks working on same cash drawer<br/>No locks, no coordination"]
+        
+        ClerkA["Clerk A: Counts $1000, starts transfer"]
+        ClerkB["Clerk B: Counts $1000, starts different transfer"]
+        
+        Both["Both think there's $1000 available<br/>Both transfer $800"]
+        
+        Result["Result: $600 overdraft!"]
+        
+        Clerks --> ClerkA
+        Clerks --> ClerkB
+        ClerkA --> Both
+        ClerkB --> Both
+        Both --> Result
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    OPEN OFFICE                               │
 │                                                              │
@@ -85,10 +108,32 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **With Transactions = Bank Vault with Procedures**
 
+```mermaid
+flowchart TD
+    Step1["1. Enter vault<br/>(BEGIN TRANSACTION)"]
+    Step2["2. Lock the drawer you're working on"]
+    Step3["3. Do your work<br/>(multiple operations)"]
+    Step4["4. If everything OK:<br/>Record in ledger (COMMIT)"]
+    Step5["5. If problem:<br/>Put everything back (ROLLBACK)"]
+    Step6["6. Exit vault, release locks"]
+    
+    Step1 --> Step2 --> Step3
+    Step3 --> Step4
+    Step3 --> Step5
+    Step4 --> Step6
+    Step5 --> Step6
+    
+    Note["Other clerks wait if they need the same drawer<br/>Ledger is permanent record of completed transactions"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    BANK VAULT                                │
 │                                                              │
@@ -104,6 +149,7 @@ Problems:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
@@ -123,7 +169,30 @@ A **transaction** is a unit of work that:
 
 **Definition**: A transaction is an indivisible unit. Either all operations complete, or none do.
 
+```mermaid
+flowchart TD
+    Begin["BEGIN TRANSACTION<br/>Transfer $100 from A to B"]
+    Update1["UPDATE accounts SET balance = balance - 100<br/>WHERE id = A"]
+    Update2["UPDATE accounts SET balance = balance + 100<br/>WHERE id = B"]
+    Commit["COMMIT"]
+    
+    Begin --> Update1 --> Update2 --> Commit
+    
+    Scenario1["Scenario 1: Both succeed → COMMIT<br/>→ Both changes saved"]
+    Scenario2["Scenario 2: Second fails → ROLLBACK<br/>→ First undone"]
+    Scenario3["Scenario 3: Crash mid-way → Recovery<br/>→ First undone"]
+    
+    Never["NEVER: First saved, second not"]
+    
+    Update2 --> Scenario1
+    Update2 --> Scenario2
+    Update2 --> Scenario3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      ATOMICITY                               │
 │                                                              │
@@ -142,10 +211,35 @@ A **transaction** is a unit of work that:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **How it's implemented (Write-Ahead Logging)**:
 
+```mermaid
+flowchart TD
+    Before["Before modifying data, write intention to log"]
+    
+    subgraph WAL["WAL Log"]
+        LSN1["[LSN 1] BEGIN TXN 42"]
+        LSN2["[LSN 2] TXN 42: UPDATE accounts<br/>SET balance=900 WHERE id=A"]
+        LSN3["[LSN 3] TXN 42: UPDATE accounts<br/>SET balance=1100 WHERE id=B"]
+        LSN4["[LSN 4] TXN 42: COMMIT"]
+        
+        LSN1 --> LSN2 --> LSN3 --> LSN4
+    end
+    
+    Recovery["On crash recovery:<br/>- Scan WAL from last checkpoint<br/>- Redo committed transactions<br/>- Undo uncommitted transactions"]
+    
+    Note2["Log is sequential writes (fast)<br/>Data pages are random writes (slower, can be deferred)"]
+    
+    Before --> WAL
+    WAL --> Recovery
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WRITE-AHEAD LOGGING (WAL)                       │
 │                                                              │
@@ -167,12 +261,30 @@ A **transaction** is a unit of work that:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Consistency: Valid State to Valid State
 
 **Definition**: A transaction brings the database from one valid state to another. All constraints are satisfied.
 
+```mermaid
+flowchart TD
+    Constraints["Constraints:<br/>- Account balance >= 0<br/>- Total money in system is constant<br/>- Foreign keys are valid"]
+    
+    Transaction["Transaction: Transfer $100 from A<br/>(balance: $50) to B"]
+    
+    Step1["Step 1: balance_A = 50 - 100 = -50"]
+    Violation["Constraint violated! balance >= 0"]
+    
+    Result["Result: Transaction REJECTED<br/>Database remains in valid state"]
+    
+    Constraints --> Transaction --> Step1 --> Violation --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     CONSISTENCY                              │
 │                                                              │
@@ -191,12 +303,38 @@ A **transaction** is a unit of work that:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Isolation: Transactions Don't Interfere
 
 **Definition**: Concurrent transactions execute as if they were serial (one after another).
 
+```mermaid
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant DB as Database
+    participant T2 as Transaction 2
+    
+    Note over T1,T2: Without Isolation
+    T1->>DB: Read balance = 100
+    T2->>DB: Read balance = 100
+    T1->>DB: Write balance = 50 (withdrew 50)
+    T2->>DB: Write balance = 80 (withdrew 20)
+    Note over T1,T2: Final: balance = 80 (T1's withdrawal lost!)
+    
+    Note over T1,T2: With Isolation
+    T1->>DB: Read balance = 100, LOCK
+    T2->>DB: Try to read, BLOCKED (waiting for T1)
+    T1->>DB: Write balance = 50, COMMIT, UNLOCK
+    T2->>DB: Read balance = 50
+    T2->>DB: Write balance = 30, COMMIT
+    Note over T1,T2: Final: balance = 30 (both withdrawals applied)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      ISOLATION                               │
 │                                                              │
@@ -217,12 +355,33 @@ A **transaction** is a unit of work that:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Durability: Committed = Permanent
 
 **Definition**: Once a transaction commits, its changes survive any subsequent failure.
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DB as Database
+    participant Disk
+    
+    Note over Client,Disk: DURABILITY Timeline
+    DB->>DB: T=0: Transaction commits
+    DB->>Disk: Write WAL to disk BEFORE acknowledging
+    Disk->>Disk: fsync() to ensure OS buffers are flushed
+    DB->>Client: T=1ms: Database says "Success" to client
+    Note over Client,Disk: T=2ms: POWER FAILURE! 💥
+    Note over Client,Disk: T=1hr: Power restored, database restarts
+    
+    Question["Question: Is the transaction's data still there?<br/><br/>Without Durability: Maybe not (data was in memory)<br/>With Durability: YES! (WAL was on disk before 'Success')<br/><br/>Implementation:<br/>- Write WAL to disk BEFORE acknowledging commit<br/>- fsync() to ensure OS buffers are flushed<br/>- Replicate to multiple disks/servers for extra safety"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      DURABILITY                              │
 │                                                              │
@@ -244,6 +403,7 @@ A **transaction** is a unit of work that:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Isolation Levels
 
@@ -251,7 +411,26 @@ Different levels of isolation trade off correctness for performance.
 
 #### Read Uncommitted (Lowest Isolation)
 
+```mermaid
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant DB as Database
+    participant T2 as Transaction 2
+    
+    Note over T1,T2: READ UNCOMMITTED
+    T1->>DB: BEGIN
+    T1->>DB: UPDATE balance = 50 (was 100)<br/>(not committed yet)
+    T2->>DB: SELECT balance → Returns 50 (dirty read!)
+    T1->>DB: ROLLBACK
+    Note over T1,T2: T2: Made decision based on data that never existed!
+    
+    Problem["Problem: Dirty reads<br/>Use case: Almost never (only rough estimates)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  READ UNCOMMITTED                            │
 │                                                              │
@@ -267,10 +446,30 @@ Different levels of isolation trade off correctness for performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Read Committed
 
+```mermaid
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant DB as Database
+    participant T2 as Transaction 2
+    
+    Note over T1,T2: READ COMMITTED
+    T1->>DB: BEGIN
+    T1->>DB: UPDATE balance = 50 (was 100)
+    T2->>DB: SELECT balance → Returns 100<br/>(sees committed value)
+    T1->>DB: COMMIT
+    T2->>DB: SELECT balance → Returns 50<br/>(sees new committed value)
+    
+    Note2["✓ No dirty reads<br/>✗ Non-repeatable reads (same query, different results)<br/><br/>Use case: Default in PostgreSQL, Oracle"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    READ COMMITTED                            │
 │                                                              │
@@ -287,10 +486,30 @@ Different levels of isolation trade off correctness for performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Repeatable Read
 
+```mermaid
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant DB as Database
+    participant T2 as Transaction 2
+    
+    Note over T1,T2: REPEATABLE READ
+    T1->>DB: BEGIN
+    T1->>DB: SELECT balance → Returns 100
+    T2->>DB: UPDATE balance = 50, COMMIT
+    T1->>DB: SELECT balance → Returns 100<br/>(same as before!)
+    T1->>DB: COMMIT
+    
+    Note3["✓ No dirty reads<br/>✓ Repeatable reads (same query, same results)<br/>✗ Phantom reads (new rows can appear)<br/><br/>Use case: Default in MySQL InnoDB"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   REPEATABLE READ                            │
 │                                                              │
@@ -308,10 +527,32 @@ Different levels of isolation trade off correctness for performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Serializable (Highest Isolation)
 
+```mermaid
+flowchart TD
+    Serializable["SERIALIZABLE<br/>Transactions execute as if they were serial<br/>No anomalies possible"]
+    
+    Impl1["1. Actual serial execution<br/>(one at a time)"]
+    Impl2["2. Two-Phase Locking (2PL)"]
+    Impl3["3. Serializable Snapshot Isolation (SSI)"]
+    
+    Serializable --> Impl1
+    Serializable --> Impl2
+    Serializable --> Impl3
+    
+    Pros["✓ No dirty reads<br/>✓ Repeatable reads<br/>✓ No phantom reads"]
+    Cons["✗ Lowest performance (most blocking/aborts)"]
+    
+    UseCase["Use case: Financial transactions, critical data"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    SERIALIZABLE                              │
 │                                                              │
@@ -332,10 +573,24 @@ Different levels of isolation trade off correctness for performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Isolation Level Comparison
 
+```mermaid
+flowchart LR
+    subgraph Comparison["ISOLATION LEVELS COMPARISON"]
+        RU["Read Uncommitted<br/>Dirty Read: Yes<br/>Non-Rep Read: Yes<br/>Phantom Read: Yes<br/>Perf: Fastest"]
+        RC["Read Committed<br/>Dirty Read: No<br/>Non-Rep Read: Yes<br/>Phantom Read: Yes<br/>Perf: Fast<br/>Default in PostgreSQL, Oracle"]
+        RR["Repeatable Read<br/>Dirty Read: No<br/>Non-Rep Read: No<br/>Phantom Read: Yes<br/>Perf: Medium<br/>Default in MySQL InnoDB"]
+        S["Serializable<br/>Dirty Read: No<br/>Non-Rep Read: No<br/>Phantom Read: No<br/>Perf: Slowest"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              ISOLATION LEVELS COMPARISON                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -353,6 +608,7 @@ Different levels of isolation trade off correctness for performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Distributed Transactions
 
@@ -360,7 +616,34 @@ When data spans multiple databases or services.
 
 #### Two-Phase Commit (2PC)
 
+```mermaid
+sequenceDiagram
+    participant Coord as Coordinator<br/>(Transaction Manager)
+    participant DBA as DB A
+    participant DBB as DB B
+    
+    Note over Coord,DBB: TWO-PHASE COMMIT (2PC)
+    Note over Coord,DBB: Phase 1: PREPARE
+    Coord->>DBA: PREPARE
+    Coord->>DBB: PREPARE
+    DBA->>DBA: Prepare (lock data)
+    DBB->>DBB: Prepare (lock data)
+    DBA->>Coord: Vote: YES (ready) or NO (abort)
+    DBB->>Coord: Vote: YES (ready) or NO (abort)
+    
+    Note over Coord,DBB: Coordinator Decision:<br/>All YES → COMMIT<br/>Any NO → ABORT
+    
+    Note over Coord,DBB: Phase 2: COMMIT/ABORT
+    Coord->>DBA: COMMIT (or ABORT)
+    Coord->>DBB: COMMIT (or ABORT)
+    DBA->>DBA: Commit (or Abort)
+    DBB->>DBB: Commit (or Abort)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  TWO-PHASE COMMIT (2PC)                      │
 │                                                              │
@@ -400,10 +683,29 @@ When data spans multiple databases or services.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Problems with 2PC**:
 
+```mermaid
+flowchart TD
+    Problems["2PC PROBLEMS"]
+    
+    P1["1. Blocking: If coordinator crashes after PREPARE,<br/>participants are stuck holding locks"]
+    P2["2. Single point of failure: Coordinator crash = stuck"]
+    P3["3. Performance: Two round-trips, locks held throughout"]
+    P4["4. Availability: Any participant down = can't commit"]
+    
+    Problems --> P1
+    Problems --> P2
+    Problems --> P3
+    Problems --> P4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    2PC PROBLEMS                              │
 │                                                              │
@@ -418,12 +720,38 @@ When data spans multiple databases or services.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Three-Phase Commit (3PC)
 
 Adds a PRE-COMMIT phase to reduce blocking:
 
+```mermaid
+sequenceDiagram
+    participant Coord2 as Coordinator
+    participant Part as Participants
+    
+    Note over Coord2,Part: THREE-PHASE COMMIT (3PC)
+    Note over Coord2,Part: Phase 1: CAN-COMMIT<br/>- Coordinator asks: "Can you commit?"<br/>- Participants respond: Yes/No<br/>- No locks yet
+    Coord2->>Part: "Can you commit?"
+    Part->>Coord2: Yes/No
+    
+    Note over Coord2,Part: Phase 2: PRE-COMMIT<br/>- If all Yes: Coordinator sends PRE-COMMIT<br/>- Participants acquire locks, prepare<br/>- Respond: ACK
+    Coord2->>Part: PRE-COMMIT (if all Yes)
+    Part->>Part: Acquire locks, prepare
+    Part->>Coord2: ACK
+    
+    Note over Coord2,Part: Phase 3: DO-COMMIT<br/>- Coordinator sends COMMIT<br/>- Participants commit and release locks
+    Coord2->>Part: COMMIT
+    Part->>Part: Commit and release locks
+    
+    Benefit["Benefit: If coordinator crashes after PRE-COMMIT,<br/>participants can elect new coordinator and complete the transaction<br/><br/>Still has issues: Network partitions can cause problems"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 THREE-PHASE COMMIT (3PC)                     │
 │                                                              │
@@ -449,12 +777,45 @@ Adds a PRE-COMMIT phase to reduce blocking:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 #### Saga Pattern (Modern Approach)
 
 Instead of distributed ACID, use compensating transactions:
 
+```mermaid
+flowchart TD
+    Book["Book a trip: Flight + Hotel + Car"]
+    
+    subgraph Forward["Forward transactions"]
+        T1["T1: Book flight"]
+        T2["T2: Book hotel"]
+        T3["T3: Book car"]
+    end
+    
+    subgraph Compensating["Compensating transactions"]
+        C1["C1: Cancel flight"]
+        C2["C2: Cancel hotel"]
+        C3["C3: Cancel car"]
+    end
+    
+    Execution["Execution:<br/>T1 → Success<br/>T2 → Success<br/>T3 → FAILURE"]
+    
+    Compensation["Compensation:<br/>C2 → Cancel hotel<br/>C1 → Cancel flight"]
+    
+    Result["Result: All-or-nothing semantics without distributed locks"]
+    
+    Book --> Forward
+    Forward --> Execution
+    Execution --> Compensation
+    Compensation --> Compensating
+    Compensating --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     SAGA PATTERN                             │
 │                                                              │
@@ -483,10 +844,43 @@ Instead of distributed ACID, use compensating transactions:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Saga Orchestration vs Choreography**:
 
+```mermaid
+flowchart TD
+    subgraph Orchestration["ORCHESTRATION (Central Coordinator)"]
+        Orchestrator["Saga Orchestrator"]
+        Flight1["Flight Service"]
+        Hotel1["Hotel Service"]
+        Car1["Car Service"]
+        
+        Orchestrator --> Flight1
+        Orchestrator --> Hotel1
+        Orchestrator --> Car1
+        
+        Pros1["Pros: Clear flow, easy to understand<br/>Cons: Single point of failure, coupling"]
+    end
+    
+    subgraph Choreography["CHOREOGRAPHY (Event-Driven)"]
+        Flight2["Flight Service"]
+        Hotel2["Hotel Service"]
+        Car2["Car Service"]
+        
+        Flight2 -->|"event"| Hotel2
+        Hotel2 -->|"event"| Car2
+        Car2 -.->|"event"| Hotel2
+        Hotel2 -.->|"event"| Flight2
+        
+        Pros2["Pros: Decoupled, no single point of failure<br/>Cons: Harder to understand flow, debugging complex"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │  ORCHESTRATION (Central Coordinator)                        │
 │                                                              │
@@ -518,10 +912,36 @@ Instead of distributed ACID, use compensating transactions:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Transaction Deadlocks
 
+```mermaid
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant RowA as Row A
+    participant RowB as Row B
+    participant T2 as Transaction 2
+    
+    Note over T1,T2: DEADLOCK SCENARIO
+    T1->>RowA: Lock Row A
+    T2->>RowB: Lock Row B
+    T1->>RowB: Try to lock Row B → BLOCKED<br/>(T2 has it)
+    T2->>RowA: Try to lock Row A → BLOCKED<br/>(T1 has it)
+    
+    Note over T1,T2: Both waiting for each other forever!
+    
+    Detection["Detection:<br/>- Build wait-for graph<br/>- Cycle in graph = deadlock"]
+    
+    Resolution["Resolution:<br/>- Abort one transaction (victim selection)<br/>- Victim retries"]
+    
+    Prevention["Prevention:<br/>- Always acquire locks in same order<br/>- Use lock timeout<br/>- Use optimistic concurrency (no locks)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    DEADLOCK SCENARIO                         │
 │                                                              │
@@ -547,6 +967,7 @@ Instead of distributed ACID, use compensating transactions:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

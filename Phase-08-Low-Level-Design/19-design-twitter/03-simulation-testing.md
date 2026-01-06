@@ -127,31 +127,83 @@ Bob's tweets: [B4, B2]
 Charlie's tweets: [C5, C3, C1]
 
 Step 1: Initialize priority queue with first tweet from each
+
+```mermaid
+flowchart LR
+    A["PQ: [C5, B4, A3]<br/>(sorted by timestamp, newest first)<br/>Iterators: [A→A1, B→B2, C→C3]"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ PQ: [C5, B4, A3]  (sorted by timestamp, newest first)          │
 │ Iterators: [A→A1, B→B2, C→C3]                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Extract C5, add next from Charlie
+
+```mermaid
+flowchart LR
+    A["Feed: [C5]<br/>PQ: [B4, A3, C3]<br/>Iterators: [A→A1, B→B2, C→C1]"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Feed: [C5]                                                      │
 │ PQ: [B4, A3, C3]                                                │
 │ Iterators: [A→A1, B→B2, C→C1]                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 3: Extract B4, add next from Bob
+
+```mermaid
+flowchart LR
+    A["Feed: [C5, B4]<br/>PQ: [A3, C3, B2]<br/>Iterators: [A→A1, B→empty, C→C1]"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Feed: [C5, B4]                                                  │
 │ PQ: [A3, C3, B2]                                                │
 │ Iterators: [A→A1, B→empty, C→C1]                               │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 4: Extract A3, add next from Alice
+
+```mermaid
+flowchart LR
+    A["Feed: [C5, B4, A3]<br/>PQ: [C3, B2, A1]<br/>Iterators: [A→empty, B→empty, C→C1]"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Feed: [C5, B4, A3]                                              │
 │ PQ: [C3, B2, A1]                                                │
 │ Iterators: [A→empty, B→empty, C→C1]                            │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Continue until limit reached or PQ empty...
 
