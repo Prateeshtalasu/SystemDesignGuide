@@ -24,61 +24,29 @@ Before diving into message deduplication, you should understand:
 
 Consider a payment processing system:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              THE DUPLICATE MESSAGE NIGHTMARE                 │
-│                                                              │
-│   Scenario: Customer clicks "Pay $100"                      │
-│                                                              │
-│   Time 0ms:   Producer sends payment message                │
-│   Time 50ms:  Broker receives message                       │
-│   Time 51ms:  Broker sends ACK                              │
-│   Time 52ms:  ACK lost in network!                          │
-│   Time 1000ms: Producer timeout, no ACK received            │
-│   Time 1001ms: Producer retries same message                │
-│   Time 1050ms: Broker receives DUPLICATE message            │
-│                                                              │
-│   Without deduplication:                                     │
-│   - Customer charged $100 twice!                            │
-│   - $200 total instead of $100                              │
-│   - Angry customer, refund process, support tickets         │
-│                                                              │
-│   With deduplication:                                        │
-│   - Second message detected as duplicate                    │
-│   - Ignored or returns cached result                        │
-│   - Customer charged exactly $100                           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Dup["THE DUPLICATE MESSAGE NIGHTMARE"]
+    Scenario["Scenario: Customer clicks 'Pay $100'"]
+    Timeline["Time 0ms: Producer sends payment message\nTime 50ms: Broker receives message\nTime 51ms: Broker sends ACK\nTime 52ms: ACK lost in network!\nTime 1000ms: Producer timeout, no ACK received\nTime 1001ms: Producer retries same message\nTime 1050ms: Broker receives DUPLICATE message"]
+    Without["Without deduplication:\n- Customer charged $100 twice!\n- $200 total instead of $100\n- Angry customer, refund process, support tickets"]
+    With["With deduplication:\n- Second message detected as duplicate\n- Ignored or returns cached result\n- Customer charged exactly $100"]
+    Scenario --> Timeline --> Without
+    Timeline --> With
+  end
 ```
 
 ### Sources of Duplicate Messages
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              SOURCES OF DUPLICATES                           │
-│                                                              │
-│   1. PRODUCER RETRIES                                        │
-│   Producer ──► Broker ──► ACK lost ──► Producer retries     │
-│   Same message sent twice                                   │
-│                                                              │
-│   2. CONSUMER REPROCESSING                                   │
-│   Consumer receives ──► Processes ──► Crashes before ACK    │
-│   Message redelivered, processed again                      │
-│                                                              │
-│   3. NETWORK DUPLICATES                                      │
-│   Network layer retransmits packets                         │
-│   Same message arrives twice                                │
-│                                                              │
-│   4. BROKER REPLICATION                                      │
-│   Leader fails after write, before replication              │
-│   New leader might not have message                         │
-│   Producer retries, now message on both                     │
-│                                                              │
-│   5. AT-LEAST-ONCE BY DESIGN                                │
-│   System designed for reliability over uniqueness           │
-│   Duplicates are acceptable trade-off                       │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Sources["SOURCES OF DUPLICATES"]
+    P["1. PRODUCER RETRIES\nProducer → Broker → ACK lost → Producer retries\nSame message sent twice"]
+    C["2. CONSUMER REPROCESSING\nConsumer receives → Processes → Crashes before ACK\nMessage redelivered, processed again"]
+    N["3. NETWORK DUPLICATES\nNetwork layer retransmits packets\nSame message arrives twice"]
+    B["4. BROKER REPLICATION\nLeader fails after write, before replication\nNew leader might not have message\nProducer retries, now message on both"]
+    D["5. AT-LEAST-ONCE BY DESIGN\nSystem designed for reliability over uniqueness\nDuplicates are acceptable trade-off"]
+  end
 ```
 
 ### What Breaks Without Deduplication

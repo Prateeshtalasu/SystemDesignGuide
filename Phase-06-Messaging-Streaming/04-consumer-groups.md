@@ -23,58 +23,50 @@ Imagine you have a topic receiving 10,000 messages per second, but each consumer
 
 **Without consumer groups:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    THE SCALING PROBLEM                       │
-│                                                              │
-│   Topic: 10,000 msg/sec                                     │
-│          │                                                   │
-│          ▼                                                   │
-│   ┌──────────────┐                                          │
-│   │  Consumer 1  │  Can only process 1,000 msg/sec          │
-│   └──────────────┘                                          │
-│                                                              │
-│   Result: 9,000 messages/sec backlog!                       │
-│   Queue grows by 9,000 messages every second.               │
-│   After 1 hour: 32.4 million message backlog!               │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: 10,000 msg/sec"]
+  Consumer1["Consumer 1\nCan only process 1,000 msg/sec"]
+  Result["Result: 9,000 messages/sec backlog!\nQueue grows by 9,000 messages every second.\nAfter 1 hour: 32.4 million message backlog!"]
+  
+  Topic --> Consumer1
+  Consumer1 --> Result
 ```
 
 **Naive approach: Add more consumers**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    NAIVE SCALING                             │
-│                                                              │
-│   Topic: 10,000 msg/sec                                     │
-│          │                                                   │
-│          ├──────────► Consumer 1 (gets ALL messages)        │
-│          ├──────────► Consumer 2 (gets ALL messages)        │
-│          └──────────► Consumer 3 (gets ALL messages)        │
-│                                                              │
-│   Problem: Each message processed 3 times!                  │
-│   This is Pub/Sub behavior, not what we want.               │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: 10,000 msg/sec"]
+  C1["Consumer 1\n(gets ALL messages)"]
+  C2["Consumer 2\n(gets ALL messages)"]
+  C3["Consumer 3\n(gets ALL messages)"]
+  Problem["Problem: Each message processed 3 times!\nThis is Pub/Sub behavior, not what we want."]
+  
+  Topic --> C1
+  Topic --> C2
+  Topic --> C3
+  C1 --> Problem
+  C2 --> Problem
+  C3 --> Problem
 ```
 
 **What we actually want:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DESIRED BEHAVIOR                          │
-│                                                              │
-│   Topic: 10,000 msg/sec                                     │
-│          │                                                   │
-│          ├──────────► Consumer 1 (gets ~3,333 msg/sec)      │
-│          ├──────────► Consumer 2 (gets ~3,333 msg/sec)      │
-│          └──────────► Consumer 3 (gets ~3,333 msg/sec)      │
-│                                                              │
-│   Each message processed exactly once (by one consumer).    │
-│   Work is distributed evenly.                               │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: 10,000 msg/sec"]
+  C1["Consumer 1\n(gets ~3,333 msg/sec)"]
+  C2["Consumer 2\n(gets ~3,333 msg/sec)"]
+  C3["Consumer 3\n(gets ~3,333 msg/sec)"]
+  Result["Each message processed exactly once (by one consumer).\nWork is distributed evenly."]
+  
+  Topic --> C1
+  Topic --> C2
+  Topic --> C3
+  C1 --> Result
+  C2 --> Result
+  C3 --> Result
 ```
 
 ### What Systems Looked Like Before Consumer Groups
@@ -120,34 +112,30 @@ Netflix records every play, pause, and stop. They need dozens of consumers to ke
 Think of a consumer group like a kitchen staff handling orders:
 
 **Without Consumer Groups: One Chef**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ONE CHEF KITCHEN                          │
-│                                                              │
-│   Orders: [Burger, Pizza, Salad, Pasta, Steak, ...]        │
-│              │                                               │
-│              ▼                                               │
-│        ┌──────────┐                                         │
-│        │  Chef 1  │  Makes ALL dishes                       │
-│        └──────────┘  (overwhelmed!)                         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Orders["Orders:\n[Burger, Pizza, Salad, Pasta, Steak, ...]"]
+  Chef1["Chef 1\nMakes ALL dishes\n(overwhelmed!)"]
+  
+  Orders --> Chef1
 ```
 
 **With Consumer Groups: Kitchen Staff**
+```mermaid
+flowchart TD
+  Tickets["Orders come in on 4 order tickets (partitions):\n[Ticket 1] [Ticket 2] [Ticket 3] [Ticket 4]"]
+  CG["Kitchen Staff (Consumer Group: 'kitchen')"]
+  Chef1["Chef 1\nTicket 1"]
+  Chef2["Chef 2\nTicket 2"]
+  Chef3["Chef 3\nTicket 3"]
+  Chef4["Chef 4\nTicket 4"]
+  
+  Tickets --> CG
+  CG --> Chef1
+  CG --> Chef2
+  CG --> Chef3
+  CG --> Chef4
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  KITCHEN WITH STAFF                          │
-│                                                              │
-│   Orders come in on 4 order tickets (partitions):           │
-│   [Ticket 1] [Ticket 2] [Ticket 3] [Ticket 4]               │
-│                                                              │
-│   Kitchen Staff (Consumer Group: "kitchen"):                │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│   │  Chef 1  │  │  Chef 2  │  │  Chef 3  │  │  Chef 4  │   │
-│   │ Ticket 1 │  │ Ticket 2 │  │ Ticket 3 │  │ Ticket 4 │   │
-│   └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│                                                              │
 │   Each chef handles their own tickets.                      │
 │   No chef works on another chef's tickets.                  │
 │   If Chef 2 gets sick, Chef 1 takes over Ticket 2.         │
@@ -156,56 +144,46 @@ Think of a consumer group like a kitchen staff handling orders:
 ```
 
 **Multiple Consumer Groups: Kitchen + Delivery**
-```
-┌─────────────────────────────────────────────────────────────┐
-│              KITCHEN + DELIVERY TEAMS                        │
-│                                                              │
-│   Same orders go to BOTH teams:                             │
-│                                                              │
-│   Consumer Group: "kitchen"                                 │
-│   ┌──────────┐  ┌──────────┐                                │
-│   │  Chef 1  │  │  Chef 2  │   (prepare food)               │
-│   └──────────┘  └──────────┘                                │
-│                                                              │
-│   Consumer Group: "delivery"                                │
-│   ┌──────────┐  ┌──────────┐                                │
-│   │ Driver 1 │  │ Driver 2 │   (plan routes)                │
-│   └──────────┘  └──────────┘                                │
-│                                                              │
-│   Kitchen team processes orders (cooking).                  │
-│   Delivery team processes orders (routing).                 │
-│   Each team gets ALL orders, but distributes internally.    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Orders["Same orders go to BOTH teams:"]
+  Kitchen["Consumer Group: 'kitchen'"]
+  Chef1["Chef 1\n(prepare food)"]
+  Chef2["Chef 2\n(prepare food)"]
+  Delivery["Consumer Group: 'delivery'"]
+  Driver1["Driver 1\n(plan routes)"]
+  Driver2["Driver 2\n(plan routes)"]
+  Note["Kitchen team processes orders (cooking).\nDelivery team processes orders (routing).\nEach team gets ALL orders, but distributes internally."]
+  
+  Orders --> Kitchen
+  Orders --> Delivery
+  Kitchen --> Chef1
+  Kitchen --> Chef2
+  Delivery --> Driver1
+  Delivery --> Driver2
 ```
 
 ### The Core Concept
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CONSUMER GROUP MENTAL MODEL                     │
-│                                                              │
-│   TOPIC (with partitions)                                   │
-│   ┌─────────────────────────────────────────────────┐       │
-│   │ Partition 0: [M1] [M4] [M7] [M10] ...           │       │
-│   │ Partition 1: [M2] [M5] [M8] [M11] ...           │       │
-│   │ Partition 2: [M3] [M6] [M9] [M12] ...           │       │
-│   └─────────────────────────────────────────────────┘       │
-│                                                              │
-│   CONSUMER GROUP "order-processor"                          │
-│   ┌─────────────────────────────────────────────────┐       │
-│   │ Consumer A ←── Partition 0                      │       │
-│   │ Consumer B ←── Partition 1                      │       │
-│   │ Consumer C ←── Partition 2                      │       │
-│   └─────────────────────────────────────────────────┘       │
-│                                                              │
-│   KEY RULES:                                                 │
-│   • Each partition → exactly one consumer in the group     │
-│   • Each consumer → can handle multiple partitions         │
-│   • Messages in partition → processed in order             │
-│   • Different groups → each gets all messages              │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Topic["TOPIC (with partitions)"]
+    P0["Partition 0:\n[M1] [M4] [M7] [M10] ..."]
+    P1["Partition 1:\n[M2] [M5] [M8] [M11] ..."]
+    P2["Partition 2:\n[M3] [M6] [M9] [M12] ..."]
+  end
+  
+  subgraph CG["CONSUMER GROUP 'order-processor'"]
+    CA["Consumer A"]
+    CB["Consumer B"]
+    CC["Consumer C"]
+  end
+  
+  P0 --> CA
+  P1 --> CB
+  P2 --> CC
+  
+  Rules["KEY RULES:\n- Each partition to exactly one consumer in the group\n- Each consumer can handle multiple partitions\n- Messages in partition processed in order\n- Different groups each gets all messages"]
 ```
 
 ---
@@ -218,38 +196,67 @@ When consumers join a group, the broker assigns partitions to consumers.
 
 **Scenario: 6 partitions, 3 consumers**
 
-```
 Initial State:
-┌─────────────────────────────────────────────────────────────┐
-│   Topic: orders (6 partitions)                              │
-│   Consumer Group: order-processor                           │
-│                                                              │
-│   Partition 0 ─────► Consumer A                             │
-│   Partition 1 ─────► Consumer A                             │
-│   Partition 2 ─────► Consumer B                             │
-│   Partition 3 ─────► Consumer B                             │
-│   Partition 4 ─────► Consumer C                             │
-│   Partition 5 ─────► Consumer C                             │
-│                                                              │
-│   Each consumer handles 2 partitions.                       │
-│   Work is evenly distributed.                               │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: orders (6 partitions)\nConsumer Group: order-processor"]
+  P0["Partition 0"]
+  P1["Partition 1"]
+  P2["Partition 2"]
+  P3["Partition 3"]
+  P4["Partition 4"]
+  P5["Partition 5"]
+  CA["Consumer A"]
+  CB["Consumer B"]
+  CC["Consumer C"]
+  
+  Topic --> P0
+  Topic --> P1
+  Topic --> P2
+  Topic --> P3
+  Topic --> P4
+  Topic --> P5
+  
+  P0 --> CA
+  P1 --> CA
+  P2 --> CB
+  P3 --> CB
+  P4 --> CC
+  P5 --> CC
+  
+  Note["Each consumer handles 2 partitions.\nWork is evenly distributed."]
 ```
 
 **Scenario: Consumer B dies (Rebalancing)**
 
+```mermaid
+flowchart TD
+  State["After Consumer B fails:"]
+  P0["Partition 0"]
+  P1["Partition 1"]
+  P2["Partition 2\n(reassigned from B)"]
+  P3["Partition 3\n(reassigned from B)"]
+  P4["Partition 4"]
+  P5["Partition 5"]
+  CA["Consumer A"]
+  CC["Consumer C"]
+  
+  State --> P0
+  State --> P1
+  State --> P2
+  State --> P3
+  State --> P4
+  State --> P5
+  
+  P0 --> CA
+  P1 --> CA
+  P2 --> CA
+  P3 --> CC
+  P4 --> CC
+  P5 --> CC
+  
+  Note["Consumer A: 3 partitions\nConsumer C: 3 partitions"]
 ```
-After Consumer B fails:
-┌─────────────────────────────────────────────────────────────┐
-│   Partition 0 ─────► Consumer A                             │
-│   Partition 1 ─────► Consumer A                             │
-│   Partition 2 ─────► Consumer A  (reassigned from B)        │
-│   Partition 3 ─────► Consumer C  (reassigned from B)        │
-│   Partition 4 ─────► Consumer C                             │
-│   Partition 5 ─────► Consumer C                             │
-│                                                              │
-│   Consumer A: 3 partitions                                  │
-│   Consumer C: 3 partitions                                  │
 │   No messages lost!                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -264,27 +271,17 @@ Rebalancing happens when:
 
 **Rebalancing Steps:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    REBALANCING PROCESS                       │
-│                                                              │
-│   1. TRIGGER: Consumer C joins the group                    │
-│                                                              │
-│   2. STOP: All consumers stop processing                    │
-│      (brief pause in message consumption)                   │
-│                                                              │
-│   3. REVOKE: Consumers give up their partitions             │
-│      Consumer A: "I release P0, P1, P2"                     │
-│      Consumer B: "I release P3, P4, P5"                     │
-│                                                              │
-│   4. ASSIGN: Coordinator reassigns partitions               │
-│      Consumer A: assigned P0, P1                            │
-│      Consumer B: assigned P2, P3                            │
-│      Consumer C: assigned P4, P5                            │
-│                                                              │
-│   5. RESUME: Consumers start processing new assignments     │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Rebalancing["REBALANCING PROCESS"]
+    Step1["1. TRIGGER: Consumer C joins the group"]
+    Step2["2. STOP: All consumers stop processing\n(brief pause in message consumption)"]
+    Step3["3. REVOKE: Consumers give up their partitions\nConsumer A: 'I release P0, P1, P2'\nConsumer B: 'I release P3, P4, P5'"]
+    Step4["4. ASSIGN: Coordinator reassigns partitions\nConsumer A: assigned P0, P1\nConsumer B: assigned P2, P3\nConsumer C: assigned P4, P5"]
+    Step5["5. RESUME: Consumers start processing new assignments"]
+    
+    Step1 --> Step2 --> Step3 --> Step4 --> Step5
+  end
 ```
 
 ### Offset Management
@@ -293,27 +290,21 @@ Each consumer group tracks its position (offset) in each partition independently
 
 **Offset Storage:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              OFFSET TRACKING                                 │
-│                                                              │
-│   __consumer_offsets topic (internal Kafka topic):          │
-│                                                              │
-│   Key: (group_id, topic, partition)                         │
-│   Value: offset                                              │
-│                                                              │
-│   Examples:                                                  │
-│   (order-processor, orders, 0) → 1547                       │
-│   (order-processor, orders, 1) → 2891                       │
-│   (order-processor, orders, 2) → 1203                       │
-│                                                              │
-│   (analytics-consumer, orders, 0) → 892                     │
-│   (analytics-consumer, orders, 1) → 1456                    │
-│                                                              │
-│   Different groups have different offsets!                  │
-│   Each group progresses independently.                      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph OffsetTracking["OFFSET TRACKING"]
+    Topic["__consumer_offsets topic\n(internal Kafka topic)"]
+    Key["Key: (group_id, topic, partition)\nValue: offset"]
+    Examples1["Examples:\n(order-processor, orders, 0) to 1547\n(order-processor, orders, 1) to 2891\n(order-processor, orders, 2) to 1203"]
+    Examples2["(analytics-consumer, orders, 0) to 892\n(analytics-consumer, orders, 1) to 1456"]
+    Note["Different groups have different offsets!\nEach group progresses independently."]
+    
+    Topic --> Key
+    Key --> Examples1
+    Key --> Examples2
+    Examples1 --> Note
+    Examples2 --> Note
+  end
 ```
 
 ### Commit Strategies
@@ -371,23 +362,29 @@ Let's trace through consumer group behavior step by step.
 
 ### Initial State
 
-```
-Topic: orders
-┌─────────────────────────────────────────────────────────────┐
-│ Partition 0: [O1] [O5] [O9]  [O13]                         │
-│ Partition 1: [O2] [O6] [O10] [O14]                         │
-│ Partition 2: [O3] [O7] [O11] [O15]                         │
-│ Partition 3: [O4] [O8] [O12] [O16]                         │
-└─────────────────────────────────────────────────────────────┘
-
-Consumer Group: order-processor
-┌─────────────────────────────────────────────────────────────┐
-│ Consumer A: Partitions 0, 1                                 │
-│   Current offsets: P0=0, P1=0                              │
-│                                                              │
-│ Consumer B: Partitions 2, 3                                 │
-│   Current offsets: P2=0, P3=0                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: orders"]
+  P0["Partition 0:\n[O1] [O5] [O9] [O13]"]
+  P1["Partition 1:\n[O2] [O6] [O10] [O14]"]
+  P2["Partition 2:\n[O3] [O7] [O11] [O15]"]
+  P3["Partition 3:\n[O4] [O8] [O12] [O16]"]
+  
+  CG["Consumer Group: order-processor"]
+  CA["Consumer A: Partitions 0, 1\nCurrent offsets: P0=0, P1=0"]
+  CB["Consumer B: Partitions 2, 3\nCurrent offsets: P2=0, P3=0"]
+  
+  Topic --> P0
+  Topic --> P1
+  Topic --> P2
+  Topic --> P3
+  
+  CG --> CA
+  CG --> CB
+  P0 --> CA
+  P1 --> CA
+  P2 --> CB
+  P3 --> CB
 ```
 
 ### Processing Flow
@@ -448,33 +445,32 @@ New assignment:
 
 ### Multiple Consumer Groups
 
-```
-Topic: orders (same messages)
-
-Consumer Group: order-processor
-┌─────────────────────────────────────────────────────────────┐
-│ Consumer A: P0, P1 → Processing orders                     │
-│ Consumer B: P2, P3 → Processing orders                     │
-│ Offsets: P0=100, P1=150, P2=120, P3=130                   │
-└─────────────────────────────────────────────────────────────┘
-
-Consumer Group: analytics
-┌─────────────────────────────────────────────────────────────┐
-│ Consumer X: P0, P1, P2, P3 → Tracking metrics              │
-│ Offsets: P0=50, P1=75, P2=60, P3=80                       │
-│ (behind order-processor, processing slower)                │
-└─────────────────────────────────────────────────────────────┘
-
-Consumer Group: fraud-detection
-┌─────────────────────────────────────────────────────────────┐
-│ Consumer Y: P0, P1 → Checking for fraud                    │
-│ Consumer Z: P2, P3 → Checking for fraud                    │
-│ Offsets: P0=100, P1=150, P2=120, P3=130                   │
-│ (same as order-processor, keeping up)                      │
-└─────────────────────────────────────────────────────────────┘
-
-Each group processes ALL messages independently.
-Each group has its own offset tracking.
+```mermaid
+flowchart TD
+  Topic["Topic: orders (same messages)"]
+  
+  subgraph CG1["Consumer Group: order-processor"]
+    CA1["Consumer A: P0, P1\nProcessing orders"]
+    CB1["Consumer B: P2, P3\nProcessing orders"]
+    Offsets1["Offsets: P0=100, P1=150, P2=120, P3=130"]
+  end
+  
+  subgraph CG2["Consumer Group: analytics"]
+    CX["Consumer X: P0, P1, P2, P3\nTracking metrics"]
+    Offsets2["Offsets: P0=50, P1=75, P2=60, P3=80\n(behind order-processor, processing slower)"]
+  end
+  
+  subgraph CG3["Consumer Group: fraud-detection"]
+    CY["Consumer Y: P0, P1\nChecking for fraud"]
+    CZ["Consumer Z: P2, P3\nChecking for fraud"]
+    Offsets3["Offsets: P0=100, P1=150, P2=120, P3=130\n(same as order-processor, keeping up)"]
+  end
+  
+  Topic --> CG1
+  Topic --> CG2
+  Topic --> CG3
+  
+  Note["Each group processes ALL messages independently.\nEach group has its own offset tracking."]
 ```
 
 ---
@@ -523,18 +519,24 @@ Key practices:
 
 Airbnb's pattern:
 
-```
-Event: Booking Created
-
-Consumer Groups:
-├── booking-confirmation (sends email)
-├── host-notification (notifies host)
-├── calendar-sync (updates availability)
-├── analytics (tracks metrics)
-├── fraud-detection (checks for fraud)
-└── search-index (updates search)
-
-Each group processes the same event for different purposes.
+```mermaid
+flowchart TD
+  Event["Event: Booking Created"]
+  CG1["Consumer Group: booking-confirmation\n(sends email)"]
+  CG2["Consumer Group: host-notification\n(notifies host)"]
+  CG3["Consumer Group: calendar-sync\n(updates availability)"]
+  CG4["Consumer Group: analytics\n(tracks metrics)"]
+  CG5["Consumer Group: fraud-detection\n(checks for fraud)"]
+  CG6["Consumer Group: search-index\n(updates search)"]
+  
+  Event --> CG1
+  Event --> CG2
+  Event --> CG3
+  Event --> CG4
+  Event --> CG5
+  Event --> CG6
+  
+  Note["Each group processes the same event for different purposes."]
 ```
 
 ---

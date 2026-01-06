@@ -22,51 +22,43 @@ Before diving into Kafka, you should understand:
 
 LinkedIn in 2010 faced a massive data pipeline problem:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              LINKEDIN'S DATA PIPELINE NIGHTMARE              │
-│                                                              │
-│   Data Sources:                                              │
-│   - User activity (page views, clicks)                      │
-│   - Search queries                                          │
-│   - Messaging                                               │
-│   - Connection requests                                     │
-│   - Job applications                                        │
-│                                                              │
-│   Data Destinations:                                         │
-│   - Hadoop (batch analytics)                                │
-│   - Real-time dashboards                                    │
-│   - Search index                                            │
-│   - Recommendation engine                                   │
-│   - Monitoring systems                                      │
-│                                                              │
-│   Problem: 5 sources × 5 destinations = 25 integrations!    │
-│   Each integration was custom, fragile, and slow.           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Nightmare["LINKEDIN'S DATA PIPELINE NIGHTMARE"]
+    Sources["Data Sources:\n- User activity (page views, clicks)\n- Search queries\n- Messaging\n- Connection requests\n- Job applications"]
+    Destinations["Data Destinations:\n- Hadoop (batch analytics)\n- Real-time dashboards\n- Search index\n- Recommendation engine\n- Monitoring systems"]
+    Problem["Problem: 5 sources × 5 destinations = 25 integrations!\nEach integration was custom, fragile, and slow."]
+    
+    Sources --> Problem
+    Destinations --> Problem
+  end
 ```
 
 ### What Systems Looked Like Before Kafka
 
 **Point-to-Point Integrations:**
-```
-┌────────────┐     ┌────────────┐     ┌────────────┐
-│  Source A  │────►│  Source B  │────►│  Source C  │
-└─────┬──────┘     └─────┬──────┘     └─────┬──────┘
-      │                  │                  │
-      │    ┌─────────────┼─────────────┐   │
-      │    │             │             │   │
-      ▼    ▼             ▼             ▼   ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   Hadoop    │   │   Search    │   │  Dashboard  │
-└─────────────┘   └─────────────┘   └─────────────┘
-
-Problems:
-- N sources × M destinations = N×M connections
-- Each connection is custom code
-- No replay (if Hadoop misses data, it's gone)
-- No real-time (batch jobs only)
-- Scaling nightmare
+```mermaid
+flowchart TD
+  SA["Source A"]
+  SB["Source B"]
+  SC["Source C"]
+  Hadoop["Hadoop"]
+  Search["Search"]
+  Dashboard["Dashboard"]
+  
+  SA --> SB
+  SB --> SC
+  SA --> Hadoop
+  SA --> Search
+  SA --> Dashboard
+  SB --> Hadoop
+  SB --> Search
+  SB --> Dashboard
+  SC --> Hadoop
+  SC --> Search
+  SC --> Dashboard
+  
+  Problems["Problems:\n- N sources × M destinations = N×M connections\n- Each connection is custom code\n- No replay (if Hadoop misses data, it's gone)\n- No real-time (batch jobs only)\n- Scaling nightmare"]
 ```
 
 **Traditional Message Queues:**
@@ -110,44 +102,23 @@ Netflix processes 8 million events per second. They need this data for real-time
 
 Think of Kafka as a **distributed append-only log** (like a database transaction log):
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    COMMIT LOG MENTAL MODEL                   │
-│                                                              │
-│   Traditional Queue (like a mailbox):                       │
-│   ┌─────────────────────────────────────────┐               │
-│   │ [M1] [M2] [M3] ──► Consumer reads ──► Gone!            │
-│   └─────────────────────────────────────────┘               │
-│   Messages disappear after reading.                         │
-│                                                              │
-│   Kafka (like a log book):                                  │
-│   ┌─────────────────────────────────────────┐               │
-│   │ [M1] [M2] [M3] [M4] [M5] [M6] ...       │               │
-│   │  0    1    2    3    4    5    ← Offsets│               │
-│   └─────────────────────────────────────────┘               │
-│   Messages stay. Consumers track their position.            │
-│   Multiple consumers can read the same messages.            │
-│   Consumers can "rewind" and re-read.                       │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Model["COMMIT LOG MENTAL MODEL"]
+    TQ["Traditional Queue (like a mailbox):\n[M1] [M2] [M3] to Consumer reads to Gone!\nMessages disappear after reading."]
+    Kafka["Kafka (like a log book):\n[M1] [M2] [M3] [M4] [M5] [M6] ...\n0    1    2    3    4    5 (Offsets)\nMessages stay. Consumers track their position.\nMultiple consumers can read the same messages.\nConsumers can 'rewind' and re-read."]
+  end
 ```
 
 ### The Newspaper Archive Analogy
 
+```mermaid
+flowchart TD
+  subgraph Analogy["NEWSPAPER ARCHIVE ANALOGY"]
+    Topic["Kafka Topic = Newspaper archive\n- All editions are stored (retention period)\n- Multiple readers can read independently\n- Each reader tracks their own page (offset)\n- New editions are appended at the end\n- Old editions eventually removed (retention policy)"]
+    Partitions["Partitions = Different sections (Sports, Business, etc.)\n- Each section is independent\n- Readers can specialize in sections"]
+  end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                NEWSPAPER ARCHIVE ANALOGY                     │
-│                                                              │
-│   Kafka Topic = Newspaper archive                           │
-│   - All editions are stored (retention period)              │
-│   - Multiple readers can read independently                 │
-│   - Each reader tracks their own page (offset)              │
-│   - New editions are appended at the end                    │
-│   - Old editions eventually removed (retention policy)      │
-│                                                              │
-│   Partitions = Different sections (Sports, Business, etc.)  │
-│   - Each section is independent                             │
-│   - Readers can specialize in sections                      │
 │   - Ordering preserved within section                       │
 │                                                              │
 │   Consumer Groups = Reading clubs                           │
@@ -159,33 +130,30 @@ Think of Kafka as a **distributed append-only log** (like a database transaction
 
 ### Kafka's Core Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    KAFKA ARCHITECTURE                        │
-│                                                              │
-│   PRODUCERS                         CONSUMERS                │
-│   ┌──────┐ ┌──────┐                ┌──────┐ ┌──────┐        │
-│   │ Prod │ │ Prod │                │ Cons │ │ Cons │        │
-│   │  A   │ │  B   │                │  X   │ │  Y   │        │
-│   └──┬───┘ └──┬───┘                └──┬───┘ └──┬───┘        │
-│      │        │                       │        │            │
-│      └────┬───┘                       └────┬───┘            │
-│           │                                │                │
-│           ▼                                ▼                │
-│   ┌─────────────────────────────────────────────────┐       │
-│   │              KAFKA CLUSTER                       │       │
-│   │  ┌─────────┐  ┌─────────┐  ┌─────────┐         │       │
-│   │  │ Broker 1│  │ Broker 2│  │ Broker 3│         │       │
-│   │  │         │  │         │  │         │         │       │
-│   │  │ P0 (L)  │  │ P0 (F)  │  │ P1 (L)  │         │       │
-│   │  │ P1 (F)  │  │ P2 (L)  │  │ P2 (F)  │         │       │
-│   │  └─────────┘  └─────────┘  └─────────┘         │       │
-│   │                                                  │       │
-│   │  L = Leader, F = Follower (replica)             │       │
-│   │  Topic "orders" with 3 partitions               │       │
-│   └─────────────────────────────────────────────────┘       │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Producers["PRODUCERS"]
+    PA["Prod A"]
+    PB["Prod B"]
+  end
+  
+  subgraph Consumers["CONSUMERS"]
+    CX["Cons X"]
+    CY["Cons Y"]
+  end
+  
+  subgraph Cluster["KAFKA CLUSTER"]
+    B1["Broker 1\nP0 (L)\nP1 (F)"]
+    B2["Broker 2\nP0 (F)\nP2 (L)"]
+    B3["Broker 3\nP1 (L)\nP2 (F)"]
+  end
+  
+  Note["L = Leader, F = Follower (replica)\nTopic 'orders' with 3 partitions"]
+  
+  PA --> Cluster
+  PB --> Cluster
+  Cluster --> CX
+  Cluster --> CY
 ```
 
 ---
@@ -198,33 +166,20 @@ Think of Kafka as a **distributed append-only log** (like a database transaction
 
 **Partition**: A topic is split into partitions for parallelism. Each partition is an ordered, immutable sequence of messages.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TOPIC: orders                             │
-│                                                              │
-│   Partition 0:                                               │
-│   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┐              │
-│   │ O1  │ O4  │ O7  │ O10 │ O13 │ O16 │ ... │              │
-│   └─────┴─────┴─────┴─────┴─────┴─────┴─────┘              │
-│   Offset: 0     1     2     3     4     5                   │
-│                                                              │
-│   Partition 1:                                               │
-│   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┐              │
-│   │ O2  │ O5  │ O8  │ O11 │ O14 │ O17 │ ... │              │
-│   └─────┴─────┴─────┴─────┴─────┴─────┴─────┘              │
-│   Offset: 0     1     2     3     4     5                   │
-│                                                              │
-│   Partition 2:                                               │
-│   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┐              │
-│   │ O3  │ O6  │ O9  │ O12 │ O15 │ O18 │ ... │              │
-│   └─────┴─────┴─────┴─────┴─────┴─────┴─────┘              │
-│   Offset: 0     1     2     3     4     5                   │
-│                                                              │
-│   • Ordering guaranteed WITHIN partition                    │
-│   • No ordering guarantee ACROSS partitions                 │
-│   • Partition determined by: key hash or round-robin        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["TOPIC: orders"]
+  P0["Partition 0:\n[O1] [O4] [O7] [O10] [O13] [O16] ...\nOffset: 0     1     2     3     4     5"]
+  P1["Partition 1:\n[O2] [O5] [O8] [O11] [O14] [O17] ...\nOffset: 0     1     2     3     4     5"]
+  P2["Partition 2:\n[O3] [O6] [O9] [O12] [O15] [O18] ...\nOffset: 0     1     2     3     4     5"]
+  Rules["- Ordering guaranteed WITHIN partition\n- No ordering guarantee ACROSS partitions\n- Partition determined by: key hash or round-robin"]
+  
+  Topic --> P0
+  Topic --> P1
+  Topic --> P2
+  P0 --> Rules
+  P1 --> Rules
+  P2 --> Rules
 ```
 
 ### How Partitioning Works
@@ -246,23 +201,18 @@ int partition = hash(key) % numPartitions;
 
 **Offset**: A unique identifier for each message within a partition. It's a sequential number starting from 0.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    OFFSET TRACKING                           │
-│                                                              │
-│   Partition 0: [M0] [M1] [M2] [M3] [M4] [M5] [M6] [M7]     │
-│                 ▲                   ▲              ▲        │
-│                 │                   │              │        │
-│            Consumer A          Consumer B     Latest        │
-│            (offset: 0)         (offset: 4)    (offset: 7)  │
-│                                                              │
-│   Consumer A: Just started, reading from beginning          │
-│   Consumer B: In progress, at offset 4                      │
-│   New message: Will be at offset 8                          │
-│                                                              │
-│   Offsets are per (consumer_group, topic, partition)        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  Partition["Partition 0:\n[M0] [M1] [M2] [M3] [M4] [M5] [M6] [M7]"]
+  CA["Consumer A\n(offset: 0)\nJust started, reading from beginning"]
+  CB["Consumer B\n(offset: 4)\nIn progress, at offset 4"]
+  Latest["Latest\n(offset: 7)\nNew message: Will be at offset 8"]
+  
+  Partition --> CA
+  Partition --> CB
+  Partition --> Latest
+  
+  Note["Offsets are per (consumer_group, topic, partition)"]
 ```
 
 ### Producers
@@ -271,23 +221,13 @@ Producers send messages to topics. Key producer concepts:
 
 **Acknowledgment Modes (acks):**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRODUCER ACKS                             │
-│                                                              │
-│   acks=0 (Fire and forget)                                  │
-│   Producer ──► Broker                                       │
-│   No waiting. Fastest but can lose messages.                │
-│                                                              │
-│   acks=1 (Leader only)                                      │
-│   Producer ──► Leader ──► ACK                               │
-│   Wait for leader to write. Can lose if leader dies.        │
-│                                                              │
-│   acks=all (All replicas)                                   │
-│   Producer ──► Leader ──► Followers ──► ACK                 │
-│   Wait for all in-sync replicas. Safest but slowest.        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph ACKS["PRODUCER ACKS"]
+    ACKS0["acks=0 (Fire and forget)\nProducer to Broker\nNo waiting. Fastest but can lose messages."]
+    ACKS1["acks=1 (Leader only)\nProducer to Leader to ACK\nWait for leader to write. Can lose if leader dies."]
+    ACKSAll["acks=all (All replicas)\nProducer to Leader to Followers to ACK\nWait for all in-sync replicas. Safest but slowest."]
+  end
 ```
 
 **Idempotent Producer:**
@@ -339,29 +279,18 @@ while (true) {
 
 Kafka replicates partitions across brokers for fault tolerance.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    REPLICATION                               │
-│                                                              │
-│   Topic: orders, Partition 0, Replication Factor: 3         │
-│                                                              │
-│   Broker 1          Broker 2          Broker 3              │
-│   ┌──────────┐      ┌──────────┐      ┌──────────┐         │
-│   │ P0       │      │ P0       │      │ P0       │         │
-│   │ (Leader) │      │ (Follower│      │ (Follower│         │
-│   │          │      │  ISR)    │      │  ISR)    │         │
-│   └──────────┘      └──────────┘      └──────────┘         │
-│        │                 ▲                 ▲                │
-│        │                 │                 │                │
-│        └─────────────────┴─────────────────┘                │
-│              Followers replicate from Leader                │
-│                                                              │
-│   ISR (In-Sync Replicas):                                   │
-│   - Replicas that are caught up with leader                 │
-│   - If follower falls behind, removed from ISR              │
-│   - acks=all waits for all ISR replicas                     │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Topic["Topic: orders, Partition 0, Replication Factor: 3"]
+  B1["Broker 1\nP0 (Leader)"]
+  B2["Broker 2\nP0 (Follower ISR)"]
+  B3["Broker 3\nP0 (Follower ISR)"]
+  
+  Topic --> B1
+  B1 -->|"Followers replicate from Leader"| B2
+  B1 -->|"Followers replicate from Leader"| B3
+  
+  ISR["ISR (In-Sync Replicas):\n- Replicas that are caught up with leader\n- If follower falls behind, removed from ISR\n- acks=all waits for all ISR replicas"]
 ```
 
 **Leader Election:**

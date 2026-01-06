@@ -52,7 +52,7 @@ Step 1: Insert Card → Enter PIN (1234) → Authenticated
 
 ```mermaid
 flowchart TD
-    A["ATM State: IDLE → CARD_INSERTED → AUTHENTICATED<br/>Display: 'Select Transaction'"]
+    A["ATM State: IDLE → CARD_INSERTED → AUTHENTICATED<br/>Display: Select Transaction"]
 ```
 
 <details>
@@ -71,7 +71,7 @@ Step 2: Select Transfer
 
 ```mermaid
 flowchart TD
-    A["ATM State: AUTHENTICATED → TRANSACTION_IN_PROGRESS<br/>Display: 'Select Source Account'<br/>User selects: CHECKING<br/>Display: 'Select Destination Account'<br/>User selects: SAVINGS<br/>Display: 'Enter Transfer Amount'"]
+    A["ATM State: AUTHENTICATED → TRANSACTION_IN_PROGRESS<br/>Display: Select Source Account<br/>User selects: CHECKING<br/>Display: Select Destination Account<br/>User selects: SAVINGS<br/>Display: Enter Transfer Amount"]
 ```
 
 <details>
@@ -94,7 +94,7 @@ Step 3: Enter Amount ($1500)
 
 ```mermaid
 flowchart TD
-    A["Validation:<br/>  - $1500 ≤ $5000 (source balance) ✓<br/>  - Source ≠ Destination ✓<br/>Execute Transfer:<br/>  - Checking: $5000 - $1500 = $3500<br/>  - Savings: $2000 + $1500 = $3500<br/>Log: TransferTransaction(CHECKING→SAVINGS, $1500, SUCCESS)<br/>Display: 'Transfer Successful'"]
+    A["Validation:<br/>  - $1500 ≤ $5000 (source balance) ✓<br/>  - Source ≠ Destination ✓<br/>Execute Transfer:<br/>  - Checking: $5000 - $1500 = $3500<br/>  - Savings: $2000 + $1500 = $3500<br/>Log: TransferTransaction(CHECKING→SAVINGS, $1500, SUCCESS)<br/>Display: Transfer Successful"]
 ```
 
 <details>
@@ -119,7 +119,7 @@ Step 4: Eject Card
 
 ```mermaid
 flowchart TD
-    A["ATM State: TRANSACTION_IN_PROGRESS → IDLE<br/>Display: 'Thank you'"]
+    A["ATM State: TRANSACTION_IN_PROGRESS → IDLE<br/>Display: Thank you"]
 ```
 
 <details>
@@ -154,7 +154,7 @@ Step 1: Insert Card
 
 ```mermaid
 flowchart TD
-    A["ATM State: IDLE → CARD_INSERTED<br/>Display: 'Enter PIN'"]
+    A["ATM State: IDLE → CARD_INSERTED<br/>Display: Enter PIN"]
 ```
 
 <details>
@@ -173,7 +173,7 @@ Step 2: Enter Wrong PIN (9999) - Attempt 1
 
 ```mermaid
 flowchart TD
-    A["card.validatePin('9999') → FALSE<br/>failedAttempts: 0 → 1<br/>Remaining attempts: 2<br/>Display: 'Incorrect PIN. 2 attempts remaining'<br/>ATM State: remains CARD_INSERTED"]
+    A["card.validatePin('9999') → FALSE<br/>failedAttempts: 0 → 1<br/>Remaining attempts: 2<br/>Display: Incorrect PIN. 2 attempts remaining<br/>ATM State: remains CARD_INSERTED"]
 ```
 
 <details>
@@ -195,7 +195,7 @@ Step 3: Enter Wrong PIN (1111) - Attempt 2
 
 ```mermaid
 flowchart TD
-    A["card.validatePin('1111') → FALSE<br/>failedAttempts: 1 → 2<br/>Remaining attempts: 1<br/>Display: 'Incorrect PIN. 1 attempt remaining'<br/>ATM State: remains CARD_INSERTED"]
+    A["card.validatePin('1111') → FALSE<br/>failedAttempts: 1 → 2<br/>Remaining attempts: 1<br/>Display: Incorrect PIN. 1 attempt remaining<br/>ATM State: remains CARD_INSERTED"]
 ```
 
 <details>
@@ -217,7 +217,7 @@ Step 4: Enter Wrong PIN (0000) - Attempt 3 (FINAL)
 
 ```mermaid
 flowchart TD
-    A["card.validatePin('0000') → FALSE<br/>failedAttempts: 2 → 3<br/>failedAttempts >= MAX_ATTEMPTS (3)<br/><br/>CARD BLOCKED:<br/>  - card.setStatus(CardStatus.BLOCKED)<br/>  - Log: 'Card blocked due to too many failed PIN attempts'<br/>Card retained by ATM (simulated)<br/>Display: 'Card blocked. Please contact your bank.'<br/>ATM State: CARD_INSERTED → IDLE"]
+    A["card.validatePin('0000') → FALSE<br/>failedAttempts: 2 → 3<br/>failedAttempts >= MAX_ATTEMPTS (3)<br/><br/>CARD BLOCKED:<br/>  - card.setStatus(CardStatus.BLOCKED)<br/>  - Log: Card blocked due to too many failed PIN attempts<br/>Card retained by ATM (simulated)<br/>Display: Card blocked. Please contact your bank.<br/>ATM State: CARD_INSERTED → IDLE"]
 ```
 
 <details>
@@ -256,6 +256,16 @@ Initial State:
 - User requests: $200 withdrawal
 
 Step 1: Withdrawal Request
+
+```mermaid
+flowchart TD
+    A["Amount requested: $200<br/>Balance check: $200 ≤ $5000 ✓<br/>Daily limit check: $200 ≤ $1000 ✓<br/>Cash availability check:<br/>  - Can dispense $200 with available bills?<br/>  - Available: $50×1 + $20×2 + $10×3 = $120<br/>  - $200 > $120 available<br/>Result: INSUFFICIENT_CASH<br/>Display: ATM cannot dispense requested amount<br/>Suggestion: Maximum available: $120"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Amount requested: $200                                         │
 │ Balance check: $200 ≤ $5000 ✓                                │
@@ -268,8 +278,21 @@ Step 1: Withdrawal Request
 │ Display: "ATM cannot dispense requested amount"               │
 │ Suggestion: "Maximum available: $120"                         │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Alternative: User requests $90
+
+```mermaid
+flowchart TD
+    A["Amount requested: $90<br/>Cash availability: $90 ≤ $120 ✓<br/>Denomination calculation:<br/>  - $50×1 = $50, remaining $40<br/>  - $20×2 = $40, remaining $0<br/>Dispense: 1×$50, 2×$20 bills<br/>Update inventory: $50×0, $20×0, $10×3 (Total: $30 left)<br/>Result: SUCCESS"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Amount requested: $90                                          │
 │ Cash availability: $90 ≤ $120 ✓                              │
@@ -280,6 +303,9 @@ Alternative: User requests $90
 │ Update inventory: $50×0, $20×0, $10×3 (Total: $30 left)     │
 │ Result: SUCCESS                                                │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---
@@ -907,7 +933,7 @@ flowchart TD
     checkState -->|No| readCard["cardReader.readCard(card)"]
     readCard --> invalid{"Card invalid / expired / blocked?"}
     invalid -->|Yes| readFail["return false"]
-    invalid -->|No| success["currentCard = card<br/>state = CARD_INSERTED<br/>Display 'Enter PIN'"]
+    invalid -->|No| success["currentCard = card<br/>state = CARD_INSERTED<br/>Display Enter PIN"]
 ```
 
 <details>
@@ -970,9 +996,9 @@ flowchart TD
     checkState -->|Yes| badState["return false"]
     checkState -->|No| validate["card.validatePin('1234')"]
     validate --> success{"PIN valid?"}
-    success -->|Yes| auth["state = AUTHENTICATED<br/>Display 'Welcome'"]
+    success -->|Yes| auth["state = AUTHENTICATED<br/>Display Welcome"]
     success -->|No| handleFail["remaining > 0?"]
-    handleFail -->|Yes| retry["Display 'X attempts remaining'"]
+    handleFail -->|Yes| retry["Display X attempts remaining"]
     handleFail -->|No| block["Retain card<br/>state = IDLE"]
 ```
 

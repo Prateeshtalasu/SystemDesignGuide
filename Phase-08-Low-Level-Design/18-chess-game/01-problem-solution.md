@@ -74,7 +74,80 @@ if (game.isStalemate()) {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class ChessGame {
+        - Board board
+        - Color currentTurn
+        - GameStatus status
+        - List~Move~ moveHistory
+        + makeMove(from, to) boolean
+        + isCheck() boolean
+        + isCheckmate() boolean
+        + getValidMoves(position) List~Position~
+    }
+    
+    class Board {
+        - Piece[][] squares
+        + getPiece(position) Piece
+        + setPiece(position, piece) void
+    }
+    
+    class Move {
+        - Position from
+        - Position to
+        - Piece piece
+        - Piece captured
+    }
+    
+    class Piece {
+        <<abstract>>
+        - Color color
+        - Position position
+        + getValidMoves(board) List~Position~
+    }
+    
+    class King {
+        + getValidMoves(board) List~Position~
+    }
+    
+    class Queen {
+        + getValidMoves(board) List~Position~
+    }
+    
+    class Rook {
+        + getValidMoves(board) List~Position~
+    }
+    
+    class Bishop {
+        + getValidMoves(board) List~Position~
+    }
+    
+    class Knight {
+        + getValidMoves(board) List~Position~
+    }
+    
+    class Pawn {
+        + getValidMoves(board) List~Position~
+    }
+    
+    ChessGame --> Board
+    ChessGame --> Move
+    ChessGame --> Piece
+    Piece <|-- King
+    Piece <|-- Queen
+    Piece <|-- Rook
+    Piece <|-- Bishop
+    Piece <|-- Knight
+    Piece <|-- Pawn
+    Move --> Piece
+    Board --> Piece
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              CHESS GAME                                          │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -119,6 +192,8 @@ if (game.isStalemate()) {
 │                    └──────────┘    └──────────┘                               │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Chess Board Layout
 

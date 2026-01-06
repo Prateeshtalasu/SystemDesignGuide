@@ -170,7 +170,28 @@ Structure:
 
 ### 3.1 Produce Flow
 
+```mermaid
+sequenceDiagram
+    participant Producer
+    participant Leader as Broker (Leader)
+    participant Follower1 as Broker (Follower)
+    participant Follower2 as Broker (F2)
+    
+    Producer->>Leader: 1. Produce (acks=all)
+    Leader->>Leader: 2. Write to log<br/>(append to segment)
+    Leader->>Leader: 3. Wait for ISR replication
+    Follower1->>Leader: 4. Fetch request
+    Leader->>Follower1: 5. Send records
+    Follower2->>Leader: 6. Fetch request
+    Leader->>Follower2: 7. Send records
+    Leader->>Leader: 8. All ISR acked
+    Leader->>Producer: 9. Produce ACK<br/>(offset assigned)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                            Produce Flow                                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -208,9 +229,35 @@ Structure:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### 3.2 Consume Flow
 
+```mermaid
+sequenceDiagram
+    participant Consumer
+    participant Coordinator
+    participant Broker as Broker (Leader)
+    
+    Consumer->>Coordinator: 1. FindCoordinator
+    Coordinator->>Consumer: 2. Coordinator info
+    Consumer->>Coordinator: 3. JoinGroup
+    Coordinator->>Consumer: 4. JoinGroup response<br/>(assignment if leader)
+    Consumer->>Coordinator: 5. SyncGroup<br/>(leader sends assign)
+    Coordinator->>Consumer: 6. SyncGroup response<br/>(partition assignment)
+    Consumer->>Broker: 7. Fetch
+    Broker->>Consumer: 8. Records
+    Consumer->>Coordinator: 9. OffsetCommit
+    loop Periodic
+        Consumer->>Coordinator: 10. Heartbeat
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                            Consume Flow                                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -253,9 +300,43 @@ Structure:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### 3.3 Replication Flow
 
+```mermaid
+sequenceDiagram
+    participant Leader
+    participant Follower1
+    participant Follower2
+    
+    Note over Leader: High Watermark: 100<br/>LEO: 105
+    Note over Follower1: LEO: 95
+    Note over Follower2: LEO: 90
+    
+    Follower1->>Leader: Fetch(offset=95)
+    Leader->>Follower1: Records [95-105]<br/>HW: 100
+    Follower1->>Follower1: Write to log<br/>LEO: 105
+    
+    Follower2->>Leader: Fetch(offset=90)
+    Leader->>Follower2: Records [90-105]<br/>HW: 100
+    Follower2->>Follower2: Write to log<br/>LEO: 105
+    
+    Note over Leader: All ISR at LEO 105<br/>Advance HW to 105
+    Note over Leader,Follower2: Next fetch includes<br/>HW: 105
 ```
+
+**Key Concepts:**
+- LEO (Log End Offset): Last offset written to log
+- HW (High Watermark): Last offset replicated to all ISR
+- ISR (In-Sync Replicas): Replicas within lag threshold
+- Consumers only see up to HW (committed messages)
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                          Replication Flow                                     │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -300,13 +381,51 @@ Key Concepts:
 └── Consumers only see up to HW (committed messages)
 ```
 
+</details>
+```
+
 ---
 
 ## 4. Log Storage Architecture
 
 ### Segment Structure
 
+```mermaid
+flowchart TD
+    Partition["Partition Directory:<br/>/data/kafka-logs/orders-0/"]
+    
+    subgraph Segment0["Segment 0 (base offset: 0)"]
+        S0Log["00000000000000000000.log<br/>(1 GB, closed)"]
+        S0Index["00000000000000000000.index<br/>(10 MB)"]
+        S0TimeIndex["00000000000000000000.timeindex<br/>(10 MB)"]
+    end
+    
+    subgraph Segment1["Segment 1 (base offset: 1000000)"]
+        S1Log["00000000000001000000.log<br/>(1 GB, closed)"]
+        S1Index["00000000000001000000.index"]
+        S1TimeIndex["00000000000001000000.timeindex"]
+    end
+    
+    subgraph Segment2["Segment 2 (base offset: 2000000) - ACTIVE"]
+        S2Log["00000000000002000000.log<br/>(500 MB, active)"]
+        S2Index["00000000000002000000.index"]
+        S2TimeIndex["00000000000002000000.timeindex"]
+    end
+    
+    Lookup["Offset Lookup:<br/>1. Binary search in index files to find segment<br/>2. Binary search in segment's index for position<br/>3. Sequential scan from position to find exact offset"]
+    
+    Partition --> Segment0
+    Partition --> Segment1
+    Partition --> Segment2
+    Segment0 --> Lookup
+    Segment1 --> Lookup
+    Segment2 --> Lookup
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         Log Segment Structure                                 │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -342,9 +461,43 @@ Key Concepts:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### Log Compaction
 
+```mermaid
+flowchart LR
+    subgraph Before["Before Compaction (cleanup.policy=compact)"]
+        B0["Offset 0: Key A = v1"]
+        B1["Offset 1: Key B = v1"]
+        B2["Offset 2: Key A = v2<br/>(← Newer value for key A)"]
+        B3["Offset 3: Key C = v1"]
+        B4["Offset 4: Key B = v2<br/>(← Newer value for key B)"]
+        B5["Offset 5: Key A = v3<br/>(← Newest value for key A)"]
+        B6["Offset 6: Key B = null<br/>(← Tombstone delete key B)"]
+        
+        B0 --> B1 --> B2 --> B3 --> B4 --> B5 --> B6
+    end
+    
+    subgraph After["After Compaction"]
+        A3["Offset 3: Key C = v1<br/>(← Only value for key C)"]
+        A5["Offset 5: Key A = v3<br/>(← Latest value for key A)"]
+        A6["Offset 6: Key B = null<br/>(← Tombstone retained for delete.retention.ms)"]
+        
+        A3 --> A5 --> A6
+    end
+    
+    Before -->|Compaction| After
+    
+    Uses["Use Cases:<br/>• Changelog topics (database CDC)<br/>• State stores (Kafka Streams)<br/>• Configuration topics"]
+    After --> Uses
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                          Log Compaction                                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -379,13 +532,46 @@ Key Concepts:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## 5. Controller Architecture
 
 ### KRaft Mode (No ZooKeeper)
 
+```mermaid
+flowchart TB
+    subgraph ControllerQuorum["Controller Quorum (Raft Consensus)"]
+        C1["Controller 1<br/>(Leader)"]
+        C2["Controller 2<br/>(Follower)"]
+        C3["Controller 3<br/>(Follower)"]
+        
+        RaftLog["Raft Log (Metadata)<br/>[Topic Created]<br/>[Partition Assigned]<br/>[Broker Registered]<br/>[Leader Elected]"]
+        
+        C1 --> C2
+        C2 --> C3
+        C1 --> RaftLog
+    end
+    
+    subgraph Brokers["Brokers"]
+        B1["Broker 1<br/>Metadata Cache"]
+        B2["Broker 2<br/>Metadata Cache"]
+        B3["Broker 3<br/>Metadata Cache"]
+        BN["Broker N<br/>Metadata Cache"]
+    end
+    
+    ControllerQuorum -->|Metadata Updates| Brokers
+    
+    MetadataRecords["Metadata Records:<br/>• TopicRecord: Topic creation/deletion<br/>• PartitionRecord: Partition configuration<br/>• PartitionChangeRecord: Leader/ISR changes<br/>• BrokerRegistrationRecord: Broker join/leave<br/>• ConfigRecord: Configuration changes"]
+    ControllerQuorum --> MetadataRecords
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                      Controller Architecture (KRaft)                          │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -426,6 +612,9 @@ Key Concepts:
 │  └── ConfigRecord: Configuration changes                                     │
 │                                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ### Leader Election

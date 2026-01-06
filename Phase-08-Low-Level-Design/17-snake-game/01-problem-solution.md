@@ -88,7 +88,59 @@ System.out.println("Final score: " + game.getScore());
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class SnakeGame {
+        - Board board
+        - Snake snake
+        - Position food
+        - int score
+        - GameStatus status
+        + move(direction) MoveResult
+        + isGameOver() boolean
+        + getScore() int
+    }
+    
+    class Board {
+        - int width
+        - int height
+        + isInBounds(position) boolean
+        + getCell(row, col) CellType
+    }
+    
+    class Snake {
+        - List~Position~ body
+        - Direction direction
+        + move() void
+        + grow() void
+        + collides(position) boolean
+    }
+    
+    class Position {
+        - int row
+        - int col
+        + equals(other) boolean
+    }
+    
+    class Direction {
+        <<enumeration>>
+        UP
+        DOWN
+        LEFT
+        RIGHT
+    }
+    
+    SnakeGame --> Board
+    SnakeGame --> Snake
+    SnakeGame --> Position
+    Snake --> Position
+    Snake --> Direction
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              SNAKE GAME                                          │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -122,6 +174,8 @@ System.out.println("Final score: " + game.getScore());
 │                   └─────────────┘                                              │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Game Board Visualization
 

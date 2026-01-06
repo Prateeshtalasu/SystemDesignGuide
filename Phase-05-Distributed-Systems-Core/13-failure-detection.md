@@ -1576,7 +1576,28 @@ suspicionTimeout = probeInterval * 6 * log(clusterSize);
 **A**: Global distribution adds latency variance and partition challenges.
 
 **Architecture**:
+```mermaid
+flowchart TB
+    subgraph Global["Global Failure Detection"]
+        subgraph USEast["US-East"]
+            LFD1[Local FD<br/>fast]
+        end
+        subgraph EUWest["EU-West"]
+            LFD2[Local FD<br/>fast]
+        end
+        subgraph APACTokyo["APAC-Tokyo"]
+            LFD3[Local FD<br/>fast]
+        end
+        LFD1 --> GFD[Global FD<br/>slower]
+        LFD2 --> GFD
+        LFD3 --> GFD
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Global Failure Detection                  │
 │                                                              │
@@ -1594,6 +1615,7 @@ suspicionTimeout = probeInterval * 6 * log(clusterSize);
 │                 └─────────────┘                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Design decisions**:
 
@@ -1801,7 +1823,29 @@ The key trade-off is **detection speed vs accuracy**. Faster detection means mor
 
 ## Quick Reference Card
 
-```
+| Category | Item | Description |
+|----------|------|-------------|
+| **FAILURE DETECTION - Approach** | Fixed timeout | Dead if no response in X seconds |
+| | Adaptive timeout | Timeout = mean + k×stddev |
+| | Phi accrual | Suspicion level based on probability |
+| | SWIM | Probe-based with indirect probes |
+| **PHI ACCRUAL** | φ = 1 | 10% chance if alive |
+| | φ = 2 | 1% chance if alive |
+| | φ = 8 | 0.000001% chance (default threshold) |
+| | Higher threshold | Fewer false positives, slower detection |
+| **SWIM PROTOCOL** | Direct probe | PING target, wait for ACK |
+| | Indirect probe | Ask others to PING on your behalf |
+| | Suspicion | Intermediate state before DEAD |
+| | Incarnation | Version number to refute suspicion |
+| **TUNING GUIDELINES** | On-premise | φ threshold = 8 |
+| | Cloud | φ threshold = 10-12 |
+| | Cross-region | φ threshold = 12-16 |
+| | With GC pauses | Add acceptable pause to calculations |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    FAILURE DETECTION                         │
 ├─────────────────────────────────────────────────────────────┤
@@ -1834,4 +1878,5 @@ The key trade-off is **detection speed vs accuracy**. Faster detection means mor
 │ With GC pauses     │ Add acceptable pause to calculations   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 

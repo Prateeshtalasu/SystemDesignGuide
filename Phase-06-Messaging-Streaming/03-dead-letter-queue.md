@@ -21,24 +21,28 @@ Before diving into Dead Letter Queues, you should understand:
 
 Imagine you have a queue processing customer orders. One message has corrupted data:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    THE POISON PILL                           │
-│                                                              │
-│   Order Queue: [Order1, BadOrder, Order3, Order4, ...]      │
-│                                                              │
-│   Consumer tries BadOrder:                                  │
-│   1. Parse JSON → fails (malformed)                         │
-│   2. NACK → message returns to queue                        │
-│   3. Consumer tries BadOrder again                          │
-│   4. Parse JSON → fails again                               │
-│   5. NACK → message returns to queue                        │
-│   ... infinite loop ...                                     │
-│                                                              │
-│   Meanwhile: Order3, Order4, Order5 are STUCK!              │
-│   Customers waiting, orders not processed.                  │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph PoisonPill["THE POISON PILL"]
+    Queue["Order Queue:\n[Order1, BadOrder, Order3, Order4, ...]"]
+    Consumer["Consumer tries BadOrder:"]
+    Step1["1. Parse JSON to fails (malformed)"]
+    Step2["2. NACK to message returns to queue"]
+    Step3["3. Consumer tries BadOrder again"]
+    Step4["4. Parse JSON to fails again"]
+    Step5["5. NACK to message returns to queue"]
+    Loop["... infinite loop ..."]
+    Problem["Meanwhile: Order3, Order4, Order5 are STUCK!\nCustomers waiting, orders not processed."]
+    
+    Queue --> Consumer
+    Consumer --> Step1
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step5
+    Step5 --> Loop
+    Loop --> Consumer
+  end
 ```
 
 This message is called a **poison message** (or poison pill). It can never be processed successfully, but it keeps getting retried forever.
@@ -116,37 +120,34 @@ Netflix's viewing history pipeline once had a bug where certain Unicode characte
 Think of message processing like an emergency room:
 
 **Without DLQ: Single Line**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ER WITHOUT TRIAGE                         │
-│                                                              │
-│   Patients: [Flu, Broken Arm, CARDIAC ARREST, Cold, ...]   │
-│                                                              │
-│   Doctor tries to treat Cardiac Arrest patient:             │
-│   - Needs specialist equipment                              │
-│   - Needs more time                                         │
-│   - Can't handle it alone                                   │
-│                                                              │
-│   Meanwhile: Flu, Cold patients wait... and wait...         │
-│   Even though they could be treated quickly!                │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph ERWithout["ER WITHOUT TRIAGE"]
+    Patients["Patients:\n[Flu, Broken Arm, CARDIAC ARREST, Cold, ...]"]
+    Doctor["Doctor tries to treat Cardiac Arrest patient:"]
+    Needs["- Needs specialist equipment\n- Needs more time\n- Can't handle it alone"]
+    Wait["Meanwhile: Flu, Cold patients wait... and wait...\nEven though they could be treated quickly!"]
+    
+    Patients --> Doctor
+    Doctor --> Needs
+    Needs --> Wait
+  end
 ```
 
 **With DLQ: Triage System**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ER WITH TRIAGE                            │
-│                                                              │
-│   Main Queue: [Flu, Broken Arm, Cold, ...]                  │
-│   → Doctor processes these normally                         │
-│                                                              │
-│   ICU (Dead Letter Queue): [Cardiac Arrest]                 │
-│   → Specialist team handles these separately                │
-│   → Doesn't block main queue                                │
-│   → Gets special attention and resources                    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph ERWith["ER WITH TRIAGE"]
+    MainQueue["Main Queue:\n[Flu, Broken Arm, Cold, ...]"]
+    Doctor["Doctor processes these normally"]
+    DLQ["ICU (Dead Letter Queue):\n[Cardiac Arrest]"]
+    Specialist["Specialist team handles these separately"]
+    Benefits["- Doesn't block main queue\n- Gets special attention and resources"]
+    
+    MainQueue --> Doctor
+    DLQ --> Specialist
+    Specialist --> Benefits
+  end
 ```
 
 ### The DLQ Mental Model
@@ -218,20 +219,16 @@ Consumer receives message:
 
 **Step 3: Retry Decision**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    RETRY DECISION                            │
-│                                                              │
-│   if (deliveryCount < maxDeliveries) {                      │
-│       // Retry: Return to main queue                        │
-│       NACK with requeue = true                              │
-│   } else {                                                  │
-│       // Max retries exceeded: Send to DLQ                  │
-│       Move message to Dead Letter Queue                     │
-│       ACK original (remove from main queue)                 │
-│   }                                                          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Start["deliveryCount vs maxDeliveries"]
+  Check{"deliveryCount < maxDeliveries?"}
+  Retry["Retry: Return to main queue\nNACK with requeue = true"]
+  DLQ["Max retries exceeded: Send to DLQ\nMove message to Dead Letter Queue\nACK original (remove from main queue)"]
+  
+  Start --> Check
+  Check -->|Yes| Retry
+  Check -->|No| DLQ
 ```
 
 **Step 4: DLQ Message Format**
@@ -303,16 +300,12 @@ Let's trace through a complete DLQ scenario.
 - One malformed order in the queue
 - DLQ configured
 
-```
-Initial State:
-┌─────────────────────────────────────────────────────────────┐
-│ Order Queue:                                                 │
-│ [Order1: {id:"O1", amount:100}]                             │
-│ [Order2: {id:"O2", amount:INVALID}]  ← Poison (not a number)│
-│ [Order3: {id:"O3", amount:300}]                             │
-│                                                              │
-│ Dead Letter Queue: (empty)                                  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  subgraph Initial["Initial State"]
+    OQ["Order Queue:\n[Order1: {id:'O1', amount:100}]\n[Order2: {id:'O2', amount:INVALID}]\nPoison (not a number)\n[Order3: {id:'O3', amount:300}]"]
+    DLQ["Dead Letter Queue:\n(empty)"]
+  end
 ```
 
 ### Processing Flow
@@ -1434,7 +1427,23 @@ A Dead Letter Queue (DLQ) is a holding area for messages that can't be processed
 
 ## Quick Reference Card
 
+```mermaid
+flowchart TD
+  subgraph CheatSheet["DEAD LETTER QUEUE CHEAT SHEET"]
+    What["WHAT IS DLQ:\n- Queue for messages that failed processing\n- Prevents poison messages from blocking queue\n- Enables investigation and recovery"]
+    When["WHEN TO SEND TO DLQ:\n+ Max retries exceeded\n+ Permanent failure (invalid data, business rule)\n- Transient failure (timeout, rate limit) to Retry"]
+    Include["DLQ MESSAGE SHOULD INCLUDE:\n- Original message\n- Original queue name\n- Failure reason / exception\n- Retry count\n- Timestamps (first failure, last failure)\n- Consumer host/instance"]
+    Options["DLQ PROCESSING OPTIONS:\n1. Manual review and fix\n2. Automated reprocessing (after delay)\n3. Compensating action (refund, notify)\n4. Archive and discard"]
+    Monitor["MONITORING:\n- DLQ depth (should be near zero)\n- DLQ entry rate (messages/hour)\n- Time in DLQ (how long messages sit)\n- Alert on any DLQ growth"]
+    Mistakes["COMMON MISTAKES:\n- All failures to DLQ (distinguish transient)\n- Not monitoring DLQ\n- Losing original message context\n- Infinite DLQ loop (reprocess to fail to DLQ to ...)"]
+    Tech["TECHNOLOGY SUPPORT:\nRabbitMQ: x-dead-letter-exchange\nSQS: RedrivePolicy\nKafka: Manual (send to DLT topic)"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              DEAD LETTER QUEUE CHEAT SHEET                   │
 ├─────────────────────────────────────────────────────────────┤
@@ -1480,4 +1489,6 @@ A Dead Letter Queue (DLQ) is a holding area for messages that can't be processed
 │   Kafka: Manual (send to DLT topic)                         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 

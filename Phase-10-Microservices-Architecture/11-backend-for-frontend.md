@@ -157,7 +157,39 @@ Web BFF translates to:
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    MobileApp["Mobile App"]
+    MobileBFF["Mobile BFF<br/>(Optimized for mobile)"]
+    UserSvc1["User Service"]
+    OrderSvc1["Order Service"]
+    PaymentSvc1["Payment Service"]
+    NotificationSvc["Notification Service"]
+    
+    WebApp["Web App"]
+    WebBFF["Web BFF<br/>(Optimized for web)"]
+    UserSvc2["User Service"]
+    OrderSvc2["Order Service"]
+    PaymentSvc2["Payment Service"]
+    AnalyticsSvc["Analytics Service"]
+    
+    MobileApp -->|HTTP/HTTPS| MobileBFF
+    MobileBFF --> UserSvc1
+    MobileBFF --> OrderSvc1
+    MobileBFF --> PaymentSvc1
+    MobileBFF --> NotificationSvc
+    
+    WebApp -->|HTTP/HTTPS| WebBFF
+    WebBFF --> UserSvc2
+    WebBFF --> OrderSvc2
+    WebBFF --> PaymentSvc2
+    WebBFF --> AnalyticsSvc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐
 │ Mobile App  │
 └──────┬──────┘
@@ -190,6 +222,7 @@ Web BFF translates to:
        ├──► Payment Service
        └──► Analytics Service
 ```
+</details>
 
 ### Core Components
 

@@ -174,7 +174,21 @@ Audit Log (who accessed what)
 ### Encryption in Transit
 
 **TLS/HTTPS Flow**:
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Client->>Server: TLS Handshake
+    Server->>Client: Certificate
+    Client->>Server: Encrypted Request
+    Server->>Client: Encrypted Response
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client                    Server
    │                         │
    │─── TLS Handshake ───────▶│
@@ -185,6 +199,7 @@ Client                    Server
    │                         │
    │◀── Encrypted Response ──│
 ```
+</details>
 
 - All data encrypted before transmission
 - Only client and server can decrypt

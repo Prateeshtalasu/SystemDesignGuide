@@ -74,7 +74,49 @@ String missing = cache.get("key1");  // Returns null (evicted)
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class LRUCache {
+        - int capacity
+        - Map~K,Node~K,V~~ cache
+        - Node~K,V~ head
+        - Node~K,V~ tail
+        - List~EvictionListener~ evictionListeners
+        + get(key) V
+        + put(key, value) void
+        + remove(key) V
+        + size() int
+        + clear() void
+    }
+    
+    class Node {
+        - K key
+        - V value
+        - Node~K,V~ prev
+        - Node~K,V~ next
+    }
+    
+    class EvictionListener {
+        <<interface>>
+        + onEviction(key, value) void
+    }
+    
+    class ConcurrentLRUCache {
+        - LRUCache~K,V~ cache
+        + get(key) V
+        + put(key, value) void
+        + remove(key) V
+    }
+    
+    LRUCache --> Node
+    LRUCache --> EvictionListener
+    ConcurrentLRUCache --> LRUCache
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                                 LRU CACHE                                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -116,6 +158,8 @@ String missing = cache.get("key1");  // Returns null (evicted)
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Responsibilities Table
 
 | Class | Owns | Why |
@@ -129,7 +173,37 @@ String missing = cache.get("key1");  // Returns null (evicted)
 
 ### Data Structure Visualization
 
+```mermaid
+flowchart LR
+    subgraph HashMap["HashMap for O(1) lookup"]
+        H1["Key A → Node A"]
+        H2["Key B → Node B"]
+        H3["Key C → Node C"]
+    end
+    
+    subgraph DLL["Doubly Linked List for O(1) reordering"]
+        direction LR
+        HEAD["HEAD<br/>(dummy)"]
+        C["Node C<br/>(MRU)"]
+        B["Node B"]
+        A["Node A<br/>(LRU)"]
+        TAIL["TAIL<br/>(dummy)"]
+        
+        HEAD <--> C
+        C <--> B
+        B <--> A
+        A <--> TAIL
+    end
+    
+    H1 --> A
+    H2 --> B
+    H3 --> C
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 HashMap for O(1) lookup:
 ┌─────────────────────────────────────┐
 │  Key  │  Reference to Node          │
@@ -155,6 +229,8 @@ Doubly Linked List for O(1) reordering:
           Most Recently              Least Recently
               Used                       Used
 ```
+
+</details>
 
 ---
 

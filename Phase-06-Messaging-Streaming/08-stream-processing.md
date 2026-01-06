@@ -23,54 +23,37 @@ Before diving into stream processing, you should understand:
 
 Imagine you're building a fraud detection system:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              THE REAL-TIME PROCESSING PROBLEM                │
-│                                                              │
-│   BATCH APPROACH:                                            │
-│   - Collect all transactions for the day                    │
-│   - Run fraud detection at midnight                         │
-│   - Flag suspicious transactions                            │
-│                                                              │
-│   Problem: Fraudster makes 100 transactions at 9am          │
-│   Detection: 3am next day (15+ hours later!)                │
-│   By then: Money is gone, damage is done                    │
-│                                                              │
-│   STREAM APPROACH:                                           │
-│   - Process each transaction as it happens                  │
-│   - Detect fraud in milliseconds                            │
-│   - Block suspicious transaction immediately                │
-│                                                              │
-│   Fraudster's first suspicious transaction: BLOCKED         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph RTP["THE REAL-TIME PROCESSING PROBLEM"]
+    Batch["BATCH APPROACH:\n- Collect all transactions for the day\n- Run fraud detection at midnight\n- Flag suspicious transactions\nProblem: Fraudster makes 100 transactions at 9am\nDetection: 3am next day (15+ hours later!)\nBy then: Money is gone, damage is done"]
+    Stream["STREAM APPROACH:\n- Process each transaction as it happens\n- Detect fraud in milliseconds\n- Block suspicious transaction immediately\nFraudster's first suspicious transaction: BLOCKED"]
+  end
 ```
 
 ### What Systems Looked Like Before Stream Processing
 
 **Batch-Only World:**
-```
-┌─────────────────────────────────────────────────────────────┐
-│   Data Sources ──► Data Lake ──► Batch Job ──► Results      │
-│                                  (hourly)                   │
-│                                                              │
-│   Latency: Hours to days                                    │
-│   Freshness: Stale data                                     │
-│   Use case: Reports, analytics                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  DS["Data Sources"] --> DL["Data Lake"] --> BJ["Batch Job (hourly)"] --> R["Results"]
+  Note["Latency: Hours to days\nFreshness: Stale data\nUse case: Reports, analytics"]
 ```
 
 **Custom Real-Time Systems:**
-```
-┌─────────────────────────────────────────────────────────────┐
-│   Each team builds custom solution:                         │
-│   - Custom message consumers                                │
-│   - Custom state management                                 │
-│   - Custom windowing logic                                  │
-│   - Custom failure handling                                 │
-│                                                              │
-│   Result: Inconsistent, buggy, hard to maintain            │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph CustomRT["Each team builds custom solution"]
+    C1["Custom message consumers"]
+    C2["Custom state management"]
+    C3["Custom windowing logic"]
+    C4["Custom failure handling"]
+    Result["Result: Inconsistent, buggy, hard to maintain"]
+    C1 --> Result
+    C2 --> Result
+    C3 --> Result
+    C4 --> Result
+  end
 ```
 
 ### What Breaks Without Stream Processing
@@ -99,30 +82,14 @@ Imagine you're building a fraud detection system:
 
 Think of stream processing like a factory assembly line:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              ASSEMBLY LINE ANALOGY                           │
-│                                                              │
-│   BATCH = Warehouse Processing                              │
-│   - Trucks deliver all parts to warehouse                   │
-│   - Workers process entire warehouse at once                │
-│   - Ship finished products at end of day                    │
-│                                                              │
-│   STREAM = Assembly Line                                    │
-│   - Parts arrive continuously on conveyor belt              │
-│   - Each station processes items as they pass               │
-│   - Finished products come out continuously                 │
-│                                                              │
-│   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐         │
-│   │Part │──►│Weld │──►│Paint│──►│QC   │──►│Ship │         │
-│   │Arrive│   │     │   │     │   │     │   │     │         │
-│   └─────┘   └─────┘   └─────┘   └─────┘   └─────┘         │
-│                                                              │
-│   Each station = Processing operator                        │
-│   Conveyor belt = Stream                                    │
-│   Parts = Events                                            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Assembly["ASSEMBLY LINE ANALOGY"]
+    Batch["BATCH = Warehouse Processing\n- Trucks deliver all parts to warehouse\n- Workers process entire warehouse at once\n- Ship finished products at end of day"]
+    Stream["STREAM = Assembly Line\n- Parts arrive continuously on conveyor belt\n- Each station processes items as they pass\n- Finished products come out continuously"]
+    Line["Part Arrive --> Weld --> Paint --> QC --> Ship"]
+    Notes["Each station = Processing operator\nConveyor belt = Stream\nParts = Events"]
+  end
 ```
 
 ### Core Stream Processing Concepts

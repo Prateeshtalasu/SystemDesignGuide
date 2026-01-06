@@ -21,7 +21,25 @@ Before diving into OAuth2 and OpenID Connect, you should understand:
 
 Imagine you want a third-party app (like a photo printing service) to access your photos stored on Google. Before OAuth2:
 
+```mermaid
+flowchart TD
+    USER["User:<br/>I want PrintMyPhotos.com<br/>to print my Google Photos"]
+    APP["PrintMyPhotos:<br/>Give me your Google<br/>username and password"]
+    
+    PROBLEMS["Problems:<br/>❌ PrintMyPhotos now has FULL access<br/>❌ They could read your email, change your password, etc.<br/>❌ You can't revoke access without changing your password<br/>❌ If PrintMyPhotos is hacked, your Google account is compromised<br/>❌ You're training users to enter passwords on third-party sites"]
+    
+    USER --> APP
+    APP --> PROBLEMS
+    
+    style USER fill:#fff9c4
+    style APP fill:#ffcdd2
+    style PROBLEMS fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE PASSWORD SHARING PROBLEM                          │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -42,11 +60,40 @@ Imagine you want a third-party app (like a photo printing service) to access you
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What OAuth2 Solves
 
 OAuth2 allows users to grant LIMITED access to their resources WITHOUT sharing credentials:
 
+```mermaid
+flowchart TD
+    STEP1["1. User clicks Connect Google Photos<br/>on PrintMyPhotos"]
+    STEP2["2. User redirected to Google's login page<br/>(Password entered on Google,<br/>NOT PrintMyPhotos)"]
+    STEP3["3. Google asks: PrintMyPhotos wants to:<br/>✓ View your Google Photos<br/>✗ NOT access your email<br/>✗ NOT change your password<br/>[Allow] [Deny]"]
+    STEP4["4. User clicks Allow"]
+    STEP5["5. Google gives PrintMyPhotos<br/>LIMITED access token<br/>- Only works for photos<br/>- Expires in 1 hour<br/>- Can be revoked anytime"]
+    
+    BENEFITS["Benefits:<br/>✅ Password never shared with third party<br/>✅ Limited scope (only photos, not email)<br/>✅ Time-limited access<br/>✅ Revocable without changing password<br/>✅ User sees exactly what they're granting"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> BENEFITS
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#fff9c4
+    style STEP4 fill:#c8e6c9
+    style STEP5 fill:#c8e6c9
+    style BENEFITS fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITH OAUTH2                                           │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -79,6 +126,8 @@ OAuth2 allows users to grant LIMITED access to their resources WITHOUT sharing c
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What OpenID Connect Adds
 
 OAuth2 only handles authorization (access to resources). OpenID Connect (OIDC) adds authentication (proving identity):
@@ -110,7 +159,27 @@ Think of OAuth2 like a valet key for your car:
 - Limited driving range (some cars)
 - You can deactivate it anytime
 
+```mermaid
+flowchart TD
+    RO["Resource Owner<br/>(You)<br/><br/>I want the valet<br/>to park my car"]
+    AS["Authorization Server<br/>(Car Manufacturer)<br/><br/>Here's a valet key<br/>with limited access"]
+    CLIENT["Client<br/>(Valet/Third-Party App)<br/><br/>Uses valet key<br/>to access"]
+    RS["Resource Server<br/>(Your Car/Google Photos)<br/><br/>Grants limited access<br/>based on key"]
+    
+    RO --> AS
+    AS --> CLIENT
+    CLIENT --> RS
+    
+    style RO fill:#e3f2fd
+    style AS fill:#fff9c4
+    style CLIENT fill:#c8e6c9
+    style RS fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OAUTH2 AS VALET KEY                                   │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -137,6 +206,8 @@ Think of OAuth2 like a valet key for your car:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -165,7 +236,29 @@ OAuth2 defines several flows for different scenarios:
 
 ### Authorization Code Flow (Most Common)
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Client
+    participant AS as Auth Server
+    participant RS as Resource Server
+    
+    U->>C: 1. Click Login
+    C->>U: 2. Redirect to Auth Server
+    U->>AS: 3. Login + Consent
+    AS->>U: 4. Redirect with Authorization Code
+    U->>C: 5. Send Code
+    C->>AS: 6. Exchange Code for Tokens
+    AS->>C: 7. Access Token + Refresh Token
+    C->>RS: 8. API Request with Access Token
+    RS->>C: 9. Protected Resource
+    C->>U: 10. Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                    AUTHORIZATION CODE FLOW                                │
 ├──────────────────────────────────────────────────────────────────────────┤
@@ -209,6 +302,8 @@ OAuth2 defines several flows for different scenarios:
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Step-by-Step Breakdown**:
 

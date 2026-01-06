@@ -28,13 +28,27 @@ byte[] hash2 = md.digest("hello".getBytes());
 ### Binary Trees
 A **binary tree** is a tree where each node has at most two children.
 
+```mermaid
+flowchart TD
+    Root[Root] --> A[A]
+    Root --> B[B]
+    A --> C[C]
+    A --> D[D]
+    B --> E[E]
+    B --> F[F]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
         Root
        /    \
       A      B
      / \    / \
     C   D  E   F
 ```
+</details>
 
 ### Data Integrity
 **Data integrity** means ensuring data hasn't been modified, corrupted, or tampered with.
@@ -137,7 +151,16 @@ If any step fails, you know exactly where the problem is!
 
 ### The Key Insight
 
-```
+**Merkle Tree Key Insight**: "A single root hash commits to the entire dataset"
+
+- If ANY data changes, the root hash changes.
+- If root hashes match, ALL data matches (with overwhelming probability).
+- Verification requires only O(log n) hashes, not O(n).
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MERKLE TREE KEY INSIGHT                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -152,6 +175,7 @@ If any step fails, you know exactly where the problem is!
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -339,7 +363,47 @@ Proof invalid! "tx3_fake" is NOT in the tree.
 
 Bitcoin uses Merkle trees to organize transactions in each block:
 
+```mermaid
+flowchart TD
+    subgraph Header["Block Header"]
+        A["Previous Block Hash"]
+        B["Timestamp"]
+        C["Nonce"]
+        D["Merkle Root"]
+    end
+    
+    subgraph Tree["Merkle Tree"]
+        Root["Merkle Root"]
+        H12["H12"]
+        H34["H34"]
+        H1["H1"]
+        H2["H2"]
+        H3["H3"]
+        H4["H4"]
+        Tx1["Tx1"]
+        Tx2["Tx2"]
+        Tx3["Tx3"]
+        Tx4["Tx4"]
+        
+        Root --> H12
+        Root --> H34
+        H12 --> H1
+        H12 --> H2
+        H34 --> H3
+        H34 --> H4
+        H1 --> Tx1
+        H2 --> Tx2
+        H3 --> Tx3
+        H4 --> Tx4
+    end
+    
+    D -.->|references| Root
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                       BITCOIN BLOCK                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -362,6 +426,7 @@ Bitcoin uses Merkle trees to organize transactions in each block:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **SPV (Simplified Payment Verification):**
 Light clients can verify a transaction without downloading the entire block:
@@ -373,7 +438,20 @@ Light clients can verify a transaction without downloading the entire block:
 
 Git uses Merkle trees (called "tree objects") to track file changes:
 
+```mermaid
+flowchart TD
+    Commit["Commit: abc123"] --> Tree["Tree: def456 root"]
+    Tree --> Blob1["Blob: 111aaa<br/>README.md"]
+    Tree --> Blob2["Blob: 222bbb<br/>main.java"]
+    Tree --> Tree2["Tree: ghi789<br/>src/"]
+    Tree2 --> Blob3["Blob: 333ccc<br/>App.java"]
+    Tree2 --> Blob4["Blob: 444ddd<br/>Utils.java"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Commit: abc123
 │
 └── Tree: def456 (root)
@@ -383,6 +461,7 @@ Commit: abc123
         ├── Blob: 333ccc (App.java)
         └── Blob: 444ddd (Utils.java)
 ```
+</details>
 
 **Fast diff detection:**
 - Compare two commit tree hashes
@@ -394,7 +473,33 @@ Commit: abc123
 
 Cassandra uses Merkle trees to synchronize data between replicas:
 
+```mermaid
+flowchart LR
+    subgraph NodeA["Node A"]
+        A1["Data<br/>Partition 1"]
+        A2["Build Merkle Tree"]
+        A3["Root: ABC"]
+        A1 --> A2
+        A2 --> A3
+    end
+    
+    subgraph NodeB["Node B"]
+        B1["Data<br/>Partition 1"]
+        B2["Build Merkle Tree"]
+        B3["Root: XYZ"]
+        B1 --> B2
+        B2 --> B3
+    end
+    
+    A3 -->|Compare| B3
+    A3 --> C["Roots differ!<br/>Traverse trees to find differences.<br/>Only sync the differing ranges."]
+    B3 --> C
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                 CASSANDRA ANTI-ENTROPY REPAIR                    │
 ├─────────────────────────────────────────────────────────────────┤
@@ -419,6 +524,7 @@ Cassandra uses Merkle trees to synchronize data between replicas:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### IPFS (InterPlanetary File System)
 

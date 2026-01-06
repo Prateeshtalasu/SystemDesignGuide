@@ -77,7 +77,55 @@ try {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class Game {
+        - Board board
+        - Player[] players
+        - int currentPlayerIndex
+        - GameStatus status
+        + makeMove(row, col) boolean
+        + getCurrentPlayer() Player
+        + getWinner() Player
+        + isGameOver() boolean
+    }
+    
+    class Board {
+        - Symbol[][] grid
+        - int size
+        + place(row, col, symbol) boolean
+        + checkWin() Symbol
+        + isFull() boolean
+    }
+    
+    class Player {
+        - String name
+        - Symbol symbol
+        + makeMove(board) Move
+    }
+    
+    class AIPlayer {
+        + minimax(board, depth, isMax) int
+        + evaluate(board) int
+        + findBestMove(board) Move
+    }
+    
+    class Move {
+        - int row
+        - int col
+        - Player player
+    }
+    
+    Game --> Board
+    Game --> Player
+    Player <|-- AIPlayer
+    Game --> Move
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           TIC-TAC-TOE GAME                                       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -112,6 +160,8 @@ try {
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Game Board Visualization
 

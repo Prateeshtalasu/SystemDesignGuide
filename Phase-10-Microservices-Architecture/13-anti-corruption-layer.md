@@ -211,7 +211,31 @@ Anti-Corruption Layer follows these patterns:
 
 ### Pattern 1: Adapter-Based ACL
 
+```mermaid
+flowchart TD
+    Microservice["Your Microservice<br/>(Clean Domain Model)"]
+    ACL["Anti-Corruption Layer (Adapter)"]
+    Trans1["Domain Model → Legacy Model<br/>(Translation)"]
+    Trans2["Legacy Model → Domain Model<br/>(Translation)"]
+    Trans3["Protocol Translation<br/>(REST → SOAP)"]
+    Trans4["Error Handling Translation"]
+    Legacy["Legacy System<br/>(Legacy Model)"]
+    
+    Microservice --> ACL
+    ACL --> Trans1
+    ACL --> Trans2
+    ACL --> Trans3
+    ACL --> Trans4
+    Trans1 --> Legacy
+    Trans2 --> Legacy
+    Trans3 --> Legacy
+    Trans4 --> Legacy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              ADAPTER-BASED ACL                          │
 └─────────────────────────────────────────────────────────┘
@@ -226,6 +250,7 @@ Anti-Corruption Layer (Adapter)
   ↓
 Legacy System (Legacy Model)
 ```
+</details>
 
 **Components:**
 
@@ -237,7 +262,28 @@ Legacy System (Legacy Model)
 
 ### Pattern 2: Facade-Based ACL
 
+```mermaid
+flowchart TD
+    Microservice["Your Microservice"]
+    Facade["Facade (Simplified Interface)"]
+    Hide["Hides legacy complexity"]
+    Provide["Provides clean operations"]
+    Translate["Translates internally"]
+    Legacy["Legacy System<br/>(Complex Interface)"]
+    
+    Microservice --> Facade
+    Facade --> Hide
+    Facade --> Provide
+    Facade --> Translate
+    Hide --> Legacy
+    Provide --> Legacy
+    Translate --> Legacy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              FACADE-BASED ACL                            │
 └─────────────────────────────────────────────────────────┘
@@ -251,6 +297,7 @@ Facade (Simplified Interface)
   ↓
 Legacy System (Complex Interface)
 ```
+</details>
 
 **Components:**
 
@@ -260,7 +307,28 @@ Legacy System (Complex Interface)
 
 ### Pattern 3: Gateway-Based ACL
 
+```mermaid
+flowchart TD
+    Microservices["Multiple Microservices"]
+    Gateway["API Gateway (ACL)"]
+    Trans["Translates requests"]
+    Route["Routes to legacy systems"]
+    Aggregate["Aggregates responses"]
+    Legacy["Legacy Systems"]
+    
+    Microservices --> Gateway
+    Gateway --> Trans
+    Gateway --> Route
+    Gateway --> Aggregate
+    Trans --> Legacy
+    Route --> Legacy
+    Aggregate --> Legacy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              GATEWAY-BASED ACL                           │
 └─────────────────────────────────────────────────────────┘
@@ -274,6 +342,7 @@ API Gateway (ACL)
   ↓
 Legacy Systems
 ```
+</details>
 
 **Components:**
 

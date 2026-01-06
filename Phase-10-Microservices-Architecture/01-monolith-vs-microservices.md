@@ -33,7 +33,24 @@ This is a **monolith**, a single deployable unit containing all your application
 
 In the early days of web development (and still today for many applications), everything lived together:
 
+```mermaid
+flowchart TD
+    subgraph Monolith["MONOLITHIC APPLICATION"]
+        UserMod["User Module"]
+        ProductMod["Product Module"]
+        CartMod["Cart Module"]
+        OrderMod["Order Module"]
+        PaymentMod["Payment Module"]
+        EmailMod["Email Module"]
+    end
+    DB["SINGLE DATABASE"]
+    Monolith --> DB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     MONOLITHIC APPLICATION                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -49,6 +66,7 @@ In the early days of web development (and still today for many applications), ev
 │                    SINGLE DATABASE                          │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 This approach worked fine until companies started experiencing these problems:
 
@@ -58,7 +76,35 @@ This approach worked fine until companies started experiencing these problems:
 
 Your product catalog gets 10x more traffic than your order processing. With a monolith, you must scale the entire application, even though only one module needs more resources.
 
+```mermaid
+flowchart TD
+    subgraph Before["Before Black Friday"]
+        Mono1["Monolith (1 CPU)"]
+        Note1["Handles normal traffic fine"]
+        Mono1 -.-> Note1
+    end
+    
+    subgraph During["During Black Friday"]
+        Mono2["Monolith (16 CPUs)"]
+        Note2["You scaled everything 16x"]
+        Mono2 -.-> Note2
+        Waste1["But only Product Catalog needed 16x"]
+        Waste2["Order Processing only needed 2x"]
+        Waste3["Email needed 1x"]
+        Waste4["Wasted 14 CPUs worth of Order Processing"]
+        Waste5["Wasted 15 CPUs worth of Email"]
+        Mono2 -.-> Waste1
+        Mono2 -.-> Waste2
+        Mono2 -.-> Waste3
+        Mono2 -.-> Waste4
+        Mono2 -.-> Waste5
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Before Black Friday:
 ┌────────────────────┐
 │   Monolith (1 CPU) │  ← Handles normal traffic fine
@@ -74,6 +120,7 @@ During Black Friday:
                       ← Wasted 14 CPUs worth of Order Processing
                       ← Wasted 15 CPUs worth of Email
 ```
+</details>
 
 **Problem 2: Deployment Coupling**
 
@@ -219,19 +266,13 @@ public class OrderService {
 
 **Deployment Flow:**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      DEPLOYMENT PIPELINE                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Source Code  →  Build  →  Test  →  Package  →  Deploy          │
-│     (All)        (All)    (All)     (1 JAR)    (1 Server)       │
-│                                                                  │
-│  Time: 30 min    1 hour    2 hours   5 min     30 min           │
-│                                                                  │
-│  Total: ~4 hours for ANY change                                  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Source["Source Code<br/>(All)"] --> Build["Build<br/>(All)<br/>30 min"]
+    Build --> Test["Test<br/>(All)<br/>1 hour"]
+    Test --> Package["Package<br/>(1 JAR)<br/>2 hours"]
+    Package --> Deploy["Deploy<br/>(1 Server)<br/>5 min"]
+    Deploy --> Total["Total: ~4 hours<br/>for ANY change"]
 ```
 
 ### Microservices Architecture Deep Dive
@@ -323,20 +364,17 @@ public class OrderService {
 
 **Deployment Flow:**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MICROSERVICES DEPLOYMENT                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  User Service:    Build → Test → Deploy    (15 min)             │
-│  Product Service: Build → Test → Deploy    (15 min)  ← Parallel │
-│  Order Service:   Build → Test → Deploy    (15 min)  ← Parallel │
-│  Payment Service: Build → Test → Deploy    (15 min)  ← Parallel │
-│                                                                  │
-│  Change to User Service only?                                    │
-│  Deploy ONLY User Service: 15 min (not 4 hours)                 │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Parallel["Parallel Deployments"]
+        User["User Service:<br/>Build → Test → Deploy<br/>(15 min)"]
+        Product["Product Service:<br/>Build → Test → Deploy<br/>(15 min)"]
+        Order["Order Service:<br/>Build → Test → Deploy<br/>(15 min)"]
+        Payment["Payment Service:<br/>Build → Test → Deploy<br/>(15 min)"]
+    end
+    
+    Note["Change to User Service only?<br/>Deploy ONLY User Service: 15 min (not 4 hours)"]
+    Parallel --> Note
 ```
 
 ### The Modular Monolith: A Middle Ground
@@ -528,7 +566,52 @@ TOTAL PROCESSING TIME: ~561ms (slower due to network overhead)
 
 ### Visual Comparison
 
+```mermaid
+flowchart LR
+    subgraph Monolith["MONOLITH: SINGLE PROCESS"]
+        Req1["Request"] --> User1["User"]
+        User1 --> Product1["Product"]
+        Product1 --> Payment1["Payment"]
+        Payment1 --> DB1["DB"]
+        DB1 --> Resp1["Response"]
+        Note1["in-memory method calls, nanoseconds"]
+        TX1["Transaction: BEGIN ─────────────────────────────────── COMMIT"]
+    end
 ```
+
+```mermaid
+flowchart TD
+    subgraph Microservices["MICROSERVICES"]
+        OrderSvc["Order Service<br/>TX: 1"] 
+        UserSvc["User Service<br/>TX: 2"]
+        ProductSvc["Product Service<br/>TX: 3"]
+        PaymentSvc["Payment Service<br/>TX: 4"]
+        Kafka["Kafka"]
+        
+        OrderSvc <--> UserSvc
+        OrderSvc <--> ProductSvc
+        OrderSvc --> Kafka
+        Kafka --> PaymentSvc
+        
+        OrderDB["DB1"]
+        UserDB["DB2"]
+        ProductDB["DB3"]
+        PaymentDB["DB4"]
+        
+        OrderSvc --> OrderDB
+        UserSvc --> UserDB
+        ProductSvc --> ProductDB
+        PaymentSvc --> PaymentDB
+    end
+    
+    Note2["Network calls between services: milliseconds<br/>Each service has its own transaction<br/>No automatic rollback across services"]
+    Microservices -.-> Note2
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 MONOLITH:
 ┌─────────────────────────────────────────────────────────────────┐
 │                         SINGLE PROCESS                           │
@@ -559,6 +642,7 @@ MICROSERVICES:
 [Each service has its own transaction]
 [No automatic rollback across services]
 ```
+</details>
 
 ---
 
@@ -1330,7 +1414,30 @@ Which one is correct? How did they get out of sync? How do you fix it?
 
 **Mistake 1: Shared Database**
 
+```mermaid
+flowchart TD
+    subgraph Bad["BAD"]
+        OrderSvc1["Order Service"]
+        PaymentSvc1["Payment Service"]
+        SharedDB["Shared DB<br/>Both services access same tables"]
+        OrderSvc1 --> SharedDB
+        PaymentSvc1 --> SharedDB
+    end
+    
+    subgraph Good["GOOD"]
+        OrderSvc2["Order Service"]
+        PaymentSvc2["Payment Service"]
+        OrderDB["Order DB<br/>Each service owns its data"]
+        PayDB["Pay DB<br/>Each service owns its data"]
+        OrderSvc2 --> OrderDB
+        PaymentSvc2 --> PayDB
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 BAD:
 ┌──────────┐     ┌──────────┐
 │  Order   │     │ Payment  │
@@ -1354,10 +1461,41 @@ GOOD:
 │Order DB│      │Pay DB  │  ← Each service owns its data
 └────────┘      └────────┘
 ```
+</details>
 
 **Mistake 2: Synchronous Chain Calls**
 
+```mermaid
+flowchart LR
+    subgraph Bad["BAD"]
+        User1["User"] --> Gateway1["Gateway"]
+        Gateway1 --> Order1["Order"]
+        Order1 --> UserSvc1["User"]
+        UserSvc1 --> Product1["Product"]
+        Product1 --> Inventory1["Inventory"]
+        Inventory1 --> Payment1["Payment"]
+        Payment1 --> Notification1["Notification"]
+        Note1["Waiting for ALL services to respond<br/>If ANY service is slow, entire request is slow<br/>Latency: 50ms + 30ms + 40ms + 500ms + 20ms = 640ms"]
+        Order1 -.-> Note1
+    end
+    
+    subgraph Good["GOOD"]
+        User2["User"] --> Gateway2["Gateway"]
+        Gateway2 --> Order2["Order"]
+        Order2 --> Event["Publish Event"]
+        Event --> Response["Response (50ms)"]
+        Event --> Kafka["Kafka Topic"]
+        Kafka --> Inventory2["Inventory<br/>(async)"]
+        Kafka --> Payment2["Payment<br/>(async)"]
+        Kafka --> Notification2["Notification<br/>(async)"]
+        Kafka --> Analytics["Analytics<br/>(async)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 BAD:
 User → Gateway → Order → User → Product → Inventory → Payment → Notification
                   ↑___________________________________|
@@ -1375,6 +1513,7 @@ User → Gateway → Order → [Publish Event] → Response (50ms)
     Inventory  Payment  Notification  Analytics
     (async)    (async)    (async)      (async)
 ```
+</details>
 
 **Mistake 3: No Circuit Breakers**
 
@@ -1615,7 +1754,22 @@ GOOD:
 
 ### Migration Path
 
+```mermaid
+flowchart TD
+    P1["Phase 1: Monolith (0-2 years)"]
+    Note1["Team grows, boundaries become clear"]
+    P1 --> Note1
+    Note1 --> P2["Phase 2: Modular Monolith (1-3 years)"]
+    Note2["Need independent scaling, team autonomy"]
+    P2 --> Note2
+    Note2 --> P3["Phase 3: Extract critical services first<br/>- Highest traffic (Product Catalog)<br/>- Different scaling needs (Search)<br/>- Different technology needs (ML recommendations)"]
+    P3 --> P4["Phase 4: Gradual extraction (ongoing)<br/>Extract services as needed, not all at once"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Phase 1: Monolith (0-2 years)
     │
     ▼ Team grows, boundaries become clear
@@ -1633,6 +1787,7 @@ Phase 3: Extract critical services first
 Phase 4: Gradual extraction (ongoing)
          Extract services as needed, not all at once
 ```
+</details>
 
 ### Real-World Examples
 

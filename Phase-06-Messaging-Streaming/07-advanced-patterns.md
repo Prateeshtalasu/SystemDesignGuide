@@ -22,26 +22,14 @@ Before diving into advanced patterns, you should understand:
 
 Imagine an e-commerce order flow:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              THE DISTRIBUTED TRANSACTION PROBLEM             │
-│                                                              │
-│   Customer places order:                                     │
-│   1. Order Service: Create order                            │
-│   2. Payment Service: Charge customer                       │
-│   3. Inventory Service: Reserve items                       │
-│   4. Shipping Service: Schedule delivery                    │
-│                                                              │
-│   Each service has its own database.                        │
-│   What if Payment succeeds but Inventory fails?             │
-│                                                              │
-│   Without patterns:                                          │
-│   - Customer charged                                        │
-│   - Items not reserved                                      │
-│   - Order in inconsistent state                             │
-│   - Manual intervention required                            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Problem["THE DISTRIBUTED TRANSACTION PROBLEM"]
+    Steps["Customer places order:\n1) Order Service: Create order\n2) Payment Service: Charge customer\n3) Inventory Service: Reserve items\n4) Shipping Service: Schedule delivery"]
+    NoteDB["Each service has its own database.\nWhat if Payment succeeds but Inventory fails?"]
+    Without["Without patterns:\n- Customer charged\n- Items not reserved\n- Order in inconsistent state\n- Manual intervention required"]
+    Steps --> NoteDB --> Without
+  end
 ```
 
 ### What Systems Looked Like Before These Patterns
@@ -101,36 +89,15 @@ Problems:
 
 Think of these patterns like different ways to run a restaurant kitchen:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              RESTAURANT KITCHEN ANALOGY                      │
-│                                                              │
-│   TRANSACTIONAL OUTBOX = Order Ticket System                │
-│   - Waiter writes order on ticket AND puts in kitchen queue │
-│   - Both happen together (same transaction)                 │
-│   - Kitchen reads from queue, never misses an order         │
-│                                                              │
-│   SAGA = Multi-Course Meal                                  │
-│   - Each course prepared by different chef                  │
-│   - If dessert chef is sick, serve fruit instead (compensate)│
-│   - Meal continues, just with adjustments                   │
-│                                                              │
-│   EVENT SOURCING = Recipe Journal                           │
-│   - Don't store "final dish state"                          │
-│   - Store every step: "added salt", "stirred 5 min"         │
-│   - Can recreate any dish by replaying steps                │
-│                                                              │
-│   CQRS = Separate Order Taking and Cooking                  │
-│   - Waiters optimized for taking orders (writes)            │
-│   - Kitchen display optimized for showing orders (reads)    │
-│   - Different systems for different purposes                │
-│                                                              │
-│   CDC = Kitchen Camera                                      │
-│   - Camera watches everything that happens                  │
-│   - Other systems (inventory, billing) watch the feed       │
-│   - No need to explicitly notify them                       │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Kitchen["RESTAURANT KITCHEN ANALOGY"]
+    Outbox["TRANSACTIONAL OUTBOX = Order Ticket System\n- Waiter writes order on ticket AND puts in kitchen queue\n- Both happen together (same transaction)\n- Kitchen reads from queue, never misses an order"]
+    Saga["SAGA = Multi-Course Meal\n- Each course prepared by different chef\n- If dessert chef is sick, serve fruit instead (compensate)\n- Meal continues, just with adjustments"]
+    ES["EVENT SOURCING = Recipe Journal\n- Don't store 'final dish state'\n- Store every step: 'added salt', 'stirred 5 min'\n- Can recreate any dish by replaying steps"]
+    CQRS["CQRS = Separate Order Taking and Cooking\n- Waiters optimized for taking orders (writes)\n- Kitchen display optimized for showing orders (reads)\n- Different systems for different purposes"]
+    CDC["CDC = Kitchen Camera\n- Camera watches everything that happens\n- Other systems (inventory, billing) watch the feed\n- No need to explicitly notify them"]
+  end
 ```
 
 ---
@@ -141,13 +108,22 @@ Think of these patterns like different ways to run a restaurant kitchen:
 
 The Transactional Outbox pattern ensures that database changes and message publishing happen atomically.
 
+```mermaid
+flowchart TD
+  subgraph OutboxPattern["TRANSACTIONAL OUTBOX PATTERN"]
+    Problem["THE PROBLEM:\n1) Save order to database\n2) Publish event to Kafka\nWhat if crash between steps?\n→ Order saved, event never published\n→ Downstream services never notified"]
+    Solution["THE SOLUTION:\nBEGIN TRANSACTION\n1) INSERT INTO orders (...)\n2) INSERT INTO outbox (event_type, payload, ...)\nCOMMIT\nSeparate process reads outbox, publishes to Kafka,\nmarks entries as published"]
+    FlowStart["Service"]
+    DB["Database\norders | outbox"]
+    Publisher["Outbox Processor (polls or CDC)"]
+    Kafka["Kafka\n'order-events' topic"]
+    FlowStart --> DB
+    DB --> Publisher --> Kafka
+    Problem --> Solution
+  end
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              TRANSACTIONAL OUTBOX PATTERN                    │
-│                                                              │
-│   THE PROBLEM:                                               │
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │ 1. Save order to database                           │   │
+
+```
 │   │ 2. Publish "OrderCreated" event to Kafka            │   │
 │   │                                                      │   │
 │   │ What if crash between 1 and 2?                      │   │
@@ -209,6 +185,31 @@ CREATE TABLE outbox (
 
 The Saga pattern manages distributed transactions through a sequence of local transactions with compensating actions.
 
+```mermaid
+flowchart TD
+  subgraph SagaPattern["SAGA PATTERN"]
+    Styles["Two styles: CHOREOGRAPHY vs ORCHESTRATION"]
+    subgraph Choreo["CHOREOGRAPHY (Event-driven)"]
+      OrderSvc["Order Service"]
+      PaySvc["Payment Service"]
+      InvSvc["Inventory Service"]
+      ShipSvc["Shipping Service"]
+      OrderSvc -- "OrderCreated" --> PaySvc
+      PaySvc -- "PaymentDone" --> InvSvc
+      InvSvc -- "InventoryReserved" --> ShipSvc
+    end
+    subgraph Orchestration["ORCHESTRATION (Coordinator-driven)"]
+      Orchestrator["Orchestrator (Saga)"]
+      P["Payment Service"]
+      I["Inventory Service"]
+      S["Shipping Service"]
+      Orchestrator --> P
+      Orchestrator --> I
+      Orchestrator --> S
+    end
+  end
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    SAGA PATTERN                              │
@@ -247,6 +248,16 @@ The Saga pattern manages distributed transactions through a sequence of local tr
 ```
 
 **Saga with Compensating Transactions:**
+
+```mermaid
+flowchart TD
+  subgraph Comp["SAGA COMPENSATION FLOW"]
+    Happy["Happy Path:\n1) Create Order ✓\n2) Reserve Inventory ✓\n3) Process Payment ✓\n4) Schedule Shipping ✓\n→ Order Complete!"]
+    Failure["Failure at Step 3 (Payment Failed):\n1) Create Order ✓\n2) Reserve Inventory ✓\n3) Process Payment ✗ (card declined)"]
+    CompActions["Compensation (reverse order):\nC2. Release Inventory (compensate step 2)\nC1. Cancel Order (compensate step 1)\n→ Order Cancelled, inventory released"]
+    Map["Each step has a compensating action:\nAction -> Compensation\nCreate Order -> Cancel Order\nReserve Stock -> Release Stock\nCharge Payment -> Refund Payment\nSchedule Ship -> Cancel Shipment"]
+  end
+```
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

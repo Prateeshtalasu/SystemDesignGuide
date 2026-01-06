@@ -113,9 +113,9 @@ With Synchronized Vehicle Booking:
 
 ```mermaid
 sequenceDiagram
-    participant T1 as Thread-1 (Customer-X)
+    participant T1 as "Thread-1 (Customer-X)"
     participant V as SUV-001
-    participant T2 as Thread-2 (Customer-Y)
+    participant T2 as "Thread-2 (Customer-Y)"
     
     T1->>V: synchronized(SUV-001) { acquire lock }
     T1->>V: Check availability Jan 15-17: AVAILABLE

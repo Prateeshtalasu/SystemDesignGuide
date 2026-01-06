@@ -133,7 +133,38 @@ flowchart TB
 
 ## Detailed Component Diagram
 
+```mermaid
+flowchart TB
+    subgraph GatewayLayer["GATEWAY LAYER"]
+        RESTGateway["REST Gateway<br/>- API routing<br/>- Rate limiting<br/>- Auth"]
+        WSGateway["WebSocket Gateway<br/>- Connection mgmt<br/>- Heartbeat<br/>- Pub/Sub"]
+        AdminGateway["Admin Gateway<br/>- Dashboard API<br/>- Support tools<br/>- Analytics"]
+    end
+    
+    subgraph AppLayer["APPLICATION LAYER"]
+        LocationService["Location Service<br/>- updateLocation<br/>- getDrivers<br/>- trackRide"]
+        MatchingService["Matching Service<br/>- findDrivers<br/>- matchRide<br/>- reassign"]
+        TripService["Trip Service<br/>- createRide<br/>- updateStatus<br/>- completeRide"]
+        PricingService["Pricing Service<br/>- calculate<br/>- getSurge<br/>- applyPromo"]
+        PaymentService["Payment Service<br/>- authorize<br/>- capture<br/>- refund"]
+        NotificationService["Notification Service<br/>- sendPush<br/>- sendSMS<br/>- sendEmail"]
+        UserService["User Service<br/>- getProfile<br/>- updateRating<br/>- verifyPhone"]
+    end
+    
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis Cluster<br/>drivers:locs (GEOADD/GEORADIUS)<br/>ride:{id} (HSET/HGET)<br/>TTL: 30 sec"]
+        PostgreSQL["PostgreSQL<br/>users<br/>rides<br/>payments<br/>surge_zones"]
+        Kafka["Kafka<br/>ride-events<br/>location-updates<br/>notifications<br/>Partitions: 24<br/>Retention: 7 days"]
+    end
+    
+    GatewayLayer --> AppLayer
+    AppLayer --> DataLayer
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐    │
@@ -191,6 +222,9 @@ flowchart TB
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

@@ -120,7 +120,51 @@ Cloud computing is the same for servers:
 
 ### The AWS Mental Model
 
+```mermaid
+flowchart TD
+    AWS["AWS CLOUD"]
+    
+    subgraph REGION["REGION (us-east-1)"]
+        subgraph AZA["Availability Zone A<br/>(us-east-1a)"]
+            EC2A["EC2"]
+            RDSA["RDS"]
+            EBSA["EBS"]
+        end
+        subgraph AZB["Availability Zone B<br/>(us-east-1b)"]
+            EC2B["EC2"]
+            RDSB["RDS"]
+            EBSB["EBS"]
+        end
+        subgraph AZC["Availability Zone C<br/>(us-east-1c)"]
+            EC2C["EC2"]
+            RDSC["RDS"]
+            EBSC["EBS"]
+        end
+        REGIONAL["Regional Services<br/>(span all AZs)<br/>S3, DynamoDB, SQS, SNS, Lambda, API Gateway"]
+    end
+    
+    GLOBAL["Global Services<br/>IAM, Route 53, CloudFront, WAF"]
+    
+    AWS --> REGION
+    REGION --> AZA
+    REGION --> AZB
+    REGION --> AZC
+    REGION --> REGIONAL
+    AWS --> GLOBAL
+    
+    style AWS fill:#ff9800
+    style REGION fill:#e3f2fd
+    style AZA fill:#fff9c4
+    style AZB fill:#fff9c4
+    style AZC fill:#fff9c4
+    style REGIONAL fill:#c8e6c9
+    style GLOBAL fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                              AWS CLOUD                                   │
 │                                                                         │
@@ -152,6 +196,8 @@ Cloud computing is the same for servers:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Key concepts**:
 - **Region**: Geographic area (us-east-1 = N. Virginia, eu-west-1 = Ireland)
 - **Availability Zone (AZ)**: Isolated datacenter within a region
@@ -169,6 +215,32 @@ Cloud computing is the same for servers:
 **Mental model**: Renting a computer by the hour.
 
 ```
+```mermaid
+flowchart TD
+    subgraph EC2["EC2 Instance"]
+        vCPU["vCPU<br/>(2-96+)"]
+        MEM["Memory<br/>(1GB - 768GB)"]
+        OS["Operating System<br/>(Amazon Linux, Ubuntu, Windows, etc.)"]
+        APP["Your Application"]
+        
+        vCPU
+        MEM
+        OS
+        APP
+    end
+    
+    EBS["EBS Volume<br/>(Persistent)"]
+    
+    EC2 -->|Attached Storage| EBS
+    
+    style EC2 fill:#e3f2fd
+    style EBS fill:#fff9c4
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────┐
 │                  EC2 Instance                    │
 │                                                  │
@@ -194,6 +266,8 @@ Cloud computing is the same for servers:
 │  (Persistent)   │
 └─────────────────┘
 ```
+
+</details>
 
 **Instance Types**:
 
@@ -225,7 +299,24 @@ Cloud computing is the same for servers:
 
 **Mental model**: A function that runs when triggered, then disappears.
 
+```mermaid
+flowchart LR
+    TRIGGER["Trigger<br/><br/>- API call<br/>- S3 upload<br/>- Schedule<br/>- SQS msg"]
+    LAMBDA["Lambda<br/>Function<br/><br/>Your code<br/>runs here"]
+    OUTPUT["Output<br/><br/>- Response<br/>- Write DB<br/>- Send msg"]
+    
+    TRIGGER --> LAMBDA
+    LAMBDA --> OUTPUT
+    
+    style TRIGGER fill:#e3f2fd
+    style LAMBDA fill:#fff9c4
+    style OUTPUT fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Trigger   │────▶│   Lambda    │────▶│   Output    │
 │             │     │  Function   │     │             │
@@ -235,6 +326,8 @@ Cloud computing is the same for servers:
 │ - SQS msg   │     │             │     │             │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
+
+</details>
 
 **Lambda Example (Java)**:
 
@@ -282,7 +375,39 @@ public class HelloHandler implements RequestHandler<APIGatewayProxyRequestEvent,
 
 **What it is**: Run Docker containers on AWS-managed infrastructure.
 
+```mermaid
+flowchart TD
+    subgraph CLUSTER["ECS Cluster"]
+        subgraph SERVICE["Service<br/>(Maintains desired count of tasks)"]
+            T1["Task"]
+            T2["Task"]
+            T3["Task"]
+            
+            subgraph C1["Container (app)"]
+            end
+            subgraph C2["Container (app)"]
+            end
+            subgraph C3["Container (app)"]
+            end
+            
+            T1 --> C1
+            T2 --> C2
+            T3 --> C3
+        end
+        LAUNCH["Launch Type:<br/>- EC2: You manage instances<br/>- Fargate: AWS manages infrastructure"]
+    end
+    
+    style CLUSTER fill:#e3f2fd
+    style SERVICE fill:#fff9c4
+    style T1 fill:#c8e6c9
+    style T2 fill:#c8e6c9
+    style T3 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         ECS Cluster                              │
 │                                                                  │
@@ -306,6 +431,8 @@ public class HelloHandler implements RequestHandler<APIGatewayProxyRequestEvent,
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### EKS (Elastic Kubernetes Service)
 
 **What it is**: Managed Kubernetes on AWS. AWS manages the control plane, you manage worker nodes.
@@ -324,7 +451,26 @@ Use ECS when:
 
 **What it is**: Serverless compute for containers. No EC2 instances to manage.
 
+```mermaid
+flowchart LR
+    subgraph EC2MODE["ECS/EKS with EC2"]
+        EC2YOU["You manage:<br/>- EC2 instances<br/>- Scaling<br/>- Patching"]
+    end
+    
+    subgraph FARGATE["ECS/EKS with Fargate"]
+        AWSMAN["AWS manages:<br/>- Infrastructure<br/>- Scaling<br/>- Patching"]
+        YOUSPEC["You specify:<br/>- CPU/Memory<br/>- Container"]
+        AWSMAN --> YOUSPEC
+    end
+    
+    style EC2MODE fill:#ffcdd2
+    style FARGATE fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ECS/EKS with EC2:
 ┌─────────────────┐
 │  You manage:    │
@@ -346,6 +492,8 @@ ECS/EKS with Fargate:
 └─────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 4️⃣ Storage Services
@@ -356,7 +504,32 @@ ECS/EKS with Fargate:
 
 **Mental model**: Infinite hard drive with a flat structure.
 
+```mermaid
+flowchart TD
+    BUCKET["S3 Bucket<br/>(my-company-data)"]
+    K1["Key: images/logo.png<br/>Value: [binary data]"]
+    K2["Key: images/banner.jpg<br/>Value: [binary data]"]
+    K3["Key: documents/report-2024.pdf<br/>Value: [binary data]"]
+    K4["Key: backups/db-2024-01-15.sql.gz<br/>Value: [binary data]"]
+    NOTE["Note: folders are just key prefixes,<br/>not real directories"]
+    
+    BUCKET --> K1
+    BUCKET --> K2
+    BUCKET --> K3
+    BUCKET --> K4
+    BUCKET --> NOTE
+    
+    style BUCKET fill:#ff9800
+    style K1 fill:#e3f2fd
+    style K2 fill:#e3f2fd
+    style K3 fill:#e3f2fd
+    style K4 fill:#e3f2fd
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         S3 Bucket                                │
 │                    (my-company-data)                            │
@@ -371,6 +544,8 @@ ECS/EKS with Fargate:
 │  Note: "folders" are just key prefixes, not real directories    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **S3 Storage Classes**:
 
@@ -395,7 +570,24 @@ ECS/EKS with Fargate:
 
 **What it is**: Block storage volumes for EC2 instances. Like a virtual hard drive.
 
+```mermaid
+flowchart TD
+    EC2["EC2 Instance<br/><br/>/dev/xvda<br/>(root volume)"]
+    EBS1["EBS Volume<br/>100 GB SSD<br/>(gp3)"]
+    EBS2["EBS Volume<br/>500 GB HDD<br/>(st1)"]
+    
+    EC2 <--> EBS1
+    EC2 -->|Can attach additional volumes| EBS2
+    
+    style EC2 fill:#e3f2fd
+    style EBS1 fill:#fff9c4
+    style EBS2 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐         ┌─────────────────┐
 │  EC2 Instance   │◀───────▶│   EBS Volume    │
 │                 │         │                 │
@@ -413,6 +605,8 @@ ECS/EKS with Fargate:
 │  (st1)          │
 └─────────────────┘
 ```
+
+</details>
 
 **EBS Volume Types**:
 
@@ -432,7 +626,27 @@ ECS/EKS with Fargate:
 
 **What it is**: Managed NFS file system. Multiple EC2 instances can mount the same file system.
 
+```mermaid
+flowchart TD
+    EFS["EFS File System<br/><br/>/shared-data<br/>/logs | /uploads | /config"]
+    EC2A["EC2 Instance<br/>(AZ-a)"]
+    EC2B["EC2 Instance<br/>(AZ-b)"]
+    EC2C["EC2 Instance<br/>(AZ-c)"]
+    
+    EFS -->|NFS mount| EC2A
+    EFS -->|NFS mount| EC2B
+    EFS -->|NFS mount| EC2C
+    
+    style EFS fill:#e3f2fd
+    style EC2A fill:#fff9c4
+    style EC2B fill:#fff9c4
+    style EC2C fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                          EFS File System                         │
 │                                                                  │
@@ -451,6 +665,8 @@ ECS/EKS with Fargate:
     └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
+</details>
+
 Use EFS when:
 - Multiple instances need shared file access
 - You need a POSIX file system
@@ -466,7 +682,24 @@ Use EFS when:
 
 **Supported engines**: PostgreSQL, MySQL, MariaDB, Oracle, SQL Server, Aurora
 
+```mermaid
+flowchart TD
+    RDS["RDS Instance"]
+    AWS["AWS Manages:<br/>- Hardware provisioning<br/>- Database setup<br/>- Patching<br/>- Backups (automated, point-in-time recovery)<br/>- Multi-AZ failover<br/>- Read replicas<br/>- Monitoring"]
+    YOU["You Manage:<br/>- Schema design<br/>- Query optimization<br/>- Application connections<br/>- Security groups"]
+    
+    RDS --> AWS
+    RDS --> YOU
+    
+    style RDS fill:#e3f2fd
+    style AWS fill:#c8e6c9
+    style YOU fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        RDS Instance                              │
 │                                                                  │
@@ -491,9 +724,28 @@ Use EFS when:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Multi-AZ Deployment**:
 
+```mermaid
+flowchart LR
+    APP["Application"]
+    PRIMARY["Primary (AZ-a)<br/><br/>PostgreSQL<br/>(Active)"]
+    STANDBY["Standby (AZ-b)<br/><br/>PostgreSQL<br/>(Standby)"]
+    
+    APP -->|All traffic| PRIMARY
+    PRIMARY <-->|Sync Repl| STANDBY
+    
+    style APP fill:#e3f2fd
+    style PRIMARY fill:#c8e6c9
+    style STANDBY fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────┐         ┌─────────────────────┐
 │    Primary (AZ-a)   │◀───────▶│   Standby (AZ-b)    │
 │                     │  Sync   │                     │
@@ -508,13 +760,46 @@ Use EFS when:
     Application
 ```
 
+</details>
+
 Failover is automatic. DNS endpoint stays the same.
 
 ### Aurora
 
 **What it is**: AWS-built database compatible with MySQL and PostgreSQL. 5x faster than standard MySQL.
 
+```mermaid
+flowchart TD
+    subgraph AURORA["Aurora Cluster"]
+        PRIMARY2["Primary<br/>(Writer)"]
+        REPLICA1["Read Replica<br/>(Reader)"]
+        REPLICA2["Read Replica<br/>(Reader)"]
+        
+        subgraph STORAGE["Shared Storage Layer<br/>(6 copies across 3 AZs)"]
+            C1["Copy 1<br/>(AZ-a)"]
+            C2["Copy 2<br/>(AZ-a)"]
+            C3["Copy 3<br/>(AZ-b)"]
+            C4["Copy 4<br/>(AZ-b)"]
+            C5["Copy 5<br/>(AZ-c)"]
+            C6["Copy 6<br/>(AZ-c)"]
+        end
+        
+        PRIMARY2 --> STORAGE
+        REPLICA1 --> STORAGE
+        REPLICA2 --> STORAGE
+    end
+    
+    style AURORA fill:#e3f2fd
+    style PRIMARY2 fill:#c8e6c9
+    style REPLICA1 fill:#fff9c4
+    style REPLICA2 fill:#fff9c4
+    style STORAGE fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Aurora Cluster                            │
 │                                                                  │
@@ -536,6 +821,8 @@ Failover is automatic. DNS endpoint stays the same.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Aurora Serverless**: Auto-scaling Aurora. Pay per second, scales to zero.
 
 ### DynamoDB
@@ -544,7 +831,32 @@ Failover is automatic. DNS endpoint stays the same.
 
 **Mental model**: Infinitely scalable hash table.
 
+```mermaid
+flowchart TD
+    TABLE["DynamoDB Table<br/>(Users)"]
+    HEADER["Partition Key (user_id) | Sort Key (none) | Attributes"]
+    R1["user-001 | | {name: Alice, email: ...}"]
+    R2["user-002 | | {name: Bob, email: ...}"]
+    R3["user-003 | | {name: Charlie, email: ...}"]
+    CAP["Capacity:<br/>- On-Demand: Pay per request"]
+    
+    TABLE --> HEADER
+    HEADER --> R1
+    HEADER --> R2
+    HEADER --> R3
+    TABLE --> CAP
+    
+    style TABLE fill:#ff9800
+    style HEADER fill:#e3f2fd
+    style R1 fill:#fff9c4
+    style R2 fill:#fff9c4
+    style R3 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                       DynamoDB Table                             │
 │                        (Users)                                   │
@@ -558,6 +870,7 @@ Failover is automatic. DNS endpoint stays the same.
 │                                                                  │
 │  Capacity:                                                       │
 │  - On-Demand: Pay per request                                   │
+```
 │  - Provisioned: Set read/write capacity units                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -585,7 +898,28 @@ Failover is automatic. DNS endpoint stays the same.
 
 **What it is**: Managed Redis or Memcached.
 
+```mermaid
+flowchart TD
+    CACHE["ElastiCache Cluster"]
+    subgraph REDIS["Redis Cluster Mode"]
+        S1["Shard 1<br/>Primary + Replica"]
+        S2["Shard 2<br/>Primary + Replica"]
+        S3["Shard 3<br/>Primary + Replica"]
+    end
+    
+    CACHE --> REDIS
+    
+    style CACHE fill:#e3f2fd
+    style REDIS fill:#fff9c4
+    style S1 fill:#c8e6c9
+    style S2 fill:#c8e6c9
+    style S3 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ElastiCache Cluster                           │
 │                                                                  │
@@ -600,6 +934,8 @@ Failover is automatic. DNS endpoint stays the same.
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 Use cases:
 - Session storage
@@ -616,7 +952,24 @@ Use cases:
 
 **What it is**: Managed message queue. Decouple producers from consumers.
 
+```mermaid
+flowchart LR
+    PROD["Producer<br/><br/>Order<br/>Service"]
+    SQS["SQS Queue<br/><br/>msg | msg | msg"]
+    CONS["Consumer<br/><br/>Order<br/>Processor"]
+    
+    PROD --> SQS
+    SQS --> CONS
+    
+    style PROD fill:#e3f2fd
+    style SQS fill:#fff9c4
+    style CONS fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────┐     ┌─────────────────────┐     ┌──────────────┐
 │   Producer   │────▶│    SQS Queue        │────▶│   Consumer   │
 │              │     │                     │     │              │
@@ -625,6 +978,8 @@ Use cases:
 │              │     │  └───┘ └───┘ └───┘ │     │              │
 └──────────────┘     └─────────────────────┘     └──────────────┘
 ```
+
+</details>
 
 **Queue Types**:
 
@@ -675,7 +1030,30 @@ for (Message message : messages) {
 
 **What it is**: Pub/sub messaging. One message, many subscribers.
 
+```mermaid
+flowchart TD
+    PUB["Publisher<br/><br/>Order<br/>Service"]
+    SNS["SNS Topic"]
+    SQS2["SQS Queue<br/>(order-proc)"]
+    LAMBDA2["Lambda<br/>(send-email)"]
+    HTTP["HTTP Endpoint<br/>(analytics)"]
+    
+    PUB --> SNS
+    SNS --> SQS2
+    SNS --> LAMBDA2
+    SNS --> HTTP
+    
+    style PUB fill:#e3f2fd
+    style SNS fill:#ff9800
+    style SQS2 fill:#fff9c4
+    style LAMBDA2 fill:#c8e6c9
+    style HTTP fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                               ┌──────────────────┐
                          ┌───▶│  SQS Queue       │
                          │    │  (order-proc)    │
@@ -696,6 +1074,8 @@ for (Message message : messages) {
                               └──────────────────┘
 ```
 
+</details>
+
 **SNS Subscribers**:
 - SQS queues
 - Lambda functions
@@ -708,7 +1088,30 @@ for (Message message : messages) {
 
 **What it is**: Serverless event bus. Route events based on rules.
 
+```mermaid
+flowchart TD
+    EB["EventBridge"]
+    BUS["Event Bus"]
+    R1["Rule 1:<br/>source = order-service<br/>detail-type = OrderCreated<br/>→ Lambda (process-order)"]
+    R2["Rule 2:<br/>source = order-service<br/>detail-type = OrderCreated<br/>detail.amount > 1000<br/>→ SNS (high-value-orders)"]
+    R3["Rule 3:<br/>schedule = rate(1 hour)<br/>→ Lambda (cleanup-job)"]
+    
+    EB --> BUS
+    BUS --> R1
+    BUS --> R2
+    BUS --> R3
+    
+    style EB fill:#e3f2fd
+    style BUS fill:#fff9c4
+    style R1 fill:#c8e6c9
+    style R2 fill:#c8e6c9
+    style R3 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        EventBridge                               │
 │                                                                  │
@@ -730,11 +1133,49 @@ for (Message message : messages) {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Kinesis
 
 **What it is**: Real-time streaming data. For high-throughput, ordered event streams.
 
+```mermaid
+flowchart TD
+    PRODS["Producers<br/><br/>IoT devices<br/>Clickstream<br/>Logs"]
+    subgraph KINESIS["Kinesis Data Stream"]
+        SH1["Shard 1"]
+        SH2["Shard 2"]
+        SH3["Shard 3"]
+    end
+    LAMBDA3["Lambda Consumer"]
+    ANALYTICS["Kinesis Analytics"]
+    FIREHOSE["Kinesis Firehose"]
+    S3["S3<br/>(archive)"]
+    
+    PRODS --> KINESIS
+    KINESIS --> SH1
+    KINESIS --> SH2
+    KINESIS --> SH3
+    SH1 --> LAMBDA3
+    SH2 --> ANALYTICS
+    SH3 --> FIREHOSE
+    FIREHOSE --> S3
+    
+    style PRODS fill:#e3f2fd
+    style KINESIS fill:#fff9c4
+    style SH1 fill:#c8e6c9
+    style SH2 fill:#c8e6c9
+    style SH3 fill:#c8e6c9
+    style LAMBDA3 fill:#fce4ec
+    style ANALYTICS fill:#fce4ec
+    style FIREHOSE fill:#fce4ec
+    style S3 fill:#ff9800
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────┐     ┌─────────────────────────────────────────┐
 │  Producers   │     │           Kinesis Data Stream           │
 │              │     │                                         │
@@ -758,6 +1199,8 @@ for (Message message : messages) {
                                                   └──────────────┘
 ```
 
+</details>
+
 **SQS vs SNS vs Kinesis**:
 
 | Feature | SQS | SNS | Kinesis |
@@ -777,7 +1220,41 @@ for (Message message : messages) {
 
 **What it is**: Your private network in AWS. You control IP ranges, subnets, routing, and security.
 
+```mermaid
+flowchart TD
+    subgraph VPC["VPC (10.0.0.0/16)"]
+        subgraph PUB1["Public Subnet (10.0.1.0/24)<br/>AZ-a"]
+            NAT["NAT Gateway"]
+        end
+        subgraph PUB2["Public Subnet (10.0.2.0/24)<br/>AZ-b"]
+            LB["Load Balancer"]
+        end
+        subgraph PRIV1["Private Subnet (10.0.3.0/24)<br/>AZ-a"]
+            EC2A2["EC2 (App Server)"]
+            RDS1["RDS (Primary)"]
+        end
+        subgraph PRIV2["Private Subnet (10.0.4.0/24)<br/>AZ-b"]
+            EC2B2["EC2 (App Server)"]
+            RDS2["RDS (Standby)"]
+        end
+        IGW["Internet Gateway"]
+    end
+    INTERNET["Internet"]
+    
+    IGW --> INTERNET
+    
+    style VPC fill:#e3f2fd
+    style PUB1 fill:#fff9c4
+    style PUB2 fill:#fff9c4
+    style PRIV1 fill:#c8e6c9
+    style PRIV2 fill:#c8e6c9
+    style IGW fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     VPC (10.0.0.0/16)                            │
 │                                                                  │
@@ -813,6 +1290,8 @@ for (Message message : messages) {
                           Internet
 ```
 
+</details>
+
 **Key Components**:
 - **Subnet**: Range of IP addresses. Public (has route to internet) or private.
 - **Internet Gateway**: Allows public subnet resources to reach internet.
@@ -832,7 +1311,36 @@ for (Message message : messages) {
 | Gateway LB (GWLB) | Layer 3 | Third-party appliances |
 | Classic LB | Layer 4/7 | Legacy (don't use for new) |
 
+```mermaid
+flowchart TD
+    ALB["Application<br/>Load Balancer"]
+    TG1["Target Group<br/>/api/*"]
+    TG2["Target Group<br/>/web/*"]
+    TG3["Target Group<br/>/admin/*"]
+    API2["EC2/ECS<br/>(API)"]
+    WEB["EC2/ECS<br/>(Web)"]
+    ADMIN["EC2/ECS<br/>(Admin)"]
+    
+    ALB --> TG1
+    ALB --> TG2
+    ALB --> TG3
+    TG1 --> API2
+    TG2 --> WEB
+    TG3 --> ADMIN
+    
+    style ALB fill:#e3f2fd
+    style TG1 fill:#fff9c4
+    style TG2 fill:#fff9c4
+    style TG3 fill:#fff9c4
+    style API2 fill:#c8e6c9
+    style WEB fill:#c8e6c9
+    style ADMIN fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                          ┌─────────────────┐
                          │  Application    │
                          │  Load Balancer  │
@@ -852,6 +1360,8 @@ for (Message message : messages) {
        │  (API)       │   │  (Web)       │   │  (Admin)     │
        └──────────────┘   └──────────────┘   └──────────────┘
 ```
+
+</details>
 
 ### Route 53
 
@@ -873,7 +1383,27 @@ for (Message message : messages) {
 
 **What it is**: Content Delivery Network (CDN). Cache content at edge locations worldwide.
 
+```mermaid
+flowchart TD
+    USER["User (Tokyo)"]
+    EDGE["Edge Location<br/>(Tokyo)<br/>◀─── Cache Hit: Return immediately"]
+    REGIONAL["Regional<br/>Edge Cache"]
+    ORIGIN["Origin<br/>(us-east-1)<br/>(S3, ALB, EC2, or any HTTP server)"]
+    
+    USER --> EDGE
+    EDGE -->|Cache Miss| REGIONAL
+    REGIONAL -->|Cache Miss| ORIGIN
+    
+    style USER fill:#e3f2fd
+    style EDGE fill:#fff9c4
+    style REGIONAL fill:#c8e6c9
+    style ORIGIN fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         CloudFront                               │
 │                                                                  │
@@ -901,11 +1431,36 @@ for (Message message : messages) {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### API Gateway
 
 **What it is**: Managed API front door. Handle authentication, throttling, caching.
 
+```mermaid
+flowchart TD
+    APIGW["API Gateway"]
+    FEATURES["Features:<br/>- Authentication (IAM, Cognito, Lambda authorizer)<br/>- Rate limiting & throttling<br/>- Request/response transformation<br/>- Caching<br/>- API versioning<br/>- OpenAPI/Swagger support"]
+    LAMBDA4["Lambda"]
+    EC2ECS2["EC2/ECS"]
+    HTTP2["HTTP Backend"]
+    
+    APIGW --> FEATURES
+    APIGW --> LAMBDA4
+    APIGW --> EC2ECS2
+    APIGW --> HTTP2
+    
+    style APIGW fill:#ff9800
+    style FEATURES fill:#fff9c4
+    style LAMBDA4 fill:#c8e6c9
+    style EC2ECS2 fill:#c8e6c9
+    style HTTP2 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                       API Gateway                                │
 │                                                                  │
@@ -928,13 +1483,38 @@ for (Message message : messages) {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 8️⃣ IAM (Identity and Access Management)
 
 ### Core Concepts
 
+```mermaid
+flowchart TD
+    IAM["IAM"]
+    USER["User (alice)<br/>Human identity<br/>Has username/password or access keys"]
+    GROUP["Group (developers)<br/>Collection of users<br/>Policies attached to group apply to all"]
+    ROLE["Role (ec2-app-role)<br/>Identity for AWS services or federation<br/>No long-term credentials"]
+    POLICY["Policy<br/>JSON document defining permissions<br/>Attached to users, groups, or roles"]
+    
+    IAM --> USER
+    IAM --> GROUP
+    IAM --> ROLE
+    IAM --> POLICY
+    
+    style IAM fill:#ff9800
+    style USER fill:#e3f2fd
+    style GROUP fill:#fff9c4
+    style ROLE fill:#c8e6c9
+    style POLICY fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                           IAM                                    │
 │                                                                  │
@@ -959,6 +1539,8 @@ for (Message message : messages) {
 │  └─────────────────┘                                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Policy Structure
 
@@ -1018,7 +1600,24 @@ for (Message message : messages) {
 
 ### IAM Roles for EC2
 
+```mermaid
+flowchart TD
+    EC2["EC2 Instance"]
+    PROFILE["Instance Profile<br/>(contains IAM Role)<br/><br/>Role: app-server-role<br/>Policies:<br/>- AmazonS3ReadOnlyAccess<br/>- AmazonSQSFullAccess<br/>- CloudWatchLogsFullAccess"]
+    NOTE["Your application automatically gets<br/>temporary credentials via instance<br/>metadata service. No hardcoded keys!"]
+    
+    EC2 --> PROFILE
+    EC2 --> NOTE
+    
+    style EC2 fill:#e3f2fd
+    style PROFILE fill:#fff9c4
+    style NOTE fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      EC2 Instance                                │
 │                                                                  │
@@ -1037,6 +1636,8 @@ for (Message message : messages) {
 │  via instance metadata service. No hardcoded keys!              │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ```java
 // Java SDK automatically uses instance role credentials

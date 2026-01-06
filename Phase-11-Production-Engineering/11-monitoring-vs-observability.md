@@ -111,7 +111,26 @@ You can diagnose the exact problem.
 
 ### Monitoring vs Observability
 
+```mermaid
+flowchart TD
+    subgraph MON["MONITORING"]
+        MON_DESC["Predefined metrics + thresholds<br/><br/>CPU > 80% → Alert<br/>Error rate > 1% → Alert<br/>Memory > 90% → Alert<br/><br/>Answers: Is something wrong?<br/>Limitations: Only catches known issues"]
+    end
+    
+    subgraph OBS["OBSERVABILITY"]
+        OBS_DESC["Logs + Metrics + Traces<br/><br/>Explore and understand system behavior<br/><br/>Why is user X's request slow?<br/>→ Check trace: Request went through 5 services<br/>→ Check logs: Service C had database timeout<br/>→ Check metrics: Database connection pool exhausted<br/><br/>Answers: Why is something wrong? and What's happening?"]
+    end
+    
+    style MON fill:#ffcdd2
+    style MON_DESC fill:#fff9c4
+    style OBS fill:#c8e6c9
+    style OBS_DESC fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MONITORING                                    │
 │                                                                  │
@@ -140,6 +159,8 @@ You can diagnose the exact problem.
 │  Answers: "Why is something wrong?" and "What's happening?"     │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -666,6 +687,7 @@ Monitoring watches predefined metrics and alerts when thresholds are exceeded. I
 SLIs measure what matters (success rate, latency). SLOs set targets (99.9% uptime). Error budgets track remaining failure allowance. High-cardinality metrics (user_id labels) should be avoided; use logs for detail instead.
 
 The key insight: Monitoring detects problems, observability explains them. Use both: monitor critical metrics for alerts, observe everything for debugging and understanding.
+
 
 
 

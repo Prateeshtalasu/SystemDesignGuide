@@ -87,7 +87,74 @@ public class TaskScheduler {
 
 **Task Submission Flow:**
 
+```mermaid
+flowchart TD
+    A["User → TaskScheduler.submit(task)"]
+    B["Validate task (non-null, valid dependencies)"]
+    C["taskQueue.offer(task) // Add to queue"]
+    D["allTasks.put(taskId, task) // Store for status lookup"]
+    E["Return taskId"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
 ```
+
+**Task Execution Flow:**
+
+```mermaid
+flowchart TD
+    A["TaskScheduler.processQueue() (called by executor thread)"]
+    B["strategy.selectNext(taskQueue) // SchedulingStrategy interface"]
+    C{"Strategy Type?"}
+    D["If FIFOStrategy: taskQueue.poll() // Simple FIFO"]
+    E["If PriorityStrategy: Find max priority task<br/>Iterate queue, find highest priority"]
+    F["If RoundRobinStrategy: Get next from round-robin index"]
+    G["Check dependencies: allDependenciesComplete(task)?"]
+    H["For each dependency: check allTasks.get(depId).getStatus()"]
+    I["Execute task: executorService.submit(() -> task.execute())"]
+    J["task.run() // Execute runnable"]
+    K["Create TaskResult(status, result, error)"]
+    L["results.put(taskId, result)"]
+    M["If task is recurring: scheduleNextExecution(task)"]
+    
+    A --> B
+    B --> C
+    C -->|FIFOStrategy| D
+    C -->|PriorityStrategy| E
+    C -->|RoundRobinStrategy| F
+    D --> G
+    E --> G
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    L --> M
+```
+
+**Task Cancellation Flow:**
+
+```mermaid
+flowchart TD
+    A["User → TaskScheduler.cancel(taskId)"]
+    B["task = allTasks.get(taskId)"]
+    C{"task.getStatus() == PENDING or SCHEDULED?"}
+    D["task.setStatus(CANCELLED)<br/>taskQueue.remove(task)<br/>Return true"]
+    E["Return false (cannot cancel running/completed)"]
+    
+    A --> B
+    B --> C
+    C -->|Yes| D
+    C -->|No| E
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 User → TaskScheduler.submit(task)
          │
          ├──► Validate task (non-null, valid dependencies)
@@ -97,11 +164,7 @@ User → TaskScheduler.submit(task)
          ├──► allTasks.put(taskId, task)  // Store for status lookup
          │
          └──► Return taskId
-```
 
-**Task Execution Flow:**
-
-```
 TaskScheduler.processQueue() (called by executor thread)
          │
          ▼
@@ -132,11 +195,7 @@ TaskScheduler.processQueue() (called by executor thread)
          ├──► results.put(taskId, result)
          │
          └──► If task is recurring: scheduleNextExecution(task)
-```
 
-**Task Cancellation Flow:**
-
-```
 User → TaskScheduler.cancel(taskId)
          │
          ├──► task = allTasks.get(taskId)
@@ -148,6 +207,9 @@ User → TaskScheduler.cancel(taskId)
          │         │    Return true
          │         │
          │         └──► No: Return false (cannot cancel running/completed)
+```
+
+</details>
          │
          └──► Return cancellation result
 ```

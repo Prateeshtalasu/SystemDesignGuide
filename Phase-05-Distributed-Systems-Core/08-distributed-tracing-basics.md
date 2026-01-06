@@ -19,15 +19,28 @@ Before diving into distributed tracing, you should understand:
 
 Imagine debugging this scenario:
 
-```
 User complaint: "My order took 30 seconds to complete"
 
+Your system:
+```mermaid
+flowchart LR
+    API[API GW] --> Order[Order Svc]
+    Order --> Inventory[Inventory]
+    Inventory --> Payment[Payment]
+    Payment --> Notification[Notification]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your system:
 ┌──────┐    ┌──────┐    ┌──────┐    ┌──────┐    ┌──────┐
 │ API  │───►│Order │───►│Inven-│───►│Pay-  │───►│Notif-│
 │ GW   │    │ Svc  │    │tory  │    │ment  │    │ication│
 └──────┘    └──────┘    └──────┘    └──────┘    └──────┘
 ```
+</details>
 
 **Questions you need to answer**:
 - Which service was slow?
@@ -184,19 +197,47 @@ class Span {
 ```
 
 Span relationships:
+```mermaid
+flowchart TD
+    Root[Root Span<br/>no parent] --> A[Child Span A<br/>parent = root]
+    Root --> B[Child Span B<br/>parent = root]
+    A --> A1[Child Span A1<br/>parent = A]
+    A --> A2[Child Span A2<br/>parent = A]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
+Span relationships:
 Root Span (no parent)
 ├── Child Span A (parent = root)
 │   ├── Child Span A1 (parent = A)
 │   └── Child Span A2 (parent = A)
 └── Child Span B (parent = root)
 ```
+</details>
 
 #### Context Propagation
 
 The trace context must be passed from service to service. This is called **context propagation**.
 
+```mermaid
+flowchart LR
+    subgraph SA["Service A"]
+        TA["Trace: abc123<br/>Span: span-001<br/>Create child context"]
+    end
+    subgraph SB["Service B"]
+        TB["Trace: abc123<br/>Span: span-002<br/>Parent: span-001<br/>Extract context"]
+    end
+    TA -->|HTTP| TB
+    note1["HTTP Headers:<br/>traceparent: 00-abc123def456-span001xyz-01<br/>tracestate: vendor=value"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Service A                    Service B
 ┌─────────────────┐         ┌─────────────────┐
 │ Trace: abc123   │         │ Trace: abc123   │
@@ -210,6 +251,7 @@ HTTP Headers:
 traceparent: 00-abc123def456-span001xyz-01
 tracestate: vendor=value
 ```
+</details>
 
 **W3C Trace Context** (standard format):
 ```
@@ -293,7 +335,19 @@ Span Export (to collector):
 
 #### Step 4: Collection and Storage
 
+```mermaid
+flowchart TD
+    SA[Service A<br/>spans] --> Collector[Trace Collector<br/>Agent]
+    SB[Service B<br/>spans] --> Collector
+    SC[Service C<br/>spans] --> Collector
+    Collector --> Storage[Storage<br/>Jaeger/Zipkin]
+    Storage --> UI[UI<br/>Trace View]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │ Service A   │     │ Service B   │     │ Service C   │
 │ (spans)     │     │ (spans)     │     │ (spans)     │
@@ -318,6 +372,7 @@ Span Export (to collector):
                     │(Trace View) │
                     └─────────────┘
 ```
+</details>
 
 ### Sampling Strategies
 

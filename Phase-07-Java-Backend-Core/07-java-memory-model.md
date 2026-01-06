@@ -13,7 +13,43 @@ Before diving into the Java Memory Model, you need to understand:
 
 Quick mental model of CPU architecture:
 
+```mermaid
+flowchart TD
+    Core0["Core 0"]
+    Core1["Core 1"]
+    Core2["Core 2"]
+    
+    L1_0["L1 Cache"]
+    L1_1["L1 Cache"]
+    L1_2["L1 Cache"]
+    
+    L2_0["L2 Cache"]
+    L2_1["L2 Cache"]
+    L2_2["L2 Cache"]
+    
+    L3["L3 Cache (Shared)"]
+    MainMemory["Main Memory (RAM)"]
+    
+    Core0 --> L1_0
+    L1_0 --> L2_0
+    Core1 --> L1_1
+    L1_1 --> L2_1
+    Core2 --> L1_2
+    L1_2 --> L2_2
+    
+    L2_0 --> L3
+    L2_1 --> L3
+    L2_2 --> L3
+    
+    L3 --> MainMemory
+    
+    Problem["Problem: Each core may have different values in its cache!<br/>Thread on Core 0 writes x=5, Thread on Core 1 still sees x=0"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MODERN CPU ARCHITECTURE                               │
 │                                                                          │
@@ -43,6 +79,8 @@ Quick mental model of CPU architecture:
 │   Thread on Core 0 writes x=5, Thread on Core 1 still sees x=0         │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 If you understand that CPU caches can cause threads to see stale data, you're ready.
@@ -133,7 +171,27 @@ public static Singleton getInstance() {
 
 Think of memory as a shared whiteboard in an office:
 
+```mermaid
+flowchart TD
+    Whiteboard["MAIN MEMORY = Central Whiteboard<br/>SHARED WHITEBOARD<br/>x = ???<br/>y = ???"]
+    
+    subgraph ThreadLocal["THREAD LOCAL = Personal Notepad"]
+        T1["Thread 1 Notepad<br/>x = 5<br/>y = 10"]
+        T2["Thread 2 Notepad<br/>x = 0<br/>y = 10"]
+        T3["Thread 3 Notepad<br/>x = 3<br/>y = 7"]
+    end
+    
+    Whiteboard -.->|"WITHOUT SYNCHRONIZATION:<br/>- Each thread works from their notepad (CPU cache)<br/>- They copy from whiteboard when convenient<br/>- They write back to whiteboard when convenient<br/>- Notepads can be out of sync with whiteboard!"| ThreadLocal
+    
+    Sync["WITH SYNCHRONIZATION (volatile, synchronized):<br/>- Forces thread to read from whiteboard (not notepad)<br/>- Forces thread to write to whiteboard immediately<br/>- Everyone sees consistent values"]
+    
+    Whiteboard --> Sync
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHITEBOARD ANALOGY                                    │
 │                                                                          │
@@ -168,6 +226,8 @@ Think of memory as a shared whiteboard in an office:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 
@@ -182,7 +242,25 @@ Think of memory as a shared whiteboard in an office:
 
 ### JMM Core Concepts
 
+```mermaid
+flowchart TD
+    JMM["JMM CORE CONCEPTS"]
+    
+    V1["1. VISIBILITY<br/>When a write by one thread becomes<br/>visible to another thread"]
+    V2["2. ORDERING<br/>The order in which operations<br/>appear to execute"]
+    V3["3. ATOMICITY<br/>Operations that complete entirely<br/>or not at all"]
+    V4["4. HAPPENS-BEFORE<br/>The key relationship that guarantees<br/>visibility and ordering"]
+    
+    JMM --> V1
+    JMM --> V2
+    JMM --> V3
+    JMM --> V4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JMM CORE CONCEPTS                                     │
 │                                                                          │
@@ -200,12 +278,41 @@ Think of memory as a shared whiteboard in an office:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Happens-Before Relationship
 
 **Definition**: If action A happens-before action B, then A's effects are visible to B, and A appears to execute before B.
 
+```mermaid
+flowchart TD
+    Rules["HAPPENS-BEFORE RULES"]
+    
+    R1["1. PROGRAM ORDER RULE<br/>Within a thread, earlier statements<br/>happen-before later ones<br/><br/>Thread 1:<br/>x = 1; // A<br/>y = 2; // B<br/>A happens-before B (within same thread)"]
+    
+    R2["2. MONITOR LOCK RULE<br/>Unlock happens-before subsequent<br/>lock of same monitor<br/><br/>Thread 1: synchronized(lock) { x = 1; }<br/>Thread 2: synchronized(lock) { int r = x; }<br/>A happens-before B (if Thread 1 releases<br/>before Thread 2 acquires)"]
+    
+    R3["3. VOLATILE VARIABLE RULE<br/>Write to volatile happens-before<br/>subsequent read of same volatile<br/><br/>Thread 1: x = 1; flag = true;<br/>Thread 2: while (!flag); int r = x;<br/>A happens-before B, B happens-before C,<br/>so A happens-before C"]
+    
+    R4["4. THREAD START RULE<br/>Thread.start() happens-before<br/>any action in started thread"]
+    
+    R5["5. THREAD TERMINATION RULE<br/>Any action in thread happens-before<br/>Thread.join() returns"]
+    
+    R6["6. TRANSITIVITY<br/>If A happens-before B and<br/>B happens-before C,<br/>then A happens-before C"]
+    
+    Rules --> R1
+    Rules --> R2
+    Rules --> R3
+    Rules --> R4
+    Rules --> R5
+    Rules --> R6
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HAPPENS-BEFORE RULES                                  │
 │                                                                          │
@@ -247,12 +354,37 @@ Think of memory as a shared whiteboard in an office:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Memory Barriers
 
 The JVM uses memory barriers (fences) to enforce happens-before:
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1
+    participant T2 as Thread 2
+    
+    Note over T1,T2: LOAD BARRIER (Acquire)<br/>Ensures all reads AFTER the barrier see values<br/>from BEFORE barrier in other threads<br/>Used when: Acquiring a lock, reading volatile
+    
+    T1->>T1: x = 1
+    T1->>T1: y = 2
+    T1->>T1: ─────────────────<br/>STORE BARRIER
+    
+    T2->>T2: ───────────────────<br/>LOAD BARRIER
+    T2->>T2: r1 = y; // sees 2
+    T2->>T2: r2 = x; // sees 1
+    
+    Note over T1,T2: STORE BARRIER (Release)<br/>Ensures all writes BEFORE the barrier are visible<br/>to threads that see writes AFTER the barrier<br/>Used when: Releasing a lock, writing volatile
+    
+    Note over T1,T2: FULL BARRIER (Fence)<br/>Both load and store barrier<br/>Most expensive, used for volatile read-write
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MEMORY BARRIERS                                       │
 │                                                                          │
@@ -283,10 +415,41 @@ The JVM uses memory barriers (fences) to enforce happens-before:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Heap vs Stack Memory
 
+```mermaid
+flowchart TD
+    subgraph Heap["HEAP (Shared by all threads)"]
+        Objects["Objects, Arrays, Class Instances"]
+        Obj1["Object<br/>fields"]
+        Obj2["Array<br/>elements"]
+        Obj3["String<br/>chars"]
+        Warning["⚠️ REQUIRES SYNCHRONIZATION<br/>for concurrent access"]
+        Objects --> Obj1
+        Objects --> Obj2
+        Objects --> Obj3
+        Objects --> Warning
+    end
+    
+    subgraph Stack["STACK (One per thread, private)"]
+        T1["Thread 1 Stack<br/>Local vars<br/>Method params<br/>Return addresses"]
+        T2["Thread 2 Stack<br/>Local vars<br/>Method params<br/>Return addresses"]
+        T3["Thread 3 Stack<br/>Local vars<br/>Method params<br/>Return addresses"]
+        Note1["✓ NO SYNCHRONIZATION needed<br/>(thread-private)"]
+    end
+    
+    subgraph Metaspace["METASPACE (Class metadata, Java 8+)"]
+        Meta["Class definitions,<br/>Method bytecode,<br/>Static variables"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JAVA MEMORY AREAS                                     │
 │                                                                          │
@@ -324,6 +487,8 @@ The JVM uses memory barriers (fences) to enforce happens-before:
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### What Lives Where
@@ -365,7 +530,36 @@ public class VisibilityDemo {
 
 ### Without Volatile (BROKEN)
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1 (Core 0)
+    participant Cache1 as CPU Cache 1
+    participant Memory as Main Memory
+    participant Cache2 as CPU Cache 2
+    participant T2 as Thread 2 (Core 1)
+    
+    Note over Memory: Initial state: ready = false, number = 0
+    
+    Note over Cache1: ready = false<br/>number = 0
+    Note over Cache2: ready = false<br/>number = 0
+    
+    T1->>Cache1: number = 42<br/>(cache: number = 42)
+    T2->>Cache2: while (!ready) // reads cache: false
+    T2->>Cache2: while (!ready) // reads cache: false
+    T2->>Cache2: while (!ready) // reads cache: false
+    T1->>Cache1: ready = true<br/>(cache: ready = true)
+    T2->>Cache2: while (!ready) // STILL FALSE!
+    Note over T2: ... loops forever ...
+    
+    Note over T1,T2: WHY?<br/>- Thread 1's writes are in its cache, not flushed to main memory<br/>- Thread 2 keeps reading from its cache, never sees the update<br/>- Without volatile/synchronized, JVM has no obligation to sync
+    
+    Note over T1,T2: ANOTHER PROBLEM - Reordering:<br/>Compiler/CPU might reorder Thread 1's writes:<br/>ready = true; // B (executed first!)<br/>number = 42; // A (executed second)<br/><br/>Thread 2 might see: ready = true, number = 0 ← WRONG!
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VISIBILITY PROBLEM                                    │
 │                                                                          │
@@ -401,6 +595,8 @@ public class VisibilityDemo {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### With Volatile (FIXED)
 
@@ -423,7 +619,26 @@ public class VisibilityDemoFixed {
 }
 ```
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1
+    participant T2 as Thread 2
+    
+    T1->>T1: number = 42; // A
+    T1->>T1: ───────────────────────<br/>STORE BARRIER (volatile write)
+    T1->>T1: ready = true; // B
+    
+    T2->>T2: ───────────────────────<br/>LOAD BARRIER
+    T2->>T2: while (!ready); // C<br/>// Sees ready = true
+    T2->>T2: print(number); // D<br/>// GUARANTEED to see 42!
+    
+    Note over T1,T2: WHY IT WORKS:<br/>1. Volatile write (B) flushes ALL previous writes to main memory<br/>2. Volatile read (C) refreshes ALL subsequent reads from main memory<br/>3. A happens-before B (program order)<br/>4. B happens-before C (volatile rule)<br/>5. C happens-before D (program order)<br/>6. By transitivity: A happens-before D<br/>7. Therefore: number = 42 is visible when ready = true is visible
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VOLATILE GUARANTEES                                   │
 │                                                                          │
@@ -447,6 +662,8 @@ public class VisibilityDemoFixed {
 │   7. Therefore: number = 42 is visible when ready = true is visible    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -983,7 +1200,40 @@ queue.take();      // ...this take()
 
 ### Memory Models Comparison
 
+```mermaid
+graph TD
+    subgraph JMM["JAVA MEMORY MODEL (JMM)"]
+        J1["- Happens-before based"]
+        J2["- volatile, synchronized, final"]
+        J3["- Well-defined, portable"]
+        J4["- Compiler can reorder within<br/>happens-before constraints"]
+    end
+    
+    subgraph Cpp["C++ MEMORY MODEL (C++11)"]
+        C1["- Similar to JMM but more options"]
+        C2["- memory_order_relaxed, acquire,<br/>release, seq_cst"]
+        C3["- More control, more complexity"]
+        C4["- Undefined behavior if misused"]
+    end
+    
+    subgraph Go["GO MEMORY MODEL"]
+        G1["- Channel operations provide<br/>synchronization"]
+        G2["- 'Don't communicate by sharing memory;<br/>share memory by communicating'"]
+        G3["- Simpler model, fewer primitives"]
+    end
+    
+    subgraph x86["x86 MEMORY MODEL (Hardware)"]
+        X1["- Total Store Order (TSO)"]
+        X2["- Stores are seen in program order"]
+        X3["- Stronger guarantees than JMM requires"]
+        X4["- JMM code might break on<br/>weaker hardware (ARM)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MEMORY MODELS COMPARISON                              │
 │                                                                          │
@@ -1016,6 +1266,8 @@ queue.take();      // ...this take()
 │   - JMM code might break on weaker hardware (ARM)                      │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Java Synchronization Mechanisms Comparison

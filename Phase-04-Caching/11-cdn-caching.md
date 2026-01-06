@@ -21,7 +21,32 @@ If you understand that a CDN is a network of servers distributed globally to ser
 
 Your origin server is in Virginia. Users are everywhere.
 
+```mermaid
+flowchart TD
+    Title["WITHOUT CDN<br/>Origin Server: Virginia, USA"]
+    
+    subgraph Virginia["User in Virginia"]
+        V1["User ──(5ms)──▶ Server ──(5ms)──▶ User"]
+        V2["Round trip: 10ms ✅"]
+    end
+    
+    subgraph Tokyo["User in Tokyo"]
+        T1["User ──(100ms)──▶ Server ──(100ms)──▶ User"]
+        T2["Round trip: 200ms 😕"]
+    end
+    
+    subgraph Sydney["User in Sydney"]
+        S1["User ──(150ms)──▶ Server ──(150ms)──▶ User"]
+        S2["Round trip: 300ms 😢"]
+    end
+    
+    Problems["Problems:<br/>- High latency for distant users<br/>- All traffic hits one server<br/>- Single point of failure<br/>- Poor experience for global users"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITHOUT CDN                                           │
 │                                                                          │
@@ -52,10 +77,36 @@ Your origin server is in Virginia. Users are everywhere.
 │   - Poor experience for global users                                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### With CDN
 
+```mermaid
+flowchart TD
+    Title["WITH CDN<br/>CDN has edge servers worldwide:<br/>- Virginia, New York, London, Frankfurt, Tokyo, Sydney, etc."]
+    
+    subgraph Virginia2["User in Virginia"]
+        V21["User ──(5ms)──▶ Virginia Edge ──(5ms)──▶ User"]
+        V22["Round trip: 10ms ✅"]
+    end
+    
+    subgraph Tokyo2["User in Tokyo"]
+        T21["User ──(5ms)──▶ Tokyo Edge ──(5ms)──▶ User"]
+        T22["Round trip: 10ms ✅ (was 200ms!)"]
+    end
+    
+    subgraph Sydney2["User in Sydney"]
+        S21["User ──(5ms)──▶ Sydney Edge ──(5ms)──▶ User"]
+        S22["Round trip: 10ms ✅ (was 300ms!)"]
+    end
+    
+    Benefits["Benefits:<br/>- Low latency for ALL users<br/>- Origin server load reduced 90%+<br/>- Built-in redundancy<br/>- DDoS protection"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITH CDN                                              │
 │                                                                          │
@@ -87,6 +138,7 @@ Your origin server is in Virginia. Users are everywhere.
 │   - DDoS protection                                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Impact
 
@@ -104,7 +156,34 @@ Your origin server is in Virginia. Users are everywhere.
 
 ### The Warehouse Analogy
 
+```mermaid
+flowchart TD
+    Title["THE WAREHOUSE ANALOGY"]
+    
+    subgraph Without["WITHOUT CDN (Single Warehouse)"]
+        W1["You order from Amazon. The warehouse is in Seattle."]
+        W2["- If you're in Seattle: Next day delivery ✅"]
+        W3["- If you're in New York: 5 days shipping 😕"]
+        W4["- If you're in London: 2 weeks shipping 😢"]
+    end
+    
+    subgraph With["WITH CDN (Distribution Centers)"]
+        W5["Amazon has warehouses everywhere.<br/>Popular items are pre-stocked in each warehouse."]
+        W6["- Seattle order → Ships from Seattle warehouse"]
+        W7["- New York order → Ships from New York warehouse"]
+        W8["- London order → Ships from London warehouse"]
+        W9["Everyone gets fast delivery! ✅"]
+    end
+    
+    Analogy["CDN = Content Distribution Network<br/>= Digital warehouses for your website content"]
+    
+    Mapping["Origin Server = Main Warehouse (source of truth)<br/>Edge Servers = Distribution Centers (cached copies)<br/>Cache Hit = Item in stock at local warehouse<br/>Cache Miss = Need to order from main warehouse"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE WAREHOUSE ANALOGY                                 │
 │                                                                          │
@@ -137,6 +216,7 @@ Your origin server is in Virginia. Users are everywhere.
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -144,7 +224,57 @@ Your origin server is in Virginia. Users are everywhere.
 
 ### CDN Architecture
 
+```mermaid
+flowchart TD
+    Origin["ORIGIN SERVER<br/>(Your App)"]
+    
+    Shield1["SHIELD<br/>(US-East)"]
+    Shield2["SHIELD<br/>(EU)"]
+    Shield3["SHIELD<br/>(APAC)"]
+    
+    Edge1["Edge NY"]
+    Edge2["Edge LA"]
+    Edge3["Edge Miami"]
+    Edge4["Edge London"]
+    Edge5["Edge Tokyo"]
+    Edge6["Edge Seoul"]
+    Edge7["Edge Sydney"]
+    
+    Users1["[Users]"]
+    Users2["[Users]"]
+    Users3["[Users]"]
+    Users4["[Users]"]
+    Users5["[Users]"]
+    Users6["[Users]"]
+    Users7["[Users]"]
+    
+    Origin --> Shield1
+    Origin --> Shield2
+    Origin --> Shield3
+    
+    Shield1 --> Edge1
+    Shield1 --> Edge2
+    Shield1 --> Edge3
+    Shield2 --> Edge4
+    Shield3 --> Edge5
+    Shield3 --> Edge6
+    Shield3 --> Edge7
+    
+    Edge1 --> Users1
+    Edge2 --> Users2
+    Edge3 --> Users3
+    Edge4 --> Users4
+    Edge5 --> Users5
+    Edge6 --> Users6
+    Edge7 --> Users7
+    
+    Layers["Layers:<br/>1. Edge Servers: Closest to users, first cache layer<br/>2. Shield/PoP: Regional cache, reduces origin load<br/>3. Origin: Your actual server, source of truth"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CDN ARCHITECTURE                                      │
 │                                                                          │
@@ -178,10 +308,41 @@ Your origin server is in Virginia. Users are everywhere.
 │   3. Origin: Your actual server, source of truth                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Request Flow
 
+```mermaid
+flowchart TD
+    Start["User in Tokyo requests: https://cdn.example.com/image.jpg"]
+    
+    Step1["Step 1: DNS Resolution<br/>cdn.example.com → CDN's DNS<br/>CDN's DNS returns IP of nearest edge (Tokyo)<br/>Uses: Anycast, GeoDNS, or latency-based routing"]
+    
+    Step2["Step 2: Edge Cache Check<br/>Tokyo Edge: Do I have /image.jpg?"]
+    
+    Hit["CACHE HIT:<br/>Return cached content immediately (5ms)"]
+    
+    Miss["CACHE MISS:<br/>Continue to Step 3"]
+    
+    Step3["Step 3: Shield Check (if miss)<br/>Tokyo Edge → APAC Shield: Do you have /image.jpg?"]
+    
+    ShieldHit["SHIELD HIT:<br/>Return to edge, edge caches, returns to user"]
+    
+    ShieldMiss["SHIELD MISS:<br/>Continue to Step 4"]
+    
+    Step4["Step 4: Origin Fetch (if all miss)<br/>Shield → Origin: GET /image.jpg<br/>Origin returns content with Cache-Control headers<br/>Shield caches → Edge caches → Returns to user"]
+    
+    Start --> Step1 --> Step2
+    Step2 -->|HIT| Hit
+    Step2 -->|MISS| Miss --> Step3
+    Step3 -->|HIT| ShieldHit
+    Step3 -->|MISS| ShieldMiss --> Step4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CDN REQUEST FLOW                                      │
 │                                                                          │
@@ -224,10 +385,34 @@ Your origin server is in Virginia. Users are everywhere.
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cache Key Design
 
+```mermaid
+flowchart TD
+    Title["CACHE KEY DESIGN<br/>Cache Key = Unique identifier for cached content"]
+    
+    Default["Default cache key:<br/>URL: https://example.com/api/products?category=electronics&sort=price<br/>Key: /api/products?category=electronics&sort=price"]
+    
+    subgraph Problems["Problems with default"]
+        P1["1. Query param order matters:<br/>/api/products?a=1&b=2 ≠ /api/products?b=2&a=1<br/>(Same content, different cache entries!)"]
+        P2["2. Irrelevant params create duplicates:<br/>/api/products?category=electronics&tracking=abc123<br/>/api/products?category=electronics&tracking=xyz789<br/>(Same content, but tracking param differs)"]
+        P3["3. Missing Vary headers:<br/>/api/products (Accept-Language: en) → English content<br/>/api/products (Accept-Language: ja) → Should be Japanese!<br/>(But cached English version served to Japanese user)"]
+    end
+    
+    subgraph Solutions["Solutions"]
+        S1["1. Normalize query params (sort alphabetically)"]
+        S2["2. Exclude tracking/analytics params from cache key"]
+        S3["3. Include relevant headers in cache key (Vary header)"]
+        S4["4. Use custom cache key rules in CDN config"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE KEY DESIGN                                      │
 │                                                                          │
@@ -261,6 +446,7 @@ Your origin server is in Virginia. Users are everywhere.
 │   4. Use custom cache key rules in CDN config                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -268,7 +454,42 @@ Your origin server is in Virginia. Users are everywhere.
 
 ### Strategy Comparison
 
+```mermaid
+flowchart TD
+    Title["EDGE CACHING STRATEGIES"]
+    
+    subgraph Static["1. STATIC CONTENT CACHING"]
+        S1["Cache: Images, CSS, JS, fonts"]
+        S2["TTL: Long (1 year with cache busting)"]
+        S3["Hit Rate: 99%+"]
+        S4["Headers: Cache-Control: public, max-age=31536000, immutable"]
+    end
+    
+    subgraph Dynamic["2. DYNAMIC CONTENT CACHING"]
+        D1["Cache: API responses, HTML pages"]
+        D2["TTL: Short (seconds to minutes)"]
+        D3["Hit Rate: 50-90% (depends on traffic patterns)"]
+        D4["Headers: Cache-Control: public, max-age=60, s-maxage=300"]
+    end
+    
+    subgraph StaleWhile["3. STALE-WHILE-REVALIDATE"]
+        SW1["Serve stale content while fetching fresh in background"]
+        SW2["Best for: Content that can be slightly stale"]
+        SW3["Headers: Cache-Control: max-age=60, stale-while-revalidate=300"]
+        SW4["Flow:<br/>Request arrives, cache is stale (age > max-age)<br/>├── Immediately return stale content to user (fast!)<br/>└── Background: Fetch fresh from origin, update cache<br/>Next request gets fresh content"]
+    end
+    
+    subgraph StaleIf["4. STALE-IF-ERROR"]
+        SI1["Serve stale content if origin is down"]
+        SI2["Headers: Cache-Control: max-age=60, stale-if-error=86400"]
+        SI3["Provides resilience during outages"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    EDGE CACHING STRATEGIES                               │
 │                                                                          │
@@ -307,6 +528,7 @@ Your origin server is in Virginia. Users are everywhere.
 │   Provides resilience during outages                                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -314,7 +536,49 @@ Your origin server is in Virginia. Users are everywhere.
 
 ### Invalidation Methods
 
+```mermaid
+flowchart TD
+    Title["CDN CACHE INVALIDATION"]
+    
+    subgraph TTL["1. TTL-BASED (Automatic)"]
+        T1["Content expires after TTL"]
+        T2["Pros: Simple, no action needed"]
+        T3["Cons: Can't invalidate immediately"]
+    end
+    
+    subgraph Purge["2. PURGE API (Manual)"]
+        P1["Call CDN API to remove specific URLs"]
+        P2["POST /purge {urls: [/api/products/123]}"]
+        P3["Pros: Immediate invalidation"]
+        P4["Cons: API calls, rate limits, propagation delay"]
+    end
+    
+    subgraph Tags["3. CACHE TAGS / SURROGATE KEYS"]
+        TG1["Tag content with identifiers, purge by tag"]
+        TG2["Response: Surrogate-Key: product-123 category-electronics"]
+        TG3["Purge: POST /purge {tags: [product-123]}"]
+        TG4["Pros: Purge related content together"]
+        TG5["Cons: Requires CDN support (Fastly, Cloudflare)"]
+    end
+    
+    subgraph Versioned["4. VERSIONED URLS (Cache Busting)"]
+        V1["Change URL when content changes"]
+        V2["/app.v1.js → /app.v2.js"]
+        V3["Pros: Instant invalidation (new URL = new cache)"]
+        V4["Cons: Need to update references"]
+    end
+    
+    subgraph Soft["5. SOFT PURGE"]
+        SP1["Mark as stale, serve stale while revalidating"]
+        SP2["Pros: No cache miss storm"]
+        SP3["Cons: Brief period of stale content"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CDN CACHE INVALIDATION                                │
 │                                                                          │
@@ -353,10 +617,42 @@ Your origin server is in Virginia. Users are everywhere.
 │   Cons: Brief period of stale content                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cache Invalidation Challenges
 
+```mermaid
+flowchart TD
+    Title["INVALIDATION CHALLENGES"]
+    
+    subgraph C1["Challenge 1: Propagation Delay"]
+        C1A["Purge sent → Takes 1-30 seconds to reach all edge servers"]
+        C1B["During this time, some users see old content"]
+    end
+    
+    subgraph C2["Challenge 2: Cache Stampede"]
+        C2A["Purge 1000 URLs → All edges fetch from origin simultaneously"]
+        C2B["Origin gets hammered"]
+        C2C["Solution: Soft purge + stale-while-revalidate"]
+    end
+    
+    subgraph C3["Challenge 3: Coordinating Multiple CDNs"]
+        C3A["Using CloudFront + Cloudflare?"]
+        C3B["Need to purge both!"]
+    end
+    
+    subgraph C4["Challenge 4: Browser Cache"]
+        C4A["CDN purged, but browser still has old version!"]
+        C4B["Can't purge browser cache remotely"]
+        C4C["Solution: Use short max-age, longer s-maxage"]
+        C4D["Cache-Control: max-age=0, s-maxage=3600<br/>(Browser always revalidates, CDN caches for 1 hour)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    INVALIDATION CHALLENGES                               │
 │                                                                          │
@@ -386,6 +682,7 @@ Your origin server is in Virginia. Users are everywhere.
 │   (Browser always revalidates, CDN caches for 1 hour)                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

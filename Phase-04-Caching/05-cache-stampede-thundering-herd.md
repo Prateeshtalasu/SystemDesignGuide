@@ -29,7 +29,31 @@ You have a popular product page cached in Redis. The cache entry expires.
 
 **What actually happens**:
 
+```mermaid
+flowchart TD
+    subgraph Time["Time: 10:00:00.000 - Cache entry expires"]
+        R1["Request 1"]
+        R2["Request 2"]
+        R3["Request 3"]
+        R4["Request 4"]
+        R5["Request 5"]
+        
+        R1 -->|"Check cache"| Redis["REDIS<br/>GET product:123 → nil MISS!"]
+        R2 -->|"Check cache"| Redis
+        R3 -->|"Check cache"| Redis
+        R4 -->|"Check cache"| Redis
+        R5 -->|"Check cache"| Redis
+        
+        Redis -->|"Query DB"| DB["DATABASE<br/>5 IDENTICAL QUERIES executing simultaneously!<br/>SELECT * FROM products WHERE id = 123"]
+        
+        Note["With 10,000 concurrent users:<br/>10,000 identical database queries!<br/>Result: Database overwhelmed, slow responses, potential crash"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE THUNDERING HERD                                   │
 │                                                                          │
@@ -75,6 +99,7 @@ You have a popular product page cached in Redis. The cache entry expires.
 │   Result: Database overwhelmed, slow responses, potential crash         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Why "Thundering Herd"?
 
@@ -131,7 +156,47 @@ The name comes from a herd of animals all stampeding at once when startled. In c
 
 Imagine a concert ticket booth with one seller and thousands of fans:
 
+```mermaid
+flowchart TD
+    subgraph Without["WITHOUT STAMPEDE PREVENTION"]
+        F1["Fan 1"]
+        F2["Fan 2"]
+        F3["Fan 3"]
+        F4["Fan 4"]
+        F5["Fan 5"]
+        FMore["... 10,000 fans"]
+        
+        F1 --> Seller1["ONE SELLER<br/>(Database)<br/>← Overwhelmed!"]
+        F2 --> Seller1
+        F3 --> Seller1
+        F4 --> Seller1
+        F5 --> Seller1
+        FMore --> Seller1
+    end
+    
+    subgraph With["WITH STAMPEDE PREVENTION"]
+        Fan1["Fan 1"]
+        Fan2["Fan 2"]
+        Fan3["Fan 3"]
+        Fan4["Fan 4"]
+        Fan5["Fan 5"]
+        
+        Fan1 --> Queue["QUEUE MANAGER<br/>Fan 1 gets to buy.<br/>Everyone else, please wait."]
+        Fan2 --> Queue
+        Fan3 --> Queue
+        Fan4 --> Queue
+        Fan5 --> Queue
+        
+        Queue --> Seller2["ONE SELLER<br/>(Database)<br/>← Handles one request"]
+        
+        Note["Fan 1 buys tickets → Tickets posted on board → Everyone sees them"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE TICKET BOOTH PROBLEM                              │
 │                                                                          │
@@ -177,6 +242,7 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   Fan 1 buys tickets → Tickets posted on board → Everyone sees them    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Instead of everyone rushing the seller, one person goes while others wait. Once tickets are "posted" (cached), everyone can see them.
 
@@ -186,7 +252,27 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 
 ### The Root Cause
 
+```mermaid
+flowchart LR
+    subgraph R1["Request 1"]
+        R1A["GET cache<br/>(miss)"] --> R1B["Query DB"] --> R1C["SET cache"]
+    end
+    
+    subgraph R2["Request 2 (arrives during Request 1's DB query)"]
+        R2A["GET cache<br/>(miss)"] --> R2B["Query DB"] --> R2C["SET cache"]
+    end
+    
+    subgraph R3["Request 3 (arrives during Request 1's DB query)"]
+        R3A["GET cache<br/>(miss)"] --> R3B["Query DB"] --> R3C["SET cache"]
+    end
+    
+    Note["The problem: All requests see miss before any can set"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHY STAMPEDE HAPPENS                                  │
 │                                                                          │
@@ -213,12 +299,33 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   The problem: All requests see "miss" before any can "set"             │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Solution 1: Locking (Mutex)
 
 **The Concept**: Only one request can fetch from database. Others wait for the result.
 
+```mermaid
+flowchart LR
+    subgraph R1["Request 1"]
+        R1A["GET cache<br/>(miss)"] --> R1B["ACQUIRE LOCK<br/>(success)"] --> R1C["Query DB"] --> R1D["SET cache"] --> R1E["RELEASE LOCK"]
+    end
+    
+    subgraph R2["Request 2"]
+        R2A["GET cache<br/>(miss)"] --> R2B["ACQUIRE LOCK<br/>(blocked)"] --> R2C["... waiting ..."] --> R2D["GET cache<br/>(HIT!)"]
+    end
+    
+    subgraph R3["Request 3"]
+        R3A["GET cache<br/>(miss)"] --> R3B["ACQUIRE LOCK<br/>(blocked)"] --> R3C["... waiting ..."] --> R3D["GET cache<br/>(HIT!)"]
+    end
+    
+    Note["Result: 1 DB query instead of 3"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOCKING SOLUTION                                      │
 │                                                                          │
@@ -243,12 +350,35 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   Result: 1 DB query instead of 3                                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Solution 2: Request Coalescing
 
 **The Concept**: Group identical in-flight requests. Make one database call, share the result.
 
+```mermaid
+flowchart TD
+    Tracker["In-Flight Request Tracker<br/>Key: product:123<br/>Status: LOADING<br/>Waiters: Request2, Request3, Request4, ..."]
+    
+    subgraph R1["Request 1: First to arrive"]
+        R1A["Check tracker"] --> R1B["Not found"] --> R1C["Register as loader"] --> R1D["Query DB"]
+    end
+    
+    subgraph R2["Request 2: Arrives while Request 1 is loading"]
+        R2A["Check tracker"] --> R2B["Found LOADING"] --> R2C["Add self to waiters"] --> R2D["Wait..."]
+    end
+    
+    subgraph R1Complete["Request 1 completes"]
+        R1E["Got result"] --> R1F["Notify all waiters"] --> R1G["Cache result"]
+    end
+    
+    Note["All waiters receive the same result without additional DB queries"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REQUEST COALESCING                                    │
 │                                                                          │
@@ -277,12 +407,35 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   All waiters receive the same result without additional DB queries     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Solution 3: Probabilistic Early Expiration
 
 **The Concept**: Refresh cache before it expires. Different requests have different "early refresh" probability.
 
+```mermaid
+flowchart TD
+    TTL["TTL = 60 seconds"]
+    
+    T0["Time: 0s<br/>Cache populated"]
+    
+    T30["Time: 30s<br/>Request arrives, TTL = 30s remaining<br/>Refresh probability = low (30%)<br/>→ Probably returns cached value"]
+    
+    T50["Time: 50s<br/>Request arrives, TTL = 10s remaining<br/>Refresh probability = medium (60%)<br/>→ Might trigger background refresh"]
+    
+    T58["Time: 58s<br/>Request arrives, TTL = 2s remaining<br/>Refresh probability = high (95%)<br/>→ Very likely triggers background refresh"]
+    
+    Formula["Formula: probability = 1 - (remaining_ttl / total_ttl)^β<br/>where β controls aggressiveness (typically 2-4)"]
+    
+    Result["Result: Cache refreshed BEFORE expiration, no stampede!"]
+    
+    T0 --> T30 --> T50 --> T58 --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PROBABILISTIC EARLY EXPIRATION                        │
 │                                                                          │
@@ -307,12 +460,34 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   Result: Cache refreshed BEFORE expiration, no stampede!               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Solution 4: Background Refresh
 
 **The Concept**: Never let cache expire. Background job refreshes before TTL.
 
+```mermaid
+flowchart TD
+    subgraph Scheduler["REFRESH SCHEDULER"]
+        Table["Hot Keys to Refresh:<br/>Key | TTL Remaining | Next Refresh<br/>product:123 | 45s | In 30s<br/>product:456 | 120s | In 105s<br/>user:789 | 10s | NOW!"]
+        Rule["Refresh at: TTL - buffer (e.g., 15 seconds before expiry)"]
+    end
+    
+    subgraph UserReq["User Requests"]
+        U1["GET cache"] --> U2["Always HIT!"] --> U3["Return immediately"]
+    end
+    
+    subgraph BgJob["Background Job (separate thread)"]
+        B1["Check schedule"] --> B2["Key needs refresh"] --> B3["Query DB"] --> B4["Update cache"]
+    end
+    
+    Result["Result: Users never see cache miss for hot keys"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BACKGROUND REFRESH                                    │
 │                                                                          │
@@ -344,12 +519,37 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   Result: Users never see cache miss for hot keys                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Solution 5: Stale-While-Revalidate
 
 **The Concept**: Return stale data immediately while refreshing in background.
 
+```mermaid
+flowchart TD
+    subgraph Entry["Cache Entry Structure"]
+        E1["Key: product:123<br/>Value: {...product data...}<br/>Fresh Until: 10:00:00 (soft expiry)<br/>Stale Until: 10:05:00 (hard expiry)"]
+    end
+    
+    subgraph Request["Request at 10:02:00 (after soft expiry, before hard expiry)"]
+        R1["GET cache"] --> R2["Data is STALE but valid"] --> R3["Return stale data immediately"] --> R4["Trigger refresh in background"]
+    end
+    
+    subgraph Timeline["Timeline"]
+        T1["10:00:00 Fresh period ends"]
+        T2["10:00:00 - 10:05:00 Stale period (return stale + refresh)"]
+        T3["10:05:00 Hard expiry (must refresh synchronously)"]
+        T1 --> T2 --> T3
+    end
+    
+    Note1["User gets response in 2ms (stale but acceptable)"]
+    Note2["Background refresh updates cache for next request"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STALE-WHILE-REVALIDATE                                │
 │                                                                          │
@@ -377,6 +577,7 @@ Imagine a concert ticket booth with one seller and thousands of fans:
 │   10:05:00  Hard expiry (must refresh synchronously)                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -471,7 +672,28 @@ Result: 1 database query, all requests served successfully
 
 ### Facebook's Lease Mechanism
 
+```mermaid
+flowchart TD
+    Title["FACEBOOK'S LEASE MECHANISM<br/>Instead of simple locking, Facebook uses leases:"]
+    
+    Step1["1. Client requests data"]
+    Step2["2. Cache miss → Client gets a lease (permission to fetch)"]
+    Step3["3. Other clients see lease in progress → Wait or get stale data"]
+    Step4["4. First client fetches from DB, updates cache, releases lease"]
+    
+    LeaseInfo["Lease includes:<br/>- Lease ID (to verify ownership)<br/>- Expiration (auto-release if client dies)<br/>- Stale value (optional, for stale-while-revalidate)"]
+    
+    Benefits["Benefits:<br/>- Prevents stampede<br/>- Handles client failures (lease expires)<br/>- Can return stale data instead of waiting"]
+    
+    Step1 --> Step2 --> Step3 --> Step4
+    Step2 --> LeaseInfo
+    Step4 --> Benefits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK'S LEASE MECHANISM                            │
 │                                                                          │
@@ -493,6 +715,7 @@ Result: 1 database query, all requests served successfully
 │   - Can return stale data instead of waiting                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Netflix's Request Coalescing
 

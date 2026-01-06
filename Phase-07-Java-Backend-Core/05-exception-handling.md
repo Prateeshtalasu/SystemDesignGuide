@@ -121,7 +121,29 @@ if (fread(buffer, 1, size, fp) != size) {
 
 Think of exceptions like safety nets in a circus:
 
+```mermaid
+flowchart TD
+    MethodA["methodA()"]
+    MethodB["methodB()"]
+    MethodC["methodC()"]
+    Exception["EXCEPTION!<br/>(Artist falls)"]
+    CatchB["CATCH (Net)<br/>Exception caught here!"]
+    CatchA["CATCH (Net)<br/>Caught at higher level"]
+    
+    MethodA --> MethodB
+    MethodB --> MethodC
+    MethodC --> Exception
+    
+    Exception -->|"Exception falls up"| CatchB
+    CatchB -.->|"If no catch in methodB,<br/>exception continues falling"| CatchA
+    
+    Note["KEY INSIGHT:<br/>- Exception 'falls' up the call stack<br/>- First matching catch block 'catches' it<br/>- If no catch, program terminates<br/>- Finally block always runs (cleanup crew)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    EXCEPTION AS SAFETY NET                               │
 │                                                                          │
@@ -157,6 +179,8 @@ Think of exceptions like safety nets in a circus:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 
@@ -171,7 +195,49 @@ Think of exceptions like safety nets in a circus:
 
 ### The Exception Hierarchy
 
+```mermaid
+graph TD
+    Throwable["Throwable"]
+    
+    Error["Error<br/>(Don't catch!)"]
+    Exception["Exception"]
+    
+    OutOfMemory["OutOfMemoryError"]
+    StackOverflow["StackOverflowError"]
+    
+    RuntimeException["RuntimeException<br/>(Unchecked)"]
+    IOException["IOException<br/>(Checked)"]
+    
+    SQLException["SQLException<br/>(Checked)"]
+    
+    NullPointer["NullPointerException"]
+    IndexOutOfBounds["IndexOutOfBoundsException"]
+    IllegalArgumentException["IllegalArgumentException"]
+    
+    Throwable --> Error
+    Throwable --> Exception
+    
+    Error --> OutOfMemory
+    Error --> StackOverflow
+    
+    Exception --> RuntimeException
+    Exception --> IOException
+    
+    IOException --> SQLException
+    
+    RuntimeException --> NullPointer
+    RuntimeException --> IndexOutOfBounds
+    RuntimeException --> IllegalArgumentException
+    
+    Note1["CHECKED (Must handle or declare):<br/>- IOException, SQLException, ClassNotFoundException<br/>- Compiler forces you to handle them<br/>- Represent recoverable conditions"]
+    
+    Note2["UNCHECKED (RuntimeException and subclasses):"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JAVA EXCEPTION HIERARCHY                              │
 │                                                                          │
@@ -200,6 +266,9 @@ Think of exceptions like safety nets in a circus:
 │   - Represent recoverable conditions                                    │
 │                                                                          │
 │   UNCHECKED (RuntimeException and subclasses):                         │
+```
+</details>
+```
 │   - NullPointerException, IllegalArgumentException                     │
 │   - Compiler doesn't force handling                                    │
 │   - Usually represent programming errors                               │
@@ -269,7 +338,35 @@ public class ExceptionPropagation {
 
 ### The Stack Trace
 
+```mermaid
+flowchart TD
+    Exception["java.lang.NullPointerException:<br/>Cannot invoke method on null"]
+    
+    Stack1["at com.example.OrderService.processOrder<br/>(OrderService.java:45)"]
+    Stack2["at com.example.OrderController.createOrder<br/>(OrderController.java:23)"]
+    Stack3["at sun.reflect.NativeMethodAccessorImpl.invoke0<br/>(Native Method)"]
+    Stack4["at org.springframework.web.servlet.FrameworkServlet.service(...)"]
+    Stack5["at javax.servlet.http.HttpServlet.service<br/>(HttpServlet.java:750)"]
+    Stack6["at org.apache.catalina.core.ApplicationFilterChain.doFilter(...)"]
+    Stack7["..."]
+    
+    Exception --> Stack1
+    Stack1 --> Stack2
+    Stack2 --> Stack3
+    Stack3 --> Stack4
+    Stack4 --> Stack5
+    Stack5 --> Stack6
+    Stack6 --> Stack7
+    
+    HowToRead["HOW TO READ:<br/>1. Exception type and message at top<br/>2. YOUR code is usually near the top<br/>3. Read top-to-bottom = most recent to oldest call<br/>4. Line numbers tell you exactly where<br/>5. Framework/library code at bottom (usually ignore)"]
+    
+    Example["In this example:<br/>- NullPointerException occurred<br/>- In OrderService.processOrder() at line 45<br/>- Called from OrderController.createOrder() at line 23<br/>- Which was called by Spring framework"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    READING A STACK TRACE                                 │
 │                                                                          │
@@ -296,6 +393,8 @@ public class ExceptionPropagation {
 │   - Which was called by Spring framework                               │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -333,7 +432,36 @@ public class ConfigLoader {
 
 ### Trace 1: File Not Found
 
+```mermaid
+flowchart TD
+    Start["loadConfig('missing.yaml')"]
+    Try["try {"]
+    ReadFile["readFile('missing.yaml')"]
+    Throw["throw FileNotFoundException"]
+    Catch["} catch (FileNotFoundException e) {"]
+    Print["System.out.println('Config file not found...')"]
+    Return["return Config.defaultConfig()"]
+    Finally["} finally {"]
+    FinallyPrint["System.out.println('Config loading attempt completed')"]
+    End["RETURN: Config.defaultConfig()"]
+    
+    Start --> Try
+    Try --> ReadFile
+    ReadFile --> Throw
+    Throw -->|"Exception caught"| Catch
+    Catch --> Print
+    Print --> Return
+    Return --> Finally
+    Finally --> FinallyPrint
+    FinallyPrint --> End
+    
+    Output["Output:<br/>> Config file not found: missing.yaml<br/>> Config loading attempt completed"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TRACE: FILE NOT FOUND                                 │
 │                                                                          │
@@ -369,10 +497,45 @@ public class ConfigLoader {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Trace 2: Parse Error (Re-thrown)
 
+```mermaid
+flowchart TD
+    Start["loadConfig('invalid.yaml')"]
+    Try["try {"]
+    ReadFile["readFile('invalid.yaml')<br/>→ success, returns content"]
+    ParseConfig["parseConfig(content)"]
+    Throw["throw ParseException"]
+    Catch1["} catch (FileNotFoundException e) {<br/>// Not this one<br/>}"]
+    Catch2["} catch (ParseException e) {"]
+    Print["System.out.println('Invalid config format...')"]
+    ThrowNew["throw new ConfigurationException(..., e)"]
+    Finally["} finally {"]
+    FinallyPrint["System.out.println('Config loading...')"]
+    Propagate["ConfigurationException propagates to caller"]
+    
+    Start --> Try
+    Try --> ReadFile
+    ReadFile --> ParseConfig
+    ParseConfig --> Throw
+    Throw -->|"Exception caught"| Catch1
+    Catch1 --> Catch2
+    Catch2 --> Print
+    Print --> ThrowNew
+    ThrowNew --> Finally
+    Finally --> FinallyPrint
+    FinallyPrint --> Propagate
+    
+    Output["Output:<br/>> Invalid config format: Unexpected token at line 5<br/>> Config loading attempt completed<br/>> [Exception propagates to caller]"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TRACE: PARSE ERROR                                    │
 │                                                                          │
@@ -413,6 +576,8 @@ public class ConfigLoader {
 │   > [Exception propagates to caller]                                    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -1231,7 +1396,37 @@ record PaymentPending(String checkUrl) implements PaymentResult {}
 
 ### Exception Handling Approaches
 
+```mermaid
+graph LR
+    subgraph Exceptions["EXCEPTIONS (Java, C#, Python)"]
+        ECode["try {<br/>    riskyOperation();<br/>} catch (Exception e) {<br/>    handleError(e);<br/>}"]
+        EPros["Pros:<br/>- Separates error handling<br/>- Stack trace<br/>- Can't be ignored (checked)"]
+        ECons["Cons:<br/>- Performance overhead<br/>- Can be overused"]
+        ECode --> EPros
+        ECode --> ECons
+    end
+    
+    subgraph ResultTypes["RESULT TYPES (Rust, Kotlin, Scala)"]
+        RCode["Result&lt;User, Error&gt; result =<br/>    findUser(id);<br/>result.match(<br/>    user -> process(user),<br/>    error -> handleError(error)<br/>);"]
+        RPros["Pros:<br/>- Explicit in type system<br/>- No hidden control flow<br/>- Compiler enforces handling"]
+        RCons["Cons:<br/>- More verbose<br/>- Not native to Java"]
+        RCode --> RPros
+        RCode --> RCons
+    end
+    
+    subgraph ErrorCodes["ERROR CODES (C, Go)"]
+        CCode["int result = doOperation();<br/>if (result != SUCCESS) {<br/>    handleError(result);<br/>}"]
+        CPros["Pros:<br/>- Simple<br/>- No overhead"]
+        CCons["Cons:<br/>- Easy to ignore<br/>- No stack trace"]
+        CCode --> CPros
+        CCode --> CCons
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ERROR HANDLING APPROACHES                             │
 │                                                                          │
@@ -1265,6 +1460,8 @@ record PaymentPending(String checkUrl) implements PaymentResult {}
 │                                      - No stack trace                   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Java Approaches Comparison

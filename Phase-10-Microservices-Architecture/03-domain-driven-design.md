@@ -270,7 +270,22 @@ Bounded Context: Support
 
 How bounded contexts relate to each other:
 
+```mermaid
+flowchart TD
+    OrderCtx["Order Context"]
+    PaymentCtx["Payment Context"]
+    ShippingCtx["Shipping Context<br/>(downstream)"]
+    CommonLib["Common Library<br/>(address model)"]
+    
+    OrderCtx -->|Partner| PaymentCtx
+    OrderCtx -->|Customer-Supplier| ShippingCtx
+    OrderCtx -->|Shared Kernel<br/>(shared code)| CommonLib
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────┐
 │  Order Context   │───Partner──→┌──────────────────┐
 │                  │             │  Payment Context │
@@ -291,6 +306,7 @@ How bounded contexts relate to each other:
 │  (address model) │
 └──────────────────┘
 ```
+</details>
 
 Relationship types:
 

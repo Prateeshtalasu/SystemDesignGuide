@@ -123,7 +123,9 @@ flowchart TD
     end
     
     subgraph HTTP2["HTTP/2"]
-        R1_2["Req1"] & R2_2["Req2"] & R3_2["Req3"] -->|"Multiplexed"| Res1_2["Resp1"] & Res2_2["Resp2"] & Res3_2["Resp3"]
+        R1_2["Req1"] -->|"Multiplexed"| Res1_2["Resp1"]
+        R2_2["Req2"] -->|"Multiplexed"| Res2_2["Resp2"]
+        R3_2["Req3"] -->|"Multiplexed"| Res3_2["Resp3"]
         Note2["Single connection"]
     end
     

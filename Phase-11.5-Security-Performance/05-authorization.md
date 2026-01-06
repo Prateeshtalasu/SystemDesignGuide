@@ -20,7 +20,34 @@ Before diving into authorization, you should understand:
 
 Authentication tells us WHO the user is. But that's not enough:
 
+```mermaid
+flowchart TD
+    SCENARIO["Scenario: Hospital System"]
+    
+    USERS["Authenticated Users:<br/>• Dr. Smith (Cardiologist)<br/>• Nurse Johnson (ER)<br/>• Bob (IT Support)<br/>• Alice (Patient)"]
+    
+    QUESTION["Question: Who can access<br/>Alice's medical records?"]
+    
+    WITHOUT["Without Authorization:<br/>❌ Everyone authenticated can access everything<br/>❌ IT support could read medical records<br/>❌ Any doctor could access any patient<br/>❌ Patients could modify their own records"]
+    
+    WITH["With Authorization:<br/>✅ Only Alice's treating doctors can view her records<br/>✅ Nurses can view but not modify<br/>✅ IT support has no access to medical data<br/>✅ Alice can view her own records but not modify"]
+    
+    SCENARIO --> USERS
+    USERS --> QUESTION
+    QUESTION --> WITHOUT
+    QUESTION --> WITH
+    
+    style SCENARIO fill:#e3f2fd
+    style USERS fill:#fff9c4
+    style QUESTION fill:#fce4ec
+    style WITHOUT fill:#ffcdd2
+    style WITH fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE AUTHORIZATION PROBLEM                             │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -50,6 +77,8 @@ Authentication tells us WHO the user is. But that's not enough:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What Breaks Without Proper Authorization
 
 | Problem | Impact |
@@ -77,7 +106,23 @@ Think of authorization like building security:
 **Authentication** = Badge that proves you work here
 **Authorization** = Which doors your badge opens
 
+```mermaid
+flowchart TD
+    RBAC["RBAC (Role-Based):<br/>Employees can access floors 1-5,<br/>Managers can access floor 6<br/><br/>Your badge says Manager →<br/>You can access floors 1-6"]
+    
+    ABAC["ABAC (Attribute-Based):<br/>Access if: department=Engineering<br/>AND clearance>=SECRET<br/>AND time between 9am-6pm<br/>AND location=HQ<br/><br/>Multiple attributes checked,<br/>not just role"]
+    
+    REBAC["ReBAC (Relationship-Based):<br/>You can access files you own<br/>or files shared with you<br/><br/>Access based on your<br/>relationship to the resource"]
+    
+    style RBAC fill:#e3f2fd
+    style ABAC fill:#fff9c4
+    style REBAC fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BUILDING SECURITY ANALOGY                             │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -98,6 +143,8 @@ Think of authorization like building security:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ Authorization Models
@@ -106,7 +153,61 @@ Think of authorization like building security:
 
 The most common model. Users are assigned roles, roles have permissions.
 
+```mermaid
+flowchart LR
+    subgraph USERS["USERS"]
+        ALICE["Alice"]
+        BOB["Bob"]
+        CAROL["Carol"]
+        DAVID["David"]
+        EVE["Eve"]
+    end
+    
+    subgraph ROLES["ROLES"]
+        ADMIN["ADMIN"]
+        MANAGER["MANAGER"]
+        USER_ROLE["USER"]
+    end
+    
+    subgraph PERMS_ADMIN["PERMISSIONS (ADMIN)"]
+        ADMIN_PERMS["users:create<br/>users:read<br/>users:update<br/>users:delete<br/>orders:*<br/>reports:*"]
+    end
+    
+    subgraph PERMS_MANAGER["PERMISSIONS (MANAGER)"]
+        MANAGER_PERMS["users:read<br/>orders:*<br/>reports:read"]
+    end
+    
+    subgraph PERMS_USER["PERMISSIONS (USER)"]
+        USER_PERMS["orders:read (own)<br/>orders:create"]
+    end
+    
+    ALICE --> ADMIN
+    BOB --> MANAGER
+    CAROL --> MANAGER
+    DAVID --> USER_ROLE
+    EVE --> USER_ROLE
+    
+    ADMIN --> PERMS_ADMIN
+    MANAGER --> PERMS_MANAGER
+    USER_ROLE --> PERMS_USER
+    
+    HIERARCHY["Hierarchy: ADMIN > MANAGER > USER<br/>Higher roles inherit lower role permissions"]
+    
+    style USERS fill:#e3f2fd
+    style ROLES fill:#fff9c4
+    style ADMIN fill:#ffcdd2
+    style MANAGER fill:#fff9c4
+    style USER_ROLE fill:#c8e6c9
+    style PERMS_ADMIN fill:#ffcdd2
+    style PERMS_MANAGER fill:#fff9c4
+    style PERMS_USER fill:#c8e6c9
+    style HIERARCHY fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    RBAC MODEL                                            │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -138,6 +239,8 @@ The most common model. Users are assigned roles, roles have permissions.
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **RBAC Pros**:
 - Simple to understand and implement
 - Easy to audit (who has what role)
@@ -152,7 +255,59 @@ The most common model. Users are assigned roles, roles have permissions.
 
 More flexible. Decisions based on attributes of user, resource, action, and environment.
 
+```mermaid
+flowchart TD
+    POLICY["POLICY: Allow if all conditions are true"]
+    
+    subgraph SUBJECT["SUBJECT ATTRIBUTES"]
+        SUBJ1["user.department = HR"]
+        SUBJ2["user.clearance >= 3"]
+        SUBJ3["user.location"]
+        SUBJ4["user.title"]
+    end
+    
+    subgraph RESOURCE["RESOURCE ATTRIBUTES"]
+        RES1["document.classification = HR"]
+        RES2["document.owner"]
+        RES3["document.sensitivity"]
+        RES4["document.department"]
+    end
+    
+    subgraph ACTION["ACTION ATTRIBUTES"]
+        ACT1["action.type = read"]
+        ACT2["action.type = write"]
+        ACT3["action.type = delete"]
+    end
+    
+    subgraph ENV["ENVIRONMENT ATTRIBUTES"]
+        ENV1["env.time (9am-6pm)"]
+        ENV2["env.ip_address (internal)"]
+        ENV3["env.device_type (managed)"]
+    end
+    
+    EXAMPLE["Example Policy:<br/>ALLOW read document WHERE<br/>subject.department == resource.department AND<br/>subject.clearance >= resource.sensitivity AND<br/>environment.time BETWEEN 09:00 AND 18:00 AND<br/>environment.network == corporate"]
+    
+    POLICY --> SUBJECT
+    POLICY --> RESOURCE
+    POLICY --> ACTION
+    POLICY --> ENV
+    SUBJECT --> EXAMPLE
+    RESOURCE --> EXAMPLE
+    ACTION --> EXAMPLE
+    ENV --> EXAMPLE
+    
+    style POLICY fill:#e3f2fd
+    style SUBJECT fill:#fff9c4
+    style RESOURCE fill:#c8e6c9
+    style ACTION fill:#fce4ec
+    style ENV fill:#fff9c4
+    style EXAMPLE fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ABAC MODEL                                            │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -183,6 +338,8 @@ More flexible. Decisions based on attributes of user, resource, action, and envi
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **ABAC Pros**:
 - Very flexible and expressive

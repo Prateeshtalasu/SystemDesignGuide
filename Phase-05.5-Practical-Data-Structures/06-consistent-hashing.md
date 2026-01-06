@@ -108,7 +108,33 @@ Imagine a clock face with positions 0-59 (like minutes).
 - "user:2" (pos 35) → Server C (pos 50)
 - "user:3" (pos 55) → Server A (pos 10, wrapping around)
 
+```mermaid
+flowchart LR
+    P0[0] --> P5[5]
+    P5 --> P10[10<br/>Server A]
+    P10 --> P15[15<br/>user:1]
+    P15 --> P20[20]
+    P20 --> P25[25]
+    P25 --> P30[30<br/>Server B]
+    P30 --> P35[35<br/>user:2]
+    P35 --> P40[40]
+    P40 --> P45[45]
+    P45 --> P50[50<br/>Server C]
+    P50 --> P55[55<br/>user:3]
+    P55 -->|wraps around| P0
+    
+    style P10 fill:#90EE90
+    style P30 fill:#90EE90
+    style P50 fill:#90EE90
+    style P15 fill:#FFB6C1
+    style P35 fill:#FFB6C1
+    style P55 fill:#FFB6C1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
               0
               │
          55 ──┼── 5
@@ -125,6 +151,7 @@ Imagine a clock face with positions 0-59 (like minutes).
               30
              (B)
 ```
+</details>
 
 ### What Happens When a Server Dies?
 
@@ -142,7 +169,15 @@ Add Server D at position 20:
 - That's only ~1/4 of the ring
 - Most keys stay where they are!
 
-```
+**Consistent Hashing Key Insight**: "When adding or removing a server, only keys in the affected arc of the ring need to move. All other keys stay put."
+
+- Adding 1 server to N servers: only ~1/N keys move
+- Removing 1 server from N servers: only ~1/N keys move
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                 CONSISTENT HASHING KEY INSIGHT                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -155,6 +190,7 @@ Add Server D at position 20:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -403,7 +439,23 @@ Only ~1/4 of keys moved (B had 3 out of 12 vnodes)
 
 DynamoDB uses consistent hashing for partitioning data across storage nodes.
 
-```
+**DynamoDB Partitioning**
+
+Table: Users  
+Partition Key: user_id
+
+- user_id="alice" → hash → partition 3 → Node A
+- user_id="bob" → hash → partition 7 → Node B
+- user_id="carol" → hash → partition 2 → Node C
+
+**When Node B fails:**
+- Only partition 7's data needs to be served by replica
+- Other partitions unaffected
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DYNAMODB PARTITIONING                         │
 ├─────────────────────────────────────────────────────────────────┤
@@ -421,6 +473,7 @@ DynamoDB uses consistent hashing for partitioning data across storage nodes.
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Apache Cassandra
 

@@ -333,7 +333,23 @@ if (status == Status.ACTIVE) { }  // Use enum
 
 ### Why Immutability Matters
 
+```mermaid
+flowchart TD
+    B1["1. THREAD SAFETY<br/>Immutable objects can be shared freely between threads<br/>No synchronization needed"]
+    
+    B2["2. SIMPLICITY<br/>Object state is fixed at construction<br/>No need to track state changes"]
+    
+    B3["3. FAILURE ATOMICITY<br/>If construction fails, object doesn't exist<br/>No partially constructed objects"]
+    
+    B4["4. SAFE KEYS<br/>Safe to use as Map keys or Set elements<br/>Hash code never changes"]
+    
+    B5["5. DEFENSIVE COPIES UNNECESSARY<br/>Can share references freely<br/>No need to copy on get/set"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BENEFITS OF IMMUTABILITY                              │
 │                                                                          │
@@ -358,6 +374,8 @@ if (status == Status.ACTIVE) { }  // Use enum
 │      No need to copy on get/set                                        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Creating Immutable Classes

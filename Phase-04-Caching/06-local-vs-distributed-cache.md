@@ -33,7 +33,29 @@ redisTemplate.opsForValue().get("product:" + id);
 
 Which should you choose? The answer is: **it depends**.
 
+```mermaid
+flowchart LR
+    subgraph Local["LOCAL CACHE"]
+        L1["⚡ 50 nanoseconds<br/>Access time"]
+        L2["❌ Not shared<br/>across servers"]
+        L3["❌ Lost on restart"]
+        L4["❌ Limited to JVM<br/>heap size"]
+    end
+    
+    subgraph Distributed["DISTRIBUTED CACHE"]
+        D1["🌐 0.5-2 milliseconds<br/>Access time"]
+        D2["✅ Shared across<br/>all servers"]
+        D3["✅ Survives restarts"]
+        D4["✅ Scales to TBs"]
+    end
+    
+    Note["Local is 10,000-40,000x faster but has significant limitations"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE TRADEOFF                                          │
 │                                                                          │
@@ -54,11 +76,34 @@ Which should you choose? The answer is: **it depends**.
 │   Local is 10,000-40,000x faster but has significant limitations        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks with Wrong Choice?
 
 **Using Only Local Cache**:
+```mermaid
+flowchart LR
+    subgraph S1["Server 1"]
+        C1["Cache:<br/>product:123 = {price: $99}"]
+    end
+    
+    subgraph S2["Server 2"]
+        C2["Cache:<br/>product:123 = {price: $79}<br/>← Different values!"]
+    end
+    
+    U1["User A sees $99<br/>(Server 1)"]
+    U2["User B sees $79<br/>(Server 2)"]
+    
+    C1 --> U1
+    C2 --> U2
+    
+    Problems["Problems:<br/>1. Inconsistent data across servers<br/>2. Cache wasted - same data cached N times on N servers<br/>3. Cold start after deployment - all caches empty"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOCAL CACHE PROBLEM                                   │
 │                                                                          │
@@ -78,9 +123,24 @@ Which should you choose? The answer is: **it depends**.
 │   3. Cold start after deployment - all caches empty                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Using Only Distributed Cache**:
+```mermaid
+flowchart TD
+    S1["Server 1"] -->|"1ms"| Redis["Redis"]
+    S2["Server 2"] -->|"1ms"| Redis
+    S3["Server 3"] -->|"1ms"| Redis
+    
+    Note1["10,000 requests/second × 3 servers = 30,000 Redis calls/second"]
+    
+    Problems["Problems:<br/>1. Network latency on every access (1ms vs 50ns)<br/>2. Redis becomes bottleneck<br/>3. Network bandwidth consumed<br/>4. Single point of failure"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DISTRIBUTED CACHE PROBLEM                             │
 │                                                                          │
@@ -103,6 +163,7 @@ Which should you choose? The answer is: **it depends**.
 │   4. Single point of failure                                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples
 
@@ -118,7 +179,31 @@ Which should you choose? The answer is: **it depends**.
 
 ### The Office Supplies Analogy
 
+```mermaid
+flowchart TD
+    subgraph Local["LOCAL CACHE = Your Desk Drawer"]
+        L1["✅ Instant access (reach into drawer)"]
+        L2["✅ No one else can take your stuff"]
+        L3["❌ Limited space (one small drawer)"]
+        L4["❌ Coworker can't borrow your stapler"]
+        L5["❌ If you change desks, drawer is empty"]
+    end
+    
+    subgraph Distributed["DISTRIBUTED CACHE = Supply Closet Down the Hall"]
+        D1["✅ Everyone can access it"]
+        D2["✅ Huge storage capacity"]
+        D3["✅ Survives if you change desks"]
+        D4["❌ Takes 30 seconds to walk there"]
+        D5["❌ Might be crowded (contention)"]
+    end
+    
+    Hybrid["HYBRID = Keep frequently used items in drawer,<br/>get less common items from closet"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE OFFICE SUPPLIES ANALOGY                           │
 │                                                                          │
@@ -148,6 +233,7 @@ Which should you choose? The answer is: **it depends**.
 │            get less common items from closet                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -155,7 +241,28 @@ Which should you choose? The answer is: **it depends**.
 
 ### Local Cache Architecture
 
+```mermaid
+flowchart TD
+    subgraph JVM["JVM HEAP"]
+        subgraph Caffeine["CAFFEINE CACHE"]
+            Window["Window (1%)<br/>New items enter here"]
+            Probation["Probation (20%)<br/>Promotion candidates"]
+            Protected["Protected (79%)<br/>Frequently accessed"]
+            
+            Window -->|"Promotion"| Probation
+            Probation -->|"Promotion"| Protected
+            
+            Note["Uses W-TinyLFU algorithm (combines LRU + LFU)<br/>Near-optimal hit rate"]
+        end
+    end
+    
+    Info["Access Time: ~50 nanoseconds (direct memory access)<br/>No serialization needed<br/>No network call"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOCAL CACHE (Caffeine)                                │
 │                                                                          │
@@ -185,10 +292,33 @@ Which should you choose? The answer is: **it depends**.
 │   No network call                                                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Distributed Cache Architecture
 
+```mermaid
+flowchart TD
+    subgraph App["Application Server"]
+        Step1["1. Serialize object to JSON/bytes"]
+        Step2["2. Send over TCP to Redis"]
+        Step3["3. Wait for response"]
+        Step4["4. Deserialize response"]
+        Step1 --> Step2 --> Step3 --> Step4
+    end
+    
+    App -->|"TCP (1-2ms round trip)"| Redis
+    
+    subgraph Redis["REDIS SERVER"]
+        Memory["MEMORY<br/>Hash Table with data<br/>product:123 → {name: 'Keyboard', price: 99.99}"]
+    end
+    
+    Info["Access Time: ~500-2000 microseconds (network + serialization)<br/>Shared across all application servers<br/>Survives application restarts"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DISTRIBUTED CACHE (Redis)                             │
 │                                                                          │
@@ -221,10 +351,46 @@ Which should you choose? The answer is: **it depends**.
 │   Survives application restarts                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Hybrid (Multi-Level) Architecture
 
+```mermaid
+flowchart TD
+    Request["Request Flow"]
+    
+    L1Check["1. Check L1 (local)"]
+    L1Hit["HIT → Return immediately (50ns)"]
+    L1Miss["MISS → Check L2 (distributed)"]
+    
+    L2Hit["HIT → Store in L1, return (1-2ms)"]
+    L2Miss["MISS → Query database"]
+    DBStore["Store in L2, store in L1, return"]
+    
+    Request --> L1Check
+    L1Check -->|"HIT"| L1Hit
+    L1Check -->|"MISS"| L1Miss
+    L1Miss -->|"HIT"| L2Hit
+    L1Miss -->|"MISS"| L2Miss
+    L2Miss --> DBStore
+    
+    subgraph Servers["Servers"]
+        S1["Server 1<br/>L1 Cache (local)<br/>1000 items"]
+        S2["Server 2<br/>L1 Cache (local)<br/>1000 items"]
+        S3["Server 3<br/>L1 Cache (local)<br/>1000 items"]
+        
+        S1 --> L2["L2 Cache (Redis)<br/>1,000,000 items"]
+        S2 --> L2
+        S3 --> L2
+        
+        L2 --> DB["Database<br/>100,000,000 items"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MULTI-LEVEL CACHE (L1 + L2)                           │
 │                                                                          │
@@ -268,6 +434,7 @@ Which should you choose? The answer is: **it depends**.
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -359,7 +526,26 @@ vs Distributed only: 1ms average
 
 ### Netflix's Caching Architecture
 
+```mermaid
+flowchart TD
+    Title["NETFLIX CACHING LAYERS"]
+    
+    L0["Layer 0: In-Process Cache (Guava/Caffeine)<br/>─────────────────────────────────────<br/>- Config values, feature flags<br/>- TTL: Minutes<br/>- Size: ~100MB per instance"]
+    
+    L1["Layer 1: EVCache (Memcached-based)<br/>─────────────────────────────────────<br/>- User profiles, viewing history<br/>- TTL: Hours<br/>- Size: Terabytes<br/>- Cross-region replication"]
+    
+    L2["Layer 2: Cassandra<br/>─────────────────────────────────────<br/>- Persistent storage<br/>- Source of truth"]
+    
+    Special["Special: Hollow (local read-only datasets)<br/>─────────────────────────────────────<br/>- Movie catalog (changes infrequently)<br/>- Loaded entirely into memory<br/>- No cache misses!"]
+    
+    Title --> L0 --> L1 --> L2
+    Title --> Special
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NETFLIX CACHING LAYERS                                │
 │                                                                          │
@@ -388,10 +574,39 @@ vs Distributed only: 1ms average
 │   - No cache misses!                                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Facebook's TAO
 
+```mermaid
+flowchart TD
+    Title["FACEBOOK TAO ARCHITECTURE<br/>TAO = The Associations and Objects cache"]
+    
+    WebServer["Web Server"]
+    
+    TAOLeader["TAO Leader (in-region cache)"]
+    
+    Hit["HIT → Return (99%+ of requests)"]
+    
+    Miss["MISS → TAO Follower (other region)"]
+    
+    FollowerHit["HIT → Return + async populate leader"]
+    
+    FollowerMiss["MISS → MySQL (rare)"]
+    
+    Insight["Key insight: Leader caches HOT data for that region<br/>Follower acts as L2 with global data"]
+    
+    WebServer --> TAOLeader
+    TAOLeader -->|HIT| Hit
+    TAOLeader -->|MISS| Miss
+    Miss -->|HIT| FollowerHit
+    Miss -->|MISS| FollowerMiss
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK TAO ARCHITECTURE                             │
 │                                                                          │
@@ -419,6 +634,7 @@ vs Distributed only: 1ms average
 │                Follower acts as L2 with global data                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

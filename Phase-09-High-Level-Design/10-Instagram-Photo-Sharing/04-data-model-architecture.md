@@ -396,7 +396,81 @@ erDiagram
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TB
+    subgraph Clients["CLIENTS"]
+        iOS["iOS App"]
+        Android["Android App"]
+        Web["Web Browser"]
+    end
+    
+    subgraph Edge["EDGE LAYER"]
+        CDN["CDN<br/>(Images)"]
+        APIGateway["API Gateway"]
+        WSGateway["WebSocket Gateway"]
+    end
+    
+    subgraph AppServices["APPLICATION SERVICES"]
+        FeedService["Feed Service"]
+        PostService["Post Service"]
+        StoryService["Story Service"]
+        SearchService["Search Service"]
+        SocialGraph["Social Graph Service"]
+        UserService["User Service"]
+        NotificationService["Notification Service"]
+        ImageProcessor["Image Processor"]
+    end
+    
+    subgraph DataLayer["DATA LAYER"]
+        PostgreSQL["PostgreSQL<br/>(Users/Posts)"]
+        Redis["Redis<br/>(Feed Cache)"]
+        Cassandra["Cassandra<br/>(Stories)"]
+        Kafka["Kafka<br/>(Event Queue)"]
+        Elasticsearch["Elasticsearch<br/>(Search)"]
+        S3["S3<br/>(Images)"]
+        Zookeeper["Zookeeper<br/>(Coordination)"]
+    end
+    
+    iOS --> CDN
+    Android --> CDN
+    Web --> CDN
+    iOS --> APIGateway
+    Android --> APIGateway
+    Web --> APIGateway
+    iOS --> WSGateway
+    Android --> WSGateway
+    Web --> WSGateway
+    
+    APIGateway --> FeedService
+    APIGateway --> PostService
+    APIGateway --> StoryService
+    APIGateway --> SearchService
+    APIGateway --> SocialGraph
+    APIGateway --> UserService
+    APIGateway --> NotificationService
+    APIGateway --> ImageProcessor
+    WSGateway --> FeedService
+    WSGateway --> PostService
+    WSGateway --> StoryService
+    
+    FeedService --> PostgreSQL
+    FeedService --> Redis
+    PostService --> PostgreSQL
+    PostService --> Kafka
+    StoryService --> Cassandra
+    SearchService --> Elasticsearch
+    SocialGraph --> PostgreSQL
+    SocialGraph --> Redis
+    UserService --> PostgreSQL
+    NotificationService --> Kafka
+    ImageProcessor --> S3
+    ImageProcessor --> Kafka
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                    CLIENTS                                           │
 │                    (iOS App, Android App, Web Browser)                              │
@@ -448,11 +522,38 @@ erDiagram
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Photo Upload Flow
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant UploadService as Upload Service
+    participant ImageProcessor as Image Processor
+    participant StorageCDN as Storage/CDN
+    
+    User->>UploadService: 1. Upload photo
+    UploadService->>StorageCDN: 2. Store original
+    UploadService->>ImageProcessor: 3. Queue processing
+    UploadService->>User: 4. Upload accepted<br/>(with placeholder)
+    ImageProcessor->>ImageProcessor: 5. Generate sizes<br/>(thumb, med, large)
+    ImageProcessor->>ImageProcessor: 6. Apply filter
+    ImageProcessor->>ImageProcessor: 7. Generate blurhash
+    ImageProcessor->>StorageCDN: 8. Upload to S3
+    ImageProcessor->>StorageCDN: 9. Push to CDN
+    ImageProcessor->>UploadService: 10. Processing done
+    UploadService->>UploadService: 11. Fan-out to feeds
+    UploadService->>User: 12. Post ready
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          PHOTO UPLOAD FLOW                                           │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -495,11 +596,33 @@ User                    Upload Service       Image Processor        Storage/CDN
   │ <─────────────────────────                     │                    │
 ```
 
+</details>
+```
+
 ---
 
 ## Feed Generation (Hybrid Fan-out)
 
+```mermaid
+flowchart TD
+    Start["New Post Event"] --> CheckFollower["Check Author's<br/>Follower Count"]
+    CheckFollower --> Decision{< 10K Followers?}
+    Decision -->|Yes| RegularUser["< 10K Followers<br/>(Regular User)"]
+    Decision -->|No| Celebrity["> 10K Followers<br/>(Celebrity)"]
+    RegularUser --> FanOutWrite["FAN-OUT ON WRITE<br/><br/>For each follower:<br/>ZADD feed:{user}<br/>&lt;score&gt;<br/>&lt;post_id&gt;"]
+    Celebrity --> FanOutRead["FAN-OUT ON READ<br/><br/>Store post in<br/>celebrity_posts<br/>table only"]
+    
+    subgraph ReadFlow["FEED READ FLOW"]
+        UserReq["User Request: GET /feed"] --> GetRedis["1. Get precomputed feed from Redis<br/>ZREVRANGE feed:{user_id} 0 19<br/>→ [post_1, post_2, ..., post_20]"]
+        GetRedis --> GetCeleb["2. Get celebrity posts (fan-out on read)<br/>- Get list of celebrities user follows<br/>- Fetch their recent posts<br/>→ [celeb_post_1, celeb_post_2, ...]"]
+        GetCeleb --> Merge["3. Merge and rank<br/>- Combine precomputed + celebrity posts<br/>- Apply ranking algorithm<br/>- Return top 20"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          FEED GENERATION                                             │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -562,11 +685,37 @@ User Request: GET /feed
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Stories Architecture
 
+```mermaid
+flowchart TD
+    subgraph Upload["STORY UPLOAD"]
+        UserUpload["User uploads story"] --> Step1["1. Store in Cassandra with 24-hour TTL<br/>INSERT INTO stories (user_id, story_id, media_url, ...)<br/>USING TTL 86400"]
+        Step1 --> Step2["2. Update story tray for all followers<br/>ZADD stories:{follower_id} &lt;timestamp&gt; &lt;user_id&gt;"]
+        Step2 --> Step3["3. Send push notification to close friends"]
+    end
+    
+    subgraph Tray["STORY TRAY (Home Screen)"]
+        YourStory["Your Story"]
+        User1["User1<br/>(new)"]
+        User2["User2<br/>(new)"]
+        User3["User3<br/>(seen)"]
+        User4["User4<br/>(seen)"]
+        More["..."]
+        
+        Ordering["Ordering:<br/>1. Unseen stories first<br/>2. By recency (most recent first)<br/>3. By relationship strength"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          STORIES SYSTEM                                              │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -604,11 +753,40 @@ User Request: GET /feed
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Image Processing Pipeline
 
+```mermaid
+flowchart TD
+    Original["Original Photo<br/>(User Upload)"] --> Queue["Processing Queue<br/>(Kafka)"]
+    
+    Queue --> Validation["Validation<br/>- File type<br/>- Size limits<br/>- Malware scan"]
+    Queue --> Metadata["Metadata Extraction<br/>- EXIF data<br/>- Location<br/>- Camera info"]
+    Queue --> Blurhash["Blurhash Generation<br/>- Placeholder<br/>for loading"]
+    
+    Validation --> FilterEngine["Filter Engine<br/>Apply selected filter<br/>(Clarendon, Gingham,<br/>Juno, etc.)"]
+    Metadata --> FilterEngine
+    Blurhash --> FilterEngine
+    
+    FilterEngine --> Thumbnail["Thumbnail<br/>150x150<br/>- Feed grid<br/>- Profile"]
+    FilterEngine --> Medium["Medium<br/>640x640<br/>- Feed view<br/>- Stories"]
+    FilterEngine --> Large["Large<br/>1080px<br/>- Full view<br/>- Download"]
+    
+    Thumbnail --> S3["S3 Storage<br/><br/>/photos/{post_id}/<br/>├── original.jpg<br/>├── thumb.jpg<br/>├── medium.jpg<br/>└── large.jpg"]
+    Medium --> S3
+    Large --> S3
+    
+    S3 --> CDN["CDN<br/>(Edge Caching)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          IMAGE PROCESSING PIPELINE                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -676,11 +854,39 @@ User Request: GET /feed
                               └───────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Multi-Layer Caching
 
+```mermaid
+flowchart TD
+    subgraph Layer1["LAYER 1: CDN (Images)"]
+        CDNInfo["- All images served via CDN<br/>- Edge caching for popular content<br/>- TTL: 1 year (images are immutable)<br/>- Hit rate: 95%+"]
+    end
+    
+    subgraph Layer2["LAYER 2: Application Cache (Redis)"]
+        FeedCache["Feed cache:<br/>- feed:{user_id} = Sorted Set of post_ids<br/>- TTL: 24 hours"]
+        UserCache["User cache:<br/>- user:{user_id} = Hash of user data<br/>- TTL: 1 hour"]
+        PostCache["Post cache:<br/>- post:{post_id} = Hash of post data<br/>- TTL: 1 hour"]
+        SessionCache["Session cache:<br/>- session:{token} = user_id<br/>- TTL: 30 days"]
+    end
+    
+    subgraph Layer3["LAYER 3: Database"]
+        PostgreSQL["PostgreSQL:<br/>- Users, Posts, Comments, Likes, Follows<br/>- Read replicas for read-heavy queries"]
+        Cassandra["Cassandra:<br/>- Stories (with TTL)<br/>- Activity feed history"]
+    end
+    
+    Layer1 --> Layer2
+    Layer2 --> Layer3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          MULTI-LAYER CACHING                                         │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -728,6 +934,9 @@ User Request: GET /feed
 │  │  - Activity feed history                                                    │   │
 │  └─────────────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

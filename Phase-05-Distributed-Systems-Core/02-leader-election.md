@@ -97,7 +97,29 @@ Imagine a classroom where students need to elect a class president.
 
 Leader election is really about **agreement**: all nodes must agree on who the leader is. This is a special case of the consensus problem.
 
+**Leader Election Goals**
+
+```mermaid
+flowchart TD
+    subgraph GOALS["LEADER ELECTION GOALS"]
+        SAFETY["1. SAFETY: At most one leader at any time<br/>- Never have two leaders accepting writes<br/>- 'Split brain' is the worst outcome"]
+        
+        LIVENESS["2. LIVENESS: Eventually, there will be a leader<br/>- System shouldn't be stuck without a leader forever<br/>- But during election, there might be no leader"]
+        
+        LEASE["3. LEADER LEASE: Leader knows when it's still the leader<br/>- Leader must step down if it can't confirm leadership<br/>- Prevents stale leader from accepting writes"]
+        
+        SAFETY --> LIVENESS --> LEASE
+    end
+    
+    style SAFETY fill:#ffcdd2
+    style LIVENESS fill:#fff9c4
+    style LEASE fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  LEADER ELECTION GOALS                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -116,6 +138,7 @@ Leader election is really about **agreement**: all nodes must agree on who the l
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -134,7 +157,50 @@ The simplest leader election algorithm. Each node has a unique ID (like a number
 
 **Visual Example:**
 
+```mermaid
+sequenceDiagram
+    participant A as A(1)
+    participant B as B(2)
+    participant C as C(3)
+    participant D as D(4)
+    participant E as E(5) - CRASHED
+    
+    Note over E: Current leader: E(5)<br/>E crashes!
+    
+    rect rgb(255, 200, 200)
+        Note over B: Step 1: B notices E is down
+        B->>C: ELECTION
+        B->>D: ELECTION
+        B->>E: ELECTION
+        C-->>B: OK, I'll take over
+        D-->>B: OK, I'll take over
+        Note over E: No response (crashed)
+    end
+    
+    rect rgb(200, 255, 200)
+        Note over C,D: Step 2: C and D continue
+        C->>D: ELECTION
+        C->>E: ELECTION
+        D-->>C: OK, I'll take over
+        Note over E: No response
+        
+        D->>E: ELECTION
+        Note over E: No response
+    end
+    
+    rect rgb(200, 200, 255)
+        Note over D: Step 3: D gets no response
+        D->>A: COORDINATOR: "I am the new leader"
+        D->>B: COORDINATOR: "I am the new leader"
+        D->>C: COORDINATOR: "I am the new leader"
+        Note over D: Final state: D(4) is the new leader
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Nodes: A(1), B(2), C(3), D(4), E(5)
 Current leader: E(5)
 
@@ -158,6 +224,8 @@ Step 3: D gets no response from higher nodes
 
 Final state: D(4) is the new leader
 ```
+
+</details>
 
 **Java Implementation:**
 

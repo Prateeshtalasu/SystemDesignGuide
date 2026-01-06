@@ -69,7 +69,21 @@ B+ Tree with 1 million keys:
 
 B+ Trees have a key improvement over B-Trees:
 
+```mermaid
+flowchart TB
+    subgraph BTree["B-Tree: Data stored in ALL nodes"]
+        BTNode["[10,data] [20,data] [30,data]<br/>Internal node has data"]
+    end
+    subgraph BPlusTree["B+ Tree: Data stored ONLY in leaf nodes"]
+        BPNode["[10] [20] [30]<br/>Internal node: keys only"]
+        BPNode -->|down| LeafNodes["[10,data] → [20,data] → [30,data] → ...<br/>Leaf nodes: linked list"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 B-Tree: Data stored in ALL nodes
 ┌───────────────────────────────┐
 │ [10,data] [20,data] [30,data] │ ← Internal node has data
@@ -84,6 +98,7 @@ B+ Tree: Data stored ONLY in leaf nodes
 │ [10,data] → [20,data] → [30,data] → ...    │ ← Leaf nodes: linked list
 └─────────────────────────────────────────────┘
 ```
+</details>
 
 **Benefits of B+ Tree:**
 1. More keys per internal node → shorter tree
@@ -131,7 +146,28 @@ Imagine a library with millions of books:
 - Sub-drawer "A-M": "A-C", "D-F", "G-I", "J-M" (4 cards)
 - Bottom drawer: Actual book locations, in order, with "next drawer" links
 
+```mermaid
+flowchart TD
+    Top[M<br/>Top Level] --> SL1[D,H<br/>Second Level]
+    Top --> SL2[R,V<br/>Second Level]
+    SL1 --> L1[A-C<br/>Leaves]
+    SL1 --> L2[D-G<br/>Leaves]
+    SL1 --> L3[H-L<br/>Leaves]
+    SL2 --> L4[M-Q<br/>Leaves]
+    SL2 --> L5[R-U<br/>Leaves]
+    SL2 --> L6[V-Z<br/>Leaves]
+    L1 --> LL1[linked list of actual book cards]
+    L2 --> LL2[linked list of actual book cards]
+    L3 --> LL3[linked list of actual book cards]
+    L4 --> LL4[linked list of actual book cards]
+    L5 --> LL5[linked list of actual book cards]
+    L6 --> LL6[linked list of actual book cards]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Top Level:        [M]
                  /   \
 Second Level: [D,H]  [R,V]
@@ -140,10 +176,25 @@ Leaves:   [A-C][D-G][H-L][M-Q][R-U][V-Z]
             ↓    ↓    ↓    ↓    ↓    ↓
           (linked list of actual book cards)
 ```
+</details>
 
 ### The Key Insight
 
-```
+**B+ Tree Key Insight**: "Match tree node size to disk block size"
+
+- Internal nodes: Keys only (maximizes branching factor)
+- Leaf nodes: Keys + Data (or pointers to data)
+- Leaves linked: Enables efficient range scans
+
+**Height = log_B(N)** where B = branching factor (~100-1000)
+- For 1 billion keys: height ≈ 3-4
+- Each level = one disk read
+- 3-4 reads to find any key in billions!
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    B+ TREE KEY INSIGHT                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -162,6 +213,7 @@ Leaves:   [A-C][D-G][H-L][M-Q][R-U][V-Z]
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -200,7 +252,59 @@ class LeafNode {
 
 ### Visual Structure
 
+```mermaid
+flowchart TD
+    Root["[30 | 60]<br/>Root (internal)"]
+    
+    I1["[10|20]<br/>Internal"]
+    I2["[40|50]<br/>Internal"]
+    I3["[70|80]<br/>Internal"]
+    
+    L1["[5,8]"]
+    L2["[12,15]"]
+    L3["[25,28]"]
+    L4["[35,38]"]
+    L5["[45,48]"]
+    L6["[55,58]"]
+    L7["[65,68]"]
+    L8["[75,78]"]
+    L9["[85,90]"]
+    
+    Root --> I1
+    Root --> I2
+    Root --> I3
+    
+    I1 --> L1
+    I1 --> L2
+    I1 --> L3
+    
+    I2 --> L4
+    I2 --> L5
+    I2 --> L6
+    
+    I3 --> L7
+    I3 --> L8
+    I3 --> L9
+    
+    L1 -->|linked| L2
+    L2 -->|linked| L3
+    L3 -->|linked| L4
+    L4 -->|linked| L5
+    L5 -->|linked| L6
+    L6 -->|linked| L7
+    L7 -->|linked| L8
+    L8 -->|linked| L9
+    
+    style Root fill:#e1f5ff
+    style I1 fill:#e1f5ff
+    style I2 fill:#e1f5ff
+    style I3 fill:#e1f5ff
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────┐
                     │   [30 | 60]     │  ← Root (internal)
                     └────────┬────────┘
@@ -218,6 +322,7 @@ class LeafNode {
 │   │ │15 │ │28 │   │38 │ │48 │ │58 │   │68 │ │78 │ │90 │    (linked)
 └───┘ └───┘ └───┘   └───┘ └───┘ └───┘   └───┘ └───┘ └───┘
 ```
+</details>
 
 ### Search Algorithm
 
@@ -436,7 +541,10 @@ db.users.find({ email: "user@example.com" }).explain("executionStats");
 
 ### Index Design Best Practices
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    INDEX DESIGN TIPS                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -461,6 +569,7 @@ db.users.find({ email: "user@example.com" }).explain("executionStats");
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -795,7 +904,10 @@ public class BPlusTreeTest {
 
 ### Key Differences
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    B+ TREE vs B-TREE                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -818,6 +930,7 @@ public class BPlusTreeTest {
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Visual Comparison
 

@@ -37,7 +37,26 @@ This is the **consensus problem**: how do multiple nodes agree on a single value
 
 Before we solve consensus, let's understand why it's hard. The Two Generals Problem is a famous thought experiment:
 
+**The Two Generals Problem**
+
+```mermaid
+flowchart LR
+    subgraph ArmyA["Army A"]
+        GenA[Gen A]
+    end
+    subgraph Valley["Valley<br/>enemy territory"]
+    end
+    subgraph ArmyB["Army B"]
+        GenB[Gen B]
+    end
+    GenA -->|messenger<br/>might be captured!| GenB
+    note1["Both generals must attack at the same time to win."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 THE TWO GENERALS PROBLEM                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -51,6 +70,8 @@ Before we solve consensus, let's understand why it's hard. The Two Generals Prob
 │   └─────┘                                        └─────┘    │
 │                                                              │
 │   Both generals must attack at the same time to win.        │
+```
+</details>
 │   If only one attacks, they lose.                           │
 │                                                              │
 │   General A sends: "Attack at dawn"                         │

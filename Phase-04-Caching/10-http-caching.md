@@ -21,7 +21,36 @@ If you understand that browsers make HTTP requests and servers send responses wi
 
 Every time a user visits your website:
 
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Server
+    
+    Note over Browser,Server: WITHOUT HTTP CACHING - User visits page
+    
+    Browser->>Server: GET /index.html
+    Server-->>Browser: 200 OK (50KB HTML)
+    
+    Browser->>Server: GET /styles.css
+    Server-->>Browser: 200 OK (100KB CSS)
+    
+    Browser->>Server: GET /app.js
+    Server-->>Browser: 200 OK (500KB JS)
+    
+    Browser->>Server: GET /logo.png
+    Server-->>Browser: 200 OK (200KB PNG)
+    
+    Note over Browser,Server: Total: 850KB downloaded, 4 round trips
+    
+    Note over Browser,Server: User visits SAME page again:<br/>Total: 850KB downloaded AGAIN, 4 round trips AGAIN
+    
+    Note over Browser,Server: Problems:<br/>- Wasted bandwidth (same files downloaded repeatedly)<br/>- Slow page loads (waiting for downloads)<br/>- High server load (serving same files over and over)<br/>- Bad user experience (especially on slow connections)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITHOUT HTTP CACHING                                  │
 │                                                                          │
@@ -59,10 +88,34 @@ Every time a user visits your website:
 │   - Bad user experience (especially on slow connections)                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### With HTTP Caching
 
+```mermaid
+flowchart TD
+    First["First visit (same as before):<br/>Total: 850KB downloaded, 4 round trips<br/>BUT: Browser stores files in cache with instructions"]
+    
+    Second["Second visit:"]
+    
+    subgraph Cache["Browser checks cache"]
+        C1["styles.css: Valid for 1 year → Use cached (0 bytes)"]
+        C2["app.js: Valid for 1 year → Use cached (0 bytes)"]
+        C3["logo.png: Valid for 1 year → Use cached (0 bytes)"]
+        C4["index.html: Check with server → 304 Not Modified (0 bytes)"]
+    end
+    
+    Total["Total: 0KB downloaded, 1 round trip (just to check HTML)"]
+    
+    Results["Results:<br/>- 99%+ bandwidth saved<br/>- Near-instant page load<br/>- Server load reduced dramatically<br/>- Great user experience"]
+    
+    First --> Second --> Cache --> Total --> Results
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITH HTTP CACHING                                     │
 │                                                                          │
@@ -88,6 +141,7 @@ Every time a user visits your website:
 │   - Great user experience                                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Impact
 
@@ -105,7 +159,34 @@ Every time a user visits your website:
 
 ### The Newspaper Analogy
 
+```mermaid
+flowchart TD
+    Title["THE NEWSPAPER ANALOGY"]
+    
+    Without["WITHOUT CACHING:<br/>Every morning, you walk to the newsstand to check if there's<br/>a new newspaper. Even if it's the same as yesterday."]
+    
+    With["WITH CACHING:"]
+    
+    CC["Cache-Control: max-age=86400 (1 day)<br/>─────────────────────────────────────<br/>This newspaper is valid for 24 hours.<br/>Don't bother checking the newsstand until tomorrow."]
+    
+    ETag["ETag: edition-2024-01-15<br/>─────────────────────────────────────<br/>This is edition 2024-01-15.<br/>When you check tomorrow, ask: 'Is there a newer edition<br/>than 2024-01-15?' If not, I'll just say 'No changes.'"]
+    
+    LM["Last-Modified: Mon, 15 Jan 2024 08:00:00 GMT<br/>─────────────────────────────────────<br/>This was printed on Jan 15 at 8 AM.<br/>When you check, ask: 'Anything newer than Jan 15 8 AM?'"]
+    
+    Vary["Vary: Accept-Language<br/>─────────────────────────────────────<br/>The newspaper content varies by language.<br/>Cache the English and Spanish versions separately."]
+    
+    Title --> Without
+    Title --> With
+    With --> CC
+    With --> ETag
+    With --> LM
+    With --> Vary
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE NEWSPAPER ANALOGY                                 │
 │                                                                          │
@@ -137,6 +218,7 @@ Every time a user visits your website:
 │    Cache the English and Spanish versions separately."                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -144,7 +226,33 @@ Every time a user visits your website:
 
 ### HTTP Caching Headers
 
+```mermaid
+flowchart TD
+    Title["KEY HTTP CACHING HEADERS"]
+    
+    subgraph Response["RESPONSE HEADERS (Server → Browser)"]
+        CC["Cache-Control: max-age=3600, public<br/>│              │              │<br/>│              │              └── Can be cached by proxies/CDNs<br/>│              └── Valid for 3600 seconds (1 hour)<br/>└── Main caching directive"]
+        
+        ETag["ETag: abc123<br/>│      │<br/>│      └── Unique identifier for this version of the resource<br/>└── Entity Tag"]
+        
+        LM["Last-Modified: Wed, 15 Jan 2024 10:00:00 GMT<br/>│              │<br/>│              └── When the resource was last changed<br/>└── Timestamp header"]
+        
+        Vary["Vary: Accept-Encoding, Accept-Language<br/>│     │<br/>│     └── Cache varies by these request headers<br/>└── Tells caches to store different versions"]
+    end
+    
+    Divider["─────────────────────────────────"]
+    
+    subgraph Request["REQUEST HEADERS (Browser → Server)"]
+        INM["If-None-Match: abc123<br/>│              │<br/>│              └── ETag from cached version<br/>└── Give me new version only if ETag changed"]
+        
+        IMS["If-Modified-Since: Wed, 15 Jan 2024 10:00:00 GMT<br/>│                  │<br/>│                  └── Last-Modified from cached version<br/>└── Give me new version only if modified since this time"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    KEY HTTP CACHING HEADERS                              │
 │                                                                          │
@@ -185,13 +293,50 @@ Every time a user visits your website:
 │   If-Modified-Since: Wed, 15 Jan 2024 10:00:00 GMT                     │
 │   │                  │                                                   │
 │   │                  └── Last-Modified from cached version              │
-│   └── "Give me new version only if modified since this time"           │
+│   └── "Give me new version only if modified since this time"            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Cache-Control Directives
 
+```mermaid
+flowchart TD
+    Title["CACHE-CONTROL DIRECTIVES"]
+    
+    subgraph Freshness["FRESHNESS DIRECTIVES"]
+        F1["max-age=N → Cache for N seconds"]
+        F2["s-maxage=N → Cache for N seconds (shared caches only)"]
+        F3["no-cache → Must revalidate before using cached version"]
+        F4["no-store → Don't cache at all"]
+    end
+    
+    subgraph Revalidation["REVALIDATION DIRECTIVES"]
+        R1["must-revalidate → Must check with server when stale"]
+        R2["proxy-revalidate → Must check with server (proxies only)"]
+        R3["stale-while-revalidate=N → Serve stale while fetching fresh"]
+        R4["stale-if-error=N → Serve stale if server error"]
+    end
+    
+    subgraph Visibility["VISIBILITY DIRECTIVES"]
+        V1["public → Can be cached by any cache (CDN, proxy, browser)"]
+        V2["private → Only browser can cache (not CDN/proxy)"]
+        V3["no-transform → Don't modify content (no compression changes)"]
+    end
+    
+    subgraph Examples["EXAMPLES"]
+        E1["Static assets: Cache-Control: public, max-age=31536000"]
+        E2["API responses: Cache-Control: private, max-age=0, must-revalidate"]
+        E3["User-specific: Cache-Control: private, max-age=300"]
+        E4["Never cache: Cache-Control: no-store"]
+        E5["Always validate: Cache-Control: no-cache"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE-CONTROL DIRECTIVES                              │
 │                                                                          │
@@ -224,10 +369,47 @@ Every time a user visits your website:
 │   Always validate:   Cache-Control: no-cache                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Caching Flow
 
+```mermaid
+flowchart TD
+    Start["Request for /styles.css"]
+    
+    Check["Is /styles.css in cache?"]
+    
+    No["NO → Fetch from server"]
+    
+    Yes["YES → Is it fresh (within max-age)?"]
+    
+    Fresh["YES → Use cached version (no network!)"]
+    
+    Stale["NO → Revalidate with server"]
+    
+    Send["Send: If-None-Match: etag123<br/>If-Modified-Since: ..."]
+    
+    Response["Server response:"]
+    
+    NotModified["304 Not Modified<br/>(Use cached, 0 bytes)"]
+    
+    OK["200 OK + new content<br/>(Update cache)"]
+    
+    Start --> Check
+    Check -->|NO| No
+    Check -->|YES| Yes
+    Yes -->|YES| Fresh
+    Yes -->|NO| Stale
+    Stale --> Send
+    Send --> Response
+    Response --> NotModified
+    Response --> OK
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HTTP CACHING FLOW                                     │
 │                                                                          │
@@ -259,6 +441,7 @@ Every time a user visits your website:
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -351,7 +534,27 @@ Content-Type: application/json
 
 ### Static Assets Strategy
 
+```mermaid
+flowchart TD
+    Title["STATIC ASSETS CACHING<br/>Strategy: Long cache + cache busting"]
+    
+    Steps["1. Set very long max-age (1 year)<br/>2. Include version/hash in filename<br/>3. When content changes, filename changes"]
+    
+    Example["Example:<br/>/static/app.abc123.js → Cache-Control: max-age=31536000<br/>/static/styles.def456.css → Cache-Control: max-age=31536000"]
+    
+    Build["Build process generates hashed filenames:<br/>app.js → app.abc123.js (hash of content)"]
+    
+    Update["When you update app.js:<br/>app.js → app.xyz789.js (new hash)<br/>Browser fetches new file (different URL)<br/>Old file naturally expires from cache"]
+    
+    Tools["Tools: Webpack, Vite, esbuild all support this"]
+    
+    Title --> Steps --> Example --> Build --> Update --> Tools
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STATIC ASSETS CACHING                                 │
 │                                                                          │
@@ -376,10 +579,40 @@ Content-Type: application/json
 │   Tools: Webpack, Vite, esbuild all support this                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### API Response Caching
 
+```mermaid
+flowchart TD
+    Title["API CACHING STRATEGIES"]
+    
+    subgraph Public["PUBLIC DATA (e.g., product catalog)"]
+        P1["Cache-Control: public, max-age=300, stale-while-revalidate=60"]
+        P2["ETag: catalog-v123"]
+        P3["- CDN can cache<br/>- 5 minute freshness<br/>- Serve stale for 60s while fetching fresh"]
+    end
+    
+    Divider1["─────────────────────────────────"]
+    
+    subgraph Private["PRIVATE DATA (e.g., user profile)"]
+        PR1["Cache-Control: private, max-age=0, must-revalidate"]
+        PR2["ETag: user123-v5"]
+        PR3["- Only browser caches (not CDN)<br/>- Always revalidate with server<br/>- But can use 304 to save bandwidth"]
+    end
+    
+    Divider2["─────────────────────────────────"]
+    
+    subgraph Sensitive["SENSITIVE DATA (e.g., banking)"]
+        S1["Cache-Control: no-store"]
+        S2["- Never cache anywhere<br/>- Always fetch fresh"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    API CACHING STRATEGIES                                │
 │                                                                          │
@@ -413,6 +646,7 @@ Content-Type: application/json
 │   - Always fetch fresh                                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

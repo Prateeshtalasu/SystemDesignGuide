@@ -29,14 +29,37 @@ Initial State:
 - Waitlist for Saturday 8 PM: [Customer-A (party 2), Customer-B (party 4)]
 
 Step 1: Customer cancels reservation at Table T2 (capacity 4)
+
+```mermaid
+flowchart TD
+    A["Cancellation received for RES-045 (Table T2, Saturday 8 PM)<br/>Table T2 capacity: 4<br/>Table T2 status: RESERVED → AVAILABLE<br/>Trigger: processWaitlist(Saturday 8 PM)"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Cancellation received for RES-045 (Table T2, Saturday 8 PM)  │
 │ Table T2 capacity: 4                                          │
 │ Table T2 status: RESERVED → AVAILABLE                        │
 │ Trigger: processWaitlist(Saturday 8 PM)                      │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 2: Process waitlist (FIFO order)
+
+```mermaid
+flowchart TD
+    A["Check Customer-A (party 2):<br/>  - Party size (2) ≤ Table capacity (4) ✓<br/>  - Create reservation for Customer-A at T2<br/>  - Remove Customer-A from waitlist<br/>  - Send confirmation notification<br/><br/>Result: Customer-A gets the table<br/>Remaining waitlist: [Customer-B (party 4)]"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Check Customer-A (party 2):                                   │
 │   - Party size (2) ≤ Table capacity (4) ✓                   │
@@ -47,8 +70,21 @@ Step 2: Process waitlist (FIFO order)
 │ Result: Customer-A gets the table                            │
 │ Remaining waitlist: [Customer-B (party 4)]                   │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Step 3: Later - Customer at Table T3 (capacity 2) cancels
+
+```mermaid
+flowchart TD
+    A["Table T3 capacity: 2, now available<br/>Check Customer-B (party 4):<br/>  - Party size (4) > Table capacity (2) ✗<br/>  - Skip Customer-B, stays on waitlist<br/><br/>Result: No assignment made<br/>Customer-B waits for suitable table"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Table T3 capacity: 2, now available                          │
 │ Check Customer-B (party 4):                                   │
@@ -58,6 +94,9 @@ Step 3: Later - Customer at Table T3 (capacity 2) cancels
 │ Result: No assignment made                                    │
 │ Customer-B waits for suitable table                          │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---
@@ -70,12 +109,35 @@ Initial State:
 - Two customers simultaneously try to book
 
 Concurrent Requests:
+
+```mermaid
+flowchart TD
+    A["T0: Customer-X: makeReservation(T10, Friday 7 PM, party 4)<br/>T0: Customer-Y: makeReservation(T10, Friday 7 PM, party 5)"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ T0: Customer-X: makeReservation(T10, Friday 7 PM, party 4)   │
 │ T0: Customer-Y: makeReservation(T10, Friday 7 PM, party 5)   │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 With Synchronized Table Assignment:
+
+```mermaid
+flowchart TD
+    A["Thread-1 (Customer-X):<br/>  - synchronized(table T10) { acquire lock }<br/>  - Check: T10 available? YES<br/>  - Mark T10 as RESERVED<br/>  - Create reservation RES-100<br/>  - Release lock<br/>  - Result: SUCCESS<br/><br/>Thread-2 (Customer-Y):<br/>  - synchronized(table T10) { waiting for lock... }<br/>  - Lock acquired<br/>  - Check: T10 available? NO (reserved by Customer-X)<br/>  - Release lock<br/>  - Result: TABLE_NOT_AVAILABLE<br/>  - Offer: Add to waitlist or suggest alternative tables"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Thread-1 (Customer-X):                                        │
 │   - synchronized(table T10) { acquire lock }                 │
@@ -93,6 +155,9 @@ With Synchronized Table Assignment:
 │   - Result: TABLE_NOT_AVAILABLE                              │
 │   - Offer: Add to waitlist or suggest alternative tables     │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Final State:
 - Table T10: Reserved by Customer-X
@@ -111,6 +176,16 @@ Initial State:
 - Customer-A wants to modify to Friday 9 PM
 
 Step 1: modifyReservation(RES-050, Friday 9 PM)
+
+```mermaid
+flowchart TD
+    A["Current booking: T5, Friday 7-9 PM<br/>Requested change: T5, Friday 9-11 PM<br/><br/>Availability Check:<br/>  - Table T5 at Friday 9 PM: RESERVED (by Customer-B)<br/>  - Cannot modify to same table<br/><br/>Alternative Search:<br/>  - Find other tables for Friday 9 PM, party same size<br/>  - Table T6 (capacity 6): AVAILABLE<br/><br/>Offer alternatives:<br/>  Option 1: Keep original (Friday 7 PM)<br/>  Option 2: Move to Table T6, Friday 9 PM<br/>  Option 3: Cancel and join waitlist for T5"]
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ Current booking: T5, Friday 7-9 PM                           │
 │ Requested change: T5, Friday 9-11 PM                         │
@@ -128,6 +203,9 @@ Step 1: modifyReservation(RES-050, Friday 9 PM)
 │   Option 2: Move to Table T6, Friday 9 PM                   │
 │   Option 3: Cancel and join waitlist for T5                  │
 └───────────────────────────────────────────────────────────────┘
+```
+
+</details>
 
 Result: ModificationResult.CONFLICT_ALTERNATIVES_OFFERED
 ```
@@ -257,7 +335,23 @@ public class Reservation {
 
 **Status state machine:**
 
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> CONFIRMED: confirm
+    CONFIRMED --> SEATED: seat
+    CONFIRMED --> CANCELLED: cancel
+    CONFIRMED --> NO_SHOW: time passes
+    SEATED --> COMPLETED: complete
+    CANCELLED --> [*]
+    COMPLETED --> [*]
+    NO_SHOW --> [*]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
     ┌──────────┐
     │ PENDING  │
     └────┬─────┘
@@ -281,6 +375,8 @@ public class Reservation {
     │ NO_SHOW  │ (from CONFIRMED after time passes)
     └──────────┘
 ```
+
+</details>
 
 ---
 

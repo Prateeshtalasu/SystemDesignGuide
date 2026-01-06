@@ -124,7 +124,15 @@ Imagine you're counting visitors at a festival with multiple entrances. You can'
 
 ### The Key Insight
 
-```
+**Count-Min Sketch Guarantee**
+
+- True count ≤ Estimated count
+- The sketch NEVER underestimates. It may overestimate due to hash collisions, but taking the minimum across all hash functions minimizes this overestimation.
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                  COUNT-MIN SKETCH GUARANTEE                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -137,6 +145,7 @@ Imagine you're counting visitors at a festival with multiple entrances. You can'
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -148,7 +157,16 @@ Imagine you're counting visitors at a festival with multiple entrances. You can'
 2. **Hash Functions**: d independent hash functions, each mapping to [0, w-1]
 3. **Counters**: Each cell contains a count
 
-```
+| Columns (w buckets) | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---------------------|---|---|---|---|---|---|---|---|
+| **Row 0 (h1)** | 0 | 3 | 0 | 5 | 0 | 2 | 0 | 1 |
+| **Row 1 (h2)** | 2 | 0 | 4 | 0 | 3 | 0 | 1 | 0 |
+| **Row 2 (h3)** | 0 | 1 | 0 | 2 | 0 | 5 | 0 | 3 |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           Columns (w buckets)
           0    1    2    3    4    5    6    7
        ┌────┬────┬────┬────┬────┬────┬────┬────┐
@@ -158,6 +176,8 @@ Row 1  │  2 │  0 │  4 │  0 │  3 │  0 │  1 │  0 │  ← h2
        ├────┼────┼────┼────┼────┼────┼────┼────┤
 Row 2  │  0 │  1 │  0 │  2 │  0 │  5 │  0 │  3 │  ← h3
        └────┴────┴────┴────┴────┴────┴────┴────┘
+```
+</details>
 ```
 
 ### The Add Operation
@@ -423,7 +443,19 @@ public class TrendingService {
 
 Cloudflare uses Count-Min Sketch to detect IP addresses sending abnormally high traffic.
 
+```mermaid
+flowchart TD
+    A["Incoming Traffic"] --> B["Edge Server<br/><br/>Count-Min Sketch (per IP)"]
+    B --> C{"estimate(IP) > threshold?"}
+    C -->|Yes| D["Flag as potential DDoS"]
+    D --> E["Rate Limiter<br/><br/>Block or throttle<br/>flagged IPs"]
+    C -->|No| F["Allow traffic"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DDOS DETECTION ARCHITECTURE                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -450,6 +482,7 @@ Cloudflare uses Count-Min Sketch to detect IP addresses sending abnormally high 
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Apache Spark: Approximate Aggregations
 
@@ -1068,7 +1101,28 @@ SimpleCountMinSketch sketch = new SimpleCountMinSketch(0.001, 0.01);  // ~100 KB
 
 ### When to Use Which
 
+```mermaid
+flowchart TD
+    Start["What do you need?"] --> Q1["How many unique items?"]
+    Q1 -->|Yes| HLL["HyperLogLog"]
+    
+    Start --> Q2["Is item X in the set?"]
+    Q2 -->|Yes| BF["Bloom Filter"]
+    
+    Start --> Q3["How often does item X appear?"]
+    Q3 -->|Yes| CMS["Count-Min Sketch"]
+    
+    Start --> Q4["What are the top K most frequent items?"]
+    Q4 -->|Yes| CMSHeap["Count-Min Sketch + Min-Heap<br/>OR Space-Saving algorithm"]
+    
+    Start --> Q5["I need exact counts"]
+    Q5 -->|Yes| Exact["HashMap / Database"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CHOOSING THE RIGHT TOOL                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -1091,6 +1145,7 @@ SimpleCountMinSketch sketch = new SimpleCountMinSketch(0.001, 0.01);  // ~100 KB
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

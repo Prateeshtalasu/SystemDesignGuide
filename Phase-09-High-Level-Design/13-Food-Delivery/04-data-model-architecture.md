@@ -132,7 +132,53 @@ flowchart TB
 
 ## Detailed Service Architecture
 
+```mermaid
+flowchart TB
+    subgraph Gateway["GATEWAY LAYER"]
+        CustomerGW["Customer Gateway<br/>/v1/restaurants<br/>/v1/orders<br/>/v1/user"]
+        RestaurantGW["Restaurant Gateway<br/>/v1/restaurant/*<br/>/v1/menu/*<br/>/v1/orders"]
+        PartnerGW["Partner Gateway<br/>/v1/partner/*<br/>/v1/deliveries<br/>/v1/earnings"]
+    end
+    
+    subgraph AppLayer["APPLICATION LAYER"]
+        RestaurantSvc["Restaurant Svc<br/>getRestaurant<br/>getMenu<br/>updateItem"]
+        OrderSvc["Order Svc<br/>createOrder<br/>updateStatus<br/>cancelOrder"]
+        DeliverySvc["Delivery Svc<br/>assignPartner<br/>trackDelivery<br/>updateLocation"]
+        SearchSvc["Search Svc<br/>search<br/>recommend<br/>filter"]
+        PaymentSvc["Payment Svc<br/>authorize<br/>capture<br/>refund"]
+        NotificationSvc["Notification Svc<br/>sendPush<br/>sendSMS<br/>sendEmail"]
+        PricingSvc["Pricing Svc<br/>calculateFare<br/>applyPromo<br/>calculateFees"]
+    end
+    
+    subgraph DataLayer["DATA LAYER"]
+        Redis["Redis Cluster<br/>menu:{rest_id}<br/>order:{id}<br/>partner:{id}<br/>session:{id}<br/>TTL: varies"]
+        PostgreSQL["PostgreSQL<br/>restaurants<br/>menu_items<br/>orders<br/>payments<br/>users"]
+        Elasticsearch["Elasticsearch<br/>restaurants index<br/>- name, cuisine<br/>- location (geo)<br/>- rating, price_level<br/>menu_items index"]
+    end
+    
+    CustomerGW --> RestaurantSvc
+    CustomerGW --> OrderSvc
+    RestaurantGW --> RestaurantSvc
+    PartnerGW --> DeliverySvc
+    
+    RestaurantSvc --> SearchSvc
+    OrderSvc --> PaymentSvc
+    DeliverySvc --> NotificationSvc
+    OrderSvc --> PricingSvc
+    
+    RestaurantSvc --> Redis
+    RestaurantSvc --> PostgreSQL
+    RestaurantSvc --> Elasticsearch
+    OrderSvc --> Redis
+    OrderSvc --> PostgreSQL
+    PaymentSvc --> PostgreSQL
+    SearchSvc --> Elasticsearch
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐    │
@@ -191,13 +237,44 @@ flowchart TB
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Request Flow: Customer Places Order
 
 ### Sequence Diagram
 
+```mermaid
+sequenceDiagram
+    participant Customer
+    participant APIGateway as API Gateway
+    participant OrderSvc as Order Service
+    participant RestSvc as Restaurant Service
+    participant PriceSvc as Pricing Service
+    participant PaymentSvc as Payment Service
+    participant Kafka
+    participant PostgreSQL
+    
+    Customer->>APIGateway: POST /orders
+    APIGateway->>OrderSvc: createOrder
+    OrderSvc->>RestSvc: validateItems
+    RestSvc->>OrderSvc: items valid
+    OrderSvc->>PriceSvc: calculateTotal
+    PriceSvc->>OrderSvc: pricing
+    OrderSvc->>PaymentSvc: authorizePayment
+    PaymentSvc->>OrderSvc: authorized
+    OrderSvc->>PostgreSQL: INSERT order
+    OrderSvc->>Kafka: Publish OrderPlaced
+    OrderSvc->>APIGateway: 201 Created
+    APIGateway->>Customer: 201 Created
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌───────┐ ┌─────────┐
 │Customer│ │API Gway │ │Order Svc│ │Rest Svc │ │Price Svc│ │Payment│ │  Kafka  │
 └───┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └───┬───┘ └────┬────┘
@@ -235,6 +312,9 @@ flowchart TB
     │          │ 201 Created           │           │          │          │
     │<─────────│           │           │           │          │          │
     │          │           │           │           │          │          │
+```
+
+</details>
 ```
 
 ### Step-by-Step Explanation

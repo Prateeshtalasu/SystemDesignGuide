@@ -21,7 +21,39 @@ Before diving into input validation, you should understand:
 
 Every piece of data entering your system from outside is potentially malicious:
 
+```mermaid
+flowchart TD
+    APP["YOUR APPLICATION"]
+    
+    FORM["Form Data"]
+    URL["URL Params"]
+    HEADERS["Headers Cookies"]
+    FILES["Files Uploads"]
+    EXTERNAL["External APIs"]
+    
+    WARNING["ALL UNTRUSTED!<br/><br/>Even hidden form fields can be modified<br/>Even headers can be forged<br/>Even file names can be malicious"]
+    
+    FORM --> APP
+    URL --> APP
+    HEADERS --> APP
+    FILES --> APP
+    EXTERNAL --> APP
+    
+    APP --> WARNING
+    
+    style APP fill:#e3f2fd
+    style FORM fill:#ffcdd2
+    style URL fill:#ffcdd2
+    style HEADERS fill:#ffcdd2
+    style FILES fill:#ffcdd2
+    style EXTERNAL fill:#ffcdd2
+    style WARNING fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    UNTRUSTED INPUT SOURCES                               │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -48,6 +80,8 @@ Every piece of data entering your system from outside is potentially malicious:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What Breaks Without Input Validation
 
 | Attack | Malicious Input | Impact |
@@ -62,7 +96,39 @@ Every piece of data entering your system from outside is potentially malicious:
 
 ### The Trust Boundary Concept
 
+```mermaid
+flowchart LR
+    subgraph UNTRUSTED["UNTRUSTED<br/>(External World)"]
+        BROWSER["Browser"]
+        MOBILE["Mobile App"]
+        EXT_API["External API"]
+    end
+    
+    VALIDATION["VALIDATION<br/>LAYER"]
+    PROCESSING["Processing<br/>(Your System)"]
+    
+    NOTE1["Everything crossing this<br/>boundary must be validated"]
+    NOTE2["After validation, data is trusted<br/>(but still use defense in depth)"]
+    
+    BROWSER --> VALIDATION
+    MOBILE --> VALIDATION
+    EXT_API --> VALIDATION
+    VALIDATION --> PROCESSING
+    
+    UNTRUSTED --> NOTE1
+    VALIDATION --> NOTE2
+    
+    style UNTRUSTED fill:#ffcdd2
+    style VALIDATION fill:#fff9c4
+    style PROCESSING fill:#c8e6c9
+    style NOTE1 fill:#fff9c4
+    style NOTE2 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TRUST BOUNDARIES                                      │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -82,6 +148,8 @@ Every piece of data entering your system from outside is potentially malicious:
 │                               │                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -103,7 +171,36 @@ Think of input validation like a bouncer at a club:
 - Searches for weapons (sanitization)
 - Refuses entry to known troublemakers (blocklist)
 
+```mermaid
+flowchart TD
+    INPUT["Input: admin' OR '1'='1"]
+    
+    CHECK1["1. Type Check: Is it a string? ✓"]
+    CHECK2["2. Length Check: Is it < 50 chars? ✓"]
+    CHECK3["3. Format Check: Alphanumeric only?<br/>✗ REJECTED!<br/>(Contains quotes and special characters)"]
+    
+    RESULT["Result: DENIED ENTRY"]
+    
+    SUCCESS["The malicious input never reaches<br/>your database!"]
+    
+    INPUT --> CHECK1
+    CHECK1 --> CHECK2
+    CHECK2 --> CHECK3
+    CHECK3 --> RESULT
+    RESULT --> SUCCESS
+    
+    style INPUT fill:#e3f2fd
+    style CHECK1 fill:#c8e6c9
+    style CHECK2 fill:#c8e6c9
+    style CHECK3 fill:#ffcdd2
+    style RESULT fill:#ffcdd2
+    style SUCCESS fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VALIDATION AS BOUNCER                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -126,13 +223,40 @@ Think of input validation like a bouncer at a club:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ Validation Strategies
 
 ### Allowlist vs Blocklist
 
+```mermaid
+flowchart TD
+    subgraph BLOCKLIST["BLOCKLIST (Dangerous - Avoid)"]
+        BLOCK_DESC["Block these bad things<br/>• Block: <script>, javascript:, onclick<br/>• Problem: Attackers find bypasses<br/>• <SCRIPT>, <img onerror=...>, <svg onload=...><br/>• Always playing catch-up"]
+    end
+    
+    subgraph ALLOWLIST["ALLOWLIST (Preferred)"]
+        ALLOW_DESC["Only allow these good things<br/>• Allow: [a-zA-Z0-9_-]<br/>• Everything else rejected<br/>• Attacker can't bypass what's not allowed<br/>• Secure by default"]
+    end
+    
+    EXAMPLE["Example: Username validation<br/>✗ Blocklist: Block ', \", <, >, ;, etc.<br/>✓ Allowlist: Only allow [a-zA-Z0-9_] with length 3-20"]
+    
+    BLOCKLIST --> EXAMPLE
+    ALLOWLIST --> EXAMPLE
+    
+    style BLOCKLIST fill:#ffcdd2
+    style BLOCK_DESC fill:#ffcdd2
+    style ALLOWLIST fill:#c8e6c9
+    style ALLOW_DESC fill:#c8e6c9
+    style EXAMPLE fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ALLOWLIST vs BLOCKLIST                                │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -160,9 +284,36 @@ Think of input validation like a bouncer at a club:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Validation Types
 
+```mermaid
+flowchart TD
+    TYPE["1. TYPE VALIDATION<br/>• Is it the expected data type?<br/>• String, Integer, Boolean, Date, etc.<br/>• abc is not a valid integer"]
+    
+    LENGTH["2. LENGTH/SIZE VALIDATION<br/>• Is it within acceptable bounds?<br/>• Username: 3-20 characters<br/>• File upload: Max 10MB"]
+    
+    RANGE["3. RANGE VALIDATION<br/>• Is the value within acceptable range?<br/>• Age: 0-150<br/>• Quantity: 1-100"]
+    
+    FORMAT["4. FORMAT VALIDATION<br/>• Does it match expected pattern?<br/>• Email: user@domain.com<br/>• Phone: +1-555-555-5555"]
+    
+    BUSINESS["5. BUSINESS RULE VALIDATION<br/>• Does it make sense in context?<br/>• End date after start date<br/>• Discount <= original price"]
+    
+    SEMANTIC["6. SEMANTIC VALIDATION<br/>• Is the value meaningful?<br/>• Does user ID exist?<br/>• Is product in stock?"]
+    
+    style TYPE fill:#e3f2fd
+    style LENGTH fill:#fff9c4
+    style RANGE fill:#c8e6c9
+    style FORMAT fill:#fce4ec
+    style BUSINESS fill:#fff9c4
+    style SEMANTIC fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VALIDATION TYPES                                      │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -199,6 +350,8 @@ Think of input validation like a bouncer at a club:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

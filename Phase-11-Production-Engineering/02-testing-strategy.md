@@ -107,7 +107,24 @@ Tests are your safety net. They catch you when you fall (introduce bugs), lettin
 
 ### The Test Pyramid
 
+```mermaid
+flowchart TD
+    E2E["E2E<br/>Few, slow, expensive"]
+    INT["Integration<br/>Some, medium speed"]
+    UNIT["Unit<br/>Many, fast, cheap"]
+    
+    UNIT --> INT
+    INT --> E2E
+    
+    style E2E fill:#ffcdd2
+    style INT fill:#fff9c4
+    style UNIT fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     /\
                    /  \
                   / E2E\        ← Few, slow, expensive
@@ -119,6 +136,8 @@ Tests are your safety net. They catch you when you fall (introduce bugs), lettin
             /     Unit       \  ← Many, fast, cheap
            /__________________\
 ```
+
+</details>
 
 **Unit Tests** (Base): Test individual functions/methods in isolation
 - Fast (milliseconds)
@@ -1073,7 +1092,25 @@ mvn org.pitest:pitest-maven:mutationCoverage
 
 ### The TDD Cycle
 
+```mermaid
+flowchart TD
+    RED["1. RED<br/>Write a<br/>failing test"]
+    GREEN["2. GREEN<br/>Write minimal<br/>code to pass"]
+    REFACTOR["3. REFACTOR<br/>Clean up<br/>the code"]
+    
+    RED --> GREEN
+    GREEN --> REFACTOR
+    REFACTOR -->|Repeat| RED
+    
+    style RED fill:#ffcdd2
+    style GREEN fill:#c8e6c9
+    style REFACTOR fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
         ┌─────────────────┐
         │   1. RED        │
         │   Write a       │
@@ -1096,6 +1133,8 @@ mvn org.pitest:pitest-maven:mutationCoverage
                  │
                  └──────────────▶ Repeat
 ```
+
+</details>
 
 ### TDD Example: Building a Stack
 
@@ -1263,7 +1302,25 @@ void overMockedTest() {
 ### The Test Pyramid Violations
 
 **Ice Cream Cone Anti-Pattern**:
+
+```mermaid
+flowchart TD
+    UI["UI<br/>Many slow E2E tests"]
+    INT2["Integration<br/>Some integration tests"]
+    UNIT2["Unit<br/>Few unit tests"]
+    
+    UI --> INT2
+    INT2 --> UNIT2
+    
+    style UI fill:#ffcdd2
+    style INT2 fill:#fff9c4
+    style UNIT2 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
         /\
        /  \
       / UI \        ← Many slow E2E tests
@@ -1275,6 +1332,8 @@ void overMockedTest() {
 /     Unit       \  ← Few unit tests
 \________________/
 ```
+
+</details>
 
 This is slow, flaky, and expensive. Flip it back to a pyramid.
 

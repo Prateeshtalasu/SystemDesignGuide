@@ -119,7 +119,31 @@ Think of capacity planning like **running a restaurant**.
 
 ### Capacity Planning Mental Model
 
+```mermaid
+flowchart TD
+    MEASURE["1. MEASURE<br/>- Current utilization<br/>- Traffic patterns<br/>- Resource consumption"]
+    FORECAST["2. FORECAST<br/>- Growth rate<br/>- Seasonal patterns<br/>- Business events (launches, sales)"]
+    PLAN["3. PLAN<br/>- When will we hit limits?<br/>- What resources are needed?<br/>- What's the cost?"]
+    PROVISION["4. PROVISION<br/>- Add capacity before needed<br/>- Auto-scaling policies<br/>- Reserved instances"]
+    REVIEW["5. REVIEW<br/>- Compare forecast vs actual<br/>- Adjust models<br/>- Repeat cycle"]
+    
+    MEASURE --> FORECAST
+    FORECAST --> PLAN
+    PLAN --> PROVISION
+    PROVISION --> REVIEW
+    REVIEW --> MEASURE
+    
+    style MEASURE fill:#e3f2fd
+    style FORECAST fill:#fff9c4
+    style PLAN fill:#c8e6c9
+    style PROVISION fill:#fce4ec
+    style REVIEW fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CAPACITY PLANNING CYCLE                       │
 │                                                                  │
@@ -150,9 +174,30 @@ Think of capacity planning like **running a restaurant**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Key Metrics for Capacity Planning
 
+```mermaid
+flowchart TD
+    subgraph METRICS["CAPACITY METRICS"]
+        UTIL["UTILIZATION<br/>- CPU usage (%)<br/>- Memory usage (%)<br/>- Disk usage (%)<br/>- Network bandwidth (%)"]
+        SAT["SATURATION<br/>- Request queue length<br/>- Connection pool usage<br/>- Thread pool usage"]
+        THR["THROUGHPUT<br/>- Requests per second<br/>- Transactions per second<br/>- Data processed per second"]
+        HEAD["HEADROOM<br/>- Available capacity =<br/>  Max capacity - Current usage<br/>- Buffer for spikes"]
+    end
+    
+    style METRICS fill:#e3f2fd
+    style UTIL fill:#fff9c4
+    style SAT fill:#c8e6c9
+    style THR fill:#fce4ec
+    style HEAD fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CAPACITY METRICS                              │
 │                                                                  │
@@ -178,13 +223,38 @@ Think of capacity planning like **running a restaurant**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
 
 ### Capacity Planning Process
 
+```mermaid
+flowchart TD
+    STEP1["Step 1: Establish Baseline<br/>────────────────────<br/>- Measure current capacity<br/>- Identify resource limits<br/>- Document current utilization"]
+    STEP2["Step 2: Understand Demand<br/>────────────────────<br/>- Analyze traffic patterns<br/>- Identify peak times<br/>- Understand seasonal variations"]
+    STEP3["Step 3: Forecast Growth<br/>────────────────────<br/>- Historical growth rate<br/>- Business projections<br/>- Planned events (launches, marketing)"]
+    STEP4["Step 4: Calculate Requirements<br/>────────────────────<br/>- When will we hit 70% utilization?<br/>- What resources needed for 2x growth?<br/>- What's the cost?"]
+    STEP5["Step 5: Plan Scaling<br/>────────────────────<br/>- Auto-scaling policies<br/>- Reserved capacity<br/>- Timeline for scaling"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CAPACITY PLANNING PROCESS                     │
 │                                                                  │
@@ -220,9 +290,31 @@ Think of capacity planning like **running a restaurant**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Utilization Thresholds
 
+```mermaid
+flowchart TD
+    GREEN["0-50%: GREEN (Healthy)<br/>- Plenty of headroom<br/>- Can handle spikes<br/>- Possibly over-provisioned"]
+    YELLOW["50-70%: YELLOW (Watch)<br/>- Normal operating range<br/>- Plan for growth<br/>- Monitor trends"]
+    ORANGE["70-85%: ORANGE (Plan)<br/>- Start scaling planning<br/>- Limited spike capacity<br/>- Provision more resources"]
+    RED["85-100%: RED (Critical)<br/>- Scale immediately<br/>- At risk of overload<br/>- Performance degradation likely"]
+    
+    GREEN --> YELLOW
+    YELLOW --> ORANGE
+    ORANGE --> RED
+    
+    style GREEN fill:#c8e6c9
+    style YELLOW fill:#fff9c4
+    style ORANGE fill:#ffcc80
+    style RED fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    UTILIZATION ZONES                             │
 │                                                                  │
@@ -248,13 +340,41 @@ Think of capacity planning like **running a restaurant**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 4️⃣ Simulation: Capacity Planning in Practice
 
 ### Step 1: Back-of-Envelope Calculation
 
+```mermaid
+flowchart TD
+    SCENARIO["Scenario: E-commerce platform"]
+    GIVEN["Given:<br/>- 10 million daily active users<br/>- Average 20 page views per user<br/>- Peak traffic: 3x average<br/>- Each page view = 5 API calls"]
+    CALC1["Daily page views:<br/>10M users × 20 pages =<br/>200M page views/day"]
+    CALC2["Daily API calls:<br/>200M × 5 = 1B API calls/day"]
+    CALC3["Average RPS:<br/>1B / 86,400 seconds<br/>≈ 11,574 RPS"]
+    CALC4["Peak RPS:<br/>11,574 × 3 = 34,722 RPS"]
+    
+    SCENARIO --> GIVEN
+    GIVEN --> CALC1
+    CALC1 --> CALC2
+    CALC2 --> CALC3
+    CALC3 --> CALC4
+    
+    style SCENARIO fill:#e3f2fd
+    style GIVEN fill:#fff9c4
+    style CALC1 fill:#c8e6c9
+    style CALC2 fill:#c8e6c9
+    style CALC3 fill:#fce4ec
+    style CALC4 fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CAPACITY ESTIMATION                           │
 │                                                                  │

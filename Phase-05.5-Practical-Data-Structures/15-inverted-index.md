@@ -132,7 +132,28 @@ You don't scan the entire book!
 
 ### The Key Insight
 
-```
+**Key Insight**: "Invert the relationship: term → documents"
+
+**Components:**
+1. Dictionary: All unique terms (vocabulary)
+2. Posting List: For each term, list of documents containing it, often with positions and frequencies
+
+**Query Processing:**
+- Single term: Return posting list
+- AND: Intersect posting lists
+- OR: Union posting lists
+- Phrase: Check positions in posting lists
+
+**Preprocessing:**
+- Tokenization: Split text into terms
+- Normalization: Lowercase, remove punctuation
+- Stemming: "running" → "run"
+- Stop words: Remove "the", "a", "is"
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                 INVERTED INDEX KEY INSIGHT                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -158,6 +179,7 @@ You don't scan the entire book!
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -165,7 +187,24 @@ You don't scan the entire book!
 
 ### Structure
 
+```mermaid
+flowchart LR
+    Dictionary["Dictionary<br/>Term → Posting List Pointer"] --> Apple["apple<br/>→ 1, 5, 23, 45, 67"]
+    Dictionary --> Banana["banana<br/>→ 2, 5, 12"]
+    Dictionary --> Cherry["cherry<br/>→ 1, 2, 3, 4, 5, 6, 7, 8, ..."]
+    Dictionary --> More[...]
 ```
+
+**Posting List Entry (can include):**
+- Document ID
+- Term Frequency (TF): How many times term appears in doc
+- Positions: Where in document term appears
+- Payloads: Custom data (e.g., field boost)
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    INVERTED INDEX STRUCTURE                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -188,6 +227,7 @@ You don't scan the entire book!
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Posting List Formats
 
@@ -398,7 +438,22 @@ GET /products/_search
 ```
 
 **Elasticsearch Index Structure:**
+```mermaid
+flowchart TD
+    Index["Index: products"] --> Shard0[Shard 0]
+    Index --> Shard1[Shard 1]
+    Index --> Shard2[Shard 2]
+    Shard0 --> Seg0[Segment 0<br/>immutable]
+    Shard0 --> Seg1[Segment 1]
+    Seg0 --> II["Inverted Index<br/>terms → docs"]
+    Seg0 --> DV["Doc Values<br/>docs → field values, for sorting"]
+    Seg0 --> SF[Stored Fields<br/>original JSON]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ELASTICSEARCH INDEX                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -415,6 +470,7 @@ GET /products/_search
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Apache Lucene
 

@@ -174,7 +174,35 @@ API Versioning follows these strategies:
 
 ### Strategy 1: URL Versioning
 
+```mermaid
+flowchart TD
+    Client1["Client"]
+    V1Req["GET /v1/orders/123<br/>(v1 API)"]
+    OrderSvc1["Order Service"]
+    Route1["Routes to v1 handler"]
+    Return1["Returns v1 response format"]
+    
+    Client2["Client"]
+    V2Req["GET /v2/orders/123<br/>(v2 API)"]
+    OrderSvc2["Order Service"]
+    Route2["Routes to v2 handler"]
+    Return2["Returns v2 response format"]
+    
+    Client1 --> V1Req
+    V1Req --> OrderSvc1
+    OrderSvc1 --> Route1
+    Route1 --> Return1
+    
+    Client2 --> V2Req
+    V2Req --> OrderSvc2
+    OrderSvc2 --> Route2
+    Route2 --> Return2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              URL VERSIONING                               │
 └─────────────────────────────────────────────────────────┘
@@ -195,6 +223,7 @@ Order Service
   ├── Routes to v2 handler
   └── Returns v2 response format
 ```
+</details>
 
 **Flow:**
 1. Client includes version in URL: `/v1/orders/123`
@@ -204,7 +233,39 @@ Order Service
 
 ### Strategy 2: Header Versioning
 
+```mermaid
+flowchart TD
+    Client1["Client"]
+    V1Req["GET /api/orders/123<br/>Headers: API-Version: v1"]
+    OrderSvc1["Order Service"]
+    Read1["Reads version from header"]
+    Route1["Routes to v1 handler"]
+    Return1["Returns v1 response format"]
+    
+    Client2["Client"]
+    V2Req["GET /api/orders/123<br/>Headers: API-Version: v2"]
+    OrderSvc2["Order Service"]
+    Read2["Reads version from header"]
+    Route2["Routes to v2 handler"]
+    Return2["Returns v2 response format"]
+    
+    Client1 --> V1Req
+    V1Req --> OrderSvc1
+    OrderSvc1 --> Read1
+    Read1 --> Route1
+    Route1 --> Return1
+    
+    Client2 --> V2Req
+    V2Req --> OrderSvc2
+    OrderSvc2 --> Read2
+    Read2 --> Route2
+    Route2 --> Return2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              HEADER VERSIONING                           │
 └─────────────────────────────────────────────────────────┘
@@ -229,6 +290,7 @@ Order Service
   ├── Routes to v2 handler
   └── Returns v2 response format
 ```
+</details>
 
 **Flow:**
 1. Client includes version in header: `API-Version: v1`
@@ -238,7 +300,39 @@ Order Service
 
 ### Strategy 3: Content Negotiation
 
+```mermaid
+flowchart TD
+    Client1["Client"]
+    V1Req["GET /api/orders/123<br/>Accept: application/vnd.api.v1+json"]
+    OrderSvc1["Order Service"]
+    Read1["Reads Accept header"]
+    Route1["Routes to v1 handler"]
+    Return1["Returns v1 response format"]
+    
+    Client2["Client"]
+    V2Req["GET /api/orders/123<br/>Accept: application/vnd.api.v2+json"]
+    OrderSvc2["Order Service"]
+    Read2["Reads Accept header"]
+    Route2["Routes to v2 handler"]
+    Return2["Returns v2 response format"]
+    
+    Client1 --> V1Req
+    V1Req --> OrderSvc1
+    OrderSvc1 --> Read1
+    Read1 --> Route1
+    Route1 --> Return1
+    
+    Client2 --> V2Req
+    V2Req --> OrderSvc2
+    OrderSvc2 --> Read2
+    Read2 --> Route2
+    Route2 --> Return2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              CONTENT NEGOTIATION                         │
 └─────────────────────────────────────────────────────────┘
@@ -263,6 +357,7 @@ Order Service
   ├── Routes to v2 handler
   └── Returns v2 response format
 ```
+</details>
 
 **Flow:**
 1. Client specifies version in Accept header

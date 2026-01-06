@@ -144,7 +144,24 @@ Think of Infrastructure as Code as a **recipe for infrastructure**.
 
 ### Infrastructure as Code Mental Model
 
+```mermaid
+flowchart TD
+    CODE["Code (Terraform, CloudFormation)<br/><br/>resource aws_instance app {<br/>  ami = ami-12345<br/>  instance_type = t3.medium<br/>  ...<br/>}"]
+    STATE["State File<br/>(Tracks what exists)<br/><br/>- Instance ID: i-abc123<br/>- Current config matches code"]
+    INFRA["Cloud Infrastructure<br/><br/>EC2 Instance: i-abc123<br/>RDS Database: db-xyz789<br/>Load Balancer: lb-123"]
+    
+    CODE -->|terraform apply| STATE
+    STATE -->|Creates/updates| INFRA
+    
+    style CODE fill:#e3f2fd
+    style STATE fill:#fff9c4
+    style INFRA fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │              INFRASTRUCTURE AS CODE WORKFLOW                      │
 │                                                                  │
@@ -180,6 +197,8 @@ Think of Infrastructure as Code as a **recipe for infrastructure**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Key insight**: Code describes desired state. Tool (Terraform, etc.) makes reality match code.
 
 ---
@@ -188,7 +207,27 @@ Think of Infrastructure as Code as a **recipe for infrastructure**.
 
 ### Terraform Execution Model
 
+```mermaid
+flowchart TD
+    STEP1["1. Initialize (terraform init)<br/>- Download provider plugins<br/>- Initialize backend (state storage)"]
+    STEP2["2. Plan (terraform plan)<br/>- Read current state<br/>- Parse configuration files<br/>- Compare desired vs current<br/>- Generate execution plan<br/><br/>Plan output:<br/>+ aws_instance.app (new resource)<br/>~ aws_security_group.app (modify)<br/>- aws_instance.old (destroy)"]
+    STEP3["3. Apply (terraform apply)<br/>- Execute plan actions<br/>- Create resources<br/>- Update resources<br/>- Destroy resources<br/>- Update state file"]
+    STEP4["4. State Management<br/>- State file tracks resource IDs<br/>- Maps code to real resources<br/>- Enables updates and destroys"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TERRAFORM EXECUTION                            │
 │                                                                  │
@@ -220,6 +259,8 @@ Think of Infrastructure as Code as a **recipe for infrastructure**.
 │     - Enables updates and destroys                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### State File Structure
 
@@ -716,7 +757,39 @@ aws cloudformation delete-stack \
 
 **GitOps**: Use Git as the single source of truth for infrastructure. All infrastructure changes go through Git.
 
+```mermaid
+flowchart TD
+    STEP1["1. Developer modifies Terraform code<br/>git commit -m Add new EC2 instance"]
+    STEP2["2. Push to Git repository<br/>git push origin main"]
+    STEP3["3. CI/CD pipeline triggered<br/>- Run terraform plan<br/>- Create pull request with plan output"]
+    STEP4["4. Code review<br/>- Review infrastructure changes<br/>- Approve if changes look good"]
+    STEP5["5. Merge to main"]
+    STEP6["6. CI/CD applies changes<br/>- terraform apply<br/>- Update infrastructure"]
+    STEP7["7. State stored in Git (or S3)"]
+    PRINCIPLE["Key principle: Git is source of truth.<br/>Infrastructure matches what's in Git."]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP7
+    STEP7 --> PRINCIPLE
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
+    style STEP6 fill:#c8e6c9
+    style STEP7 fill:#fce4ec
+    style PRINCIPLE fill:#ff9800
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      GITOPS WORKFLOW                             │
 │                                                                  │
@@ -746,6 +819,8 @@ aws cloudformation delete-stack \
 │  Infrastructure matches what's in Git.                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### GitOps Benefits
 
@@ -936,6 +1011,7 @@ Infrastructure as Code (IaC) treats infrastructure like software: version contro
 Key benefits: reproducibility (same infrastructure every time), version control (full history), collaboration (code review), disaster recovery (recreate from code), and consistency (environments match).
 
 The key insight: Infrastructure becomes code. Changes go through the same process as application code: write, test, review, deploy. This eliminates "snowflake servers" and manual configuration drift.
+
 
 
 

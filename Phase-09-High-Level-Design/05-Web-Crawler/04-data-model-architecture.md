@@ -244,7 +244,41 @@ CREATE INDEX idx_domain_stats_last_crawl ON domain_stats(last_crawled_at);
 
 ## High-Level Architecture
 
+```mermaid
+flowchart TD
+    SeedURLs["Seed URLs<br/>(Initial Set)"]
+    
+    subgraph Coordinator["COORDINATOR CLUSTER"]
+        subgraph Frontier["URL FRONTIER"]
+            PQ1["Priority Q 1<br/>(Urgent)"]
+            PQ2["Priority Q 2<br/>(High)"]
+            PQ3["Priority Q 3<br/>(Normal)"]
+            PQN["Priority Q N<br/>(Low)"]
+        end
+        
+        Scheduler["SCHEDULER<br/>- Politeness enforcement (per-domain delays)<br/>- Priority-based selection<br/>- Domain queue management"]
+    end
+    
+    subgraph Workers["CRAWLER WORKERS"]
+        Pod1["Crawler Pod 1<br/>Fetcher | Parser | DNS Cache"]
+        Pod2["Crawler Pod 2<br/>Fetcher | Parser | DNS Cache"]
+        PodN["Crawler Pod N<br/>Fetcher | Parser | DNS Cache"]
+    end
+    
+    DocumentStore["Document Store<br/>(S3 / HDFS)"]
+    Kafka["Kafka Topics<br/>(New URLs)"]
+    
+    SeedURLs --> Coordinator
+    Coordinator --> Workers
+    Workers --> DocumentStore
+    Workers --> Kafka
+    Kafka --> Coordinator
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              WEB CRAWLER SYSTEM                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -304,11 +338,72 @@ CREATE INDEX idx_domain_stats_last_crawl ON domain_stats(last_crawled_at);
           └─────────────────┘     └─────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Detailed Crawler Architecture
 
+```mermaid
+flowchart TD
+    InputQueue["URL INPUT QUEUE<br/>(From Kafka / Coordinator)"]
+    
+    RobotsChecker["ROBOTS.TXT CHECKER"]
+    RobotsCache["Robots Cache (Redis)"]
+    RobotsFetcher["Robots Fetcher<br/>(if not cached)"]
+    RobotsDecision["Decision: ALLOW / DISALLOW / CRAWL_DELAY"]
+    
+    DNSResolver["DNS RESOLVER"]
+    LocalDNSCache["Local DNS Cache<br/>(In-Memory)"]
+    DNSClient["DNS Client (Async)"]
+    ExternalDNS["External DNS (8.8.8.8)"]
+    
+    HTTPFetcher["HTTP FETCHER"]
+    ConnectionPool["Connection Pool<br/>(per domain)<br/>Keep-Alive<br/>Max 2 per host"]
+    HTTPClient["HTTP Client (Async/NIO)<br/>- Timeouts<br/>- Redirects<br/>- SSL/TLS"]
+    ResponseHandler["Response Handler<br/>- Decompress<br/>- Validate<br/>- Store"]
+    
+    HTMLParser["HTML PARSER"]
+    DOMParser["DOM Parser (JSoup)<br/>- Handle errors<br/>- Charset detect"]
+    LinkExtractor["Link Extractor<br/>- &lt;a href&gt;<br/>- &lt;link&gt;<br/>- &lt;script src&gt;<br/>- Normalize"]
+    ContentExtractor["Content Extractor<br/>- Title<br/>- Meta tags<br/>- Main content"]
+    
+    NewURLs["New URLs<br/>(to Kafka)"]
+    Document["Document<br/>(to S3)"]
+    Metrics["Metrics<br/>(to Prom)"]
+    
+    InputQueue --> RobotsChecker
+    RobotsChecker --> RobotsCache
+    RobotsChecker --> RobotsFetcher
+    RobotsCache --> RobotsDecision
+    RobotsFetcher --> RobotsDecision
+    
+    RobotsDecision --> DNSResolver
+    DNSResolver --> LocalDNSCache
+    LocalDNSCache --> DNSClient
+    DNSClient --> ExternalDNS
+    
+    DNSResolver --> HTTPFetcher
+    HTTPFetcher --> ConnectionPool
+    HTTPFetcher --> HTTPClient
+    HTTPFetcher --> ResponseHandler
+    
+    ResponseHandler --> HTMLParser
+    HTMLParser --> DOMParser
+    HTMLParser --> LinkExtractor
+    HTMLParser --> ContentExtractor
+    
+    DOMParser --> NewURLs
+    LinkExtractor --> NewURLs
+    ContentExtractor --> Document
+    HTMLParser --> Metrics
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              SINGLE CRAWLER POD                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -380,11 +475,63 @@ CREATE INDEX idx_domain_stats_last_crawl ON domain_stats(last_crawled_at);
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## URL Frontier Architecture
 
+```mermaid
+flowchart TD
+    NewURLs["NEW URLS INPUT<br/>(From Parsers/Seeds)"]
+    
+    subgraph DuplicateFilter["DUPLICATE URL FILTER"]
+        BloomFilter["BLOOM FILTER<br/>Size: 18 GB (10B URLs, 0.1% false positive)<br/>URL Hash → Bloom Filter → Seen?<br/>Yes: Discard | No: Continue"]
+        URLNormalizer["URL NORMALIZER<br/>- Lowercase host<br/>- Remove default ports<br/>- Sort query params<br/>- Remove tracking params<br/>- Remove fragments"]
+        
+        BloomFilter --> URLNormalizer
+    end
+    
+    subgraph PriorityAssignment["PRIORITY ASSIGNMENT"]
+        PriorityScore["Priority Score = f(domain_importance, freshness_need, depth, page_type)"]
+        DomainScore["Domain Score<br/>PageRank-based<br/>0.0 - 1.0"]
+        FreshnessScore["Freshness Score<br/>News: High<br/>Blog: Medium<br/>Static: Low"]
+        DepthPenalty["Depth Penalty<br/>Depth 0: 1.0<br/>Depth 1: 0.9<br/>Depth 2: 0.8"]
+        
+        DomainScore --> PriorityScore
+        FreshnessScore --> PriorityScore
+        DepthPenalty --> PriorityScore
+    end
+    
+    subgraph DomainQueues["DOMAIN-BASED QUEUES"]
+        subgraph BackQueues["BACK QUEUES (per domain)"]
+            Domain1["example.com<br/>[url1, url2, url7, ...]<br/>Last: 10:05<br/>Delay: 1s"]
+            Domain2["another.com<br/>[url3, url4]<br/>Last: 10:03<br/>Delay: 2s"]
+            Domain3["news.com<br/>[url5, url6, url8, ...]<br/>Last: 10:06<br/>Delay: 0.5s"]
+            DomainN["..."]
+        end
+        
+        subgraph FrontQueues["FRONT QUEUES (by priority)"]
+            P1["Priority 1 (Urgent):<br/>[domain_ptr1, domain_ptr2, ...]"]
+            P2["Priority 2 (High):<br/>[domain_ptr3, domain_ptr4, ...]"]
+            P3["Priority 3 (Normal):<br/>[domain_ptr5, domain_ptr6, ...]"]
+            P4["Priority 4 (Low):<br/>[domain_ptr7, domain_ptr8, ...]"]
+        end
+    end
+    
+    SchedulerOutput["SCHEDULER OUTPUT<br/>(URLs to Crawlers)"]
+    
+    NewURLs --> DuplicateFilter
+    DuplicateFilter --> PriorityAssignment
+    PriorityAssignment --> DomainQueues
+    DomainQueues --> SchedulerOutput
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              URL FRONTIER DETAIL                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -442,12 +589,12 @@ CREATE INDEX idx_domain_stats_last_crawl ON domain_stats(last_crawled_at);
 │  │                                                                              │    │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │    │
 │  │  │ example.com  │  │ another.com  │  │  news.com    │  │    ...       │    │    │
-│  │  │              │  │              │  │              │  │              │    │    │
-│  │  │ [url1, url2, │  │ [url3, url4] │  │ [url5, url6, │  │              │    │    │
-│  │  │  url7, ...]  │  │              │  │  url8, ...]  │  │              │    │    │
-│  │  │              │  │              │  │              │  │              │    │    │
-│  │  │ Last: 10:05  │  │ Last: 10:03  │  │ Last: 10:06  │  │              │    │    │
-│  │  │ Delay: 1s    │  │ Delay: 2s    │  │ Delay: 0.5s  │  │              │    │    │
+│  │  │              │  │              │  │              │  │              │    │
+│  │  │ [url1, url2, │  │ [url3, url4] │  │ [url5, url6, │  │              │    │
+│  │  │  url7, ...]  │  │              │  │  url8, ...]  │  │              │    │
+│  │  │              │  │              │  │              │  │              │    │
+│  │  │ Last: 10:05  │  │ Last: 10:03  │  │ Last: 10:06  │  │              │    │
+│  │  │ Delay: 1s    │  │ Delay: 2s    │  │ Delay: 0.5s  │  │              │    │
 │  │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │    │
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                      │
@@ -466,6 +613,9 @@ CREATE INDEX idx_domain_stats_last_crawl ON domain_stats(last_crawled_at);
                          │     SCHEDULER OUTPUT      │
                          │    (URLs to Crawlers)     │
                          └───────────────────────────┘
+```
+
+</details>
 ```
 
 ---

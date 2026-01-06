@@ -101,7 +101,85 @@ if (cancelled) {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class ReservationService {
+        - Restaurant restaurant
+        - Map~String,Reservation~ reservations
+        - Map~LocalDate,Queue~WaitlistEntry~~ waitlist
+        + makeReservation(request) Reservation
+        + cancelReservation(id) boolean
+        + modifyReservation(id, request) Reservation
+        + findAvailableTables(date, time, partySize) List~Table~
+        + addToWaitlist(request) WaitlistEntry
+    }
+    
+    class Restaurant {
+        - String name
+        - List~Table~ tables
+        - List~Section~ sections
+        - Map~DayOfWeek,TimeSlot~ openingHours
+        - Duration slotDuration
+    }
+    
+    class Table {
+        - String id
+        - int capacity
+        - Section section
+    }
+    
+    class Section {
+        - String name
+        - List~Table~ tables
+        - boolean smoking
+    }
+    
+    class TimeSlot {
+        - LocalTime start
+        - LocalTime end
+    }
+    
+    class Reservation {
+        - String id
+        - Customer customer
+        - LocalDate date
+        - TimeSlot timeSlot
+        - int partySize
+        - Table table
+        - ReservationStatus status
+        - String specialRequests
+    }
+    
+    class Customer {
+        - String name
+        - String phone
+        - String email
+    }
+    
+    class WaitlistEntry {
+        - Customer customer
+        - LocalDate date
+        - int partySize
+        - LocalDateTime addedAt
+    }
+    
+    ReservationService --> Restaurant
+    ReservationService --> Reservation
+    ReservationService --> WaitlistEntry
+    Restaurant --> Table
+    Restaurant --> Section
+    Restaurant --> TimeSlot
+    Section --> Table
+    Reservation --> Customer
+    Reservation --> Table
+    Reservation --> TimeSlot
+    WaitlistEntry --> Customer
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        RESTAURANT RESERVATION SYSTEM                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -163,6 +241,8 @@ if (cancelled) {
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Time Slot Visualization
 

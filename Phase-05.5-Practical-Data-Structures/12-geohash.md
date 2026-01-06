@@ -102,6 +102,16 @@ Imagine dividing the world map recursively:
 
 **Step 1**: Divide the world into 32 cells (8 columns × 4 rows)
 ```
+| 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| 8 | 9 | b | c | d | e | f | g |
+| h | j | k | m | n | p | q | r |
+| s | t | u | v | w | x | y | z |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌───┬───┬───┬───┬───┬───┬───┬───┐
 │ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │
 ├───┼───┼───┼───┼───┼───┼───┼───┤
@@ -112,11 +122,24 @@ Imagine dividing the world map recursively:
 │ s │ t │ u │ v │ w │ x │ y │ z │
 └───┴───┴───┴───┴───┴───┴───┴───┘
 ```
+</details>
+```
 
 San Francisco is in cell "9" (second row, second column).
 
 **Step 2**: Divide cell "9" into 32 sub-cells
 ```
+Cell "9":
+| 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 |
+|---|---|---|---|---|---|---|---|
+| 98 | 99 | 9b | 9c | 9d | 9e | 9f | 9g |
+| 9h | 9j | 9k | 9m | 9n | 9p | **9q** ← San Francisco | 9r |
+| 9s | 9t | 9u | 9v | 9w | 9x | 9y | 9z |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Cell "9":
 ┌───┬───┬───┬───┬───┬───┬───┬───┐
 │90 │91 │92 │93 │94 │95 │96 │97 │
@@ -128,6 +151,8 @@ Cell "9":
 │9s │9t │9u │9v │9w │9x │9y │9z │
 └───┴───┴───┴───┴───┴───┴───┴───┘
 ```
+</details>
+```
 
 **Step 3**: Continue subdividing "9q" → "9q8" → "9q8y" → "9q8yy" → ...
 
@@ -135,7 +160,10 @@ Each additional character makes the cell 32× smaller!
 
 ### The Key Insight
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     GEOHASH KEY INSIGHT                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -157,6 +185,7 @@ Each additional character makes the cell 32× smaller!
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -394,7 +423,10 @@ ORDER BY geohash;
 
 ### Sharding by Geohash
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    GEOHASH SHARDING                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -417,6 +449,7 @@ ORDER BY geohash;
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

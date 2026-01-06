@@ -356,7 +356,28 @@ Storage:
 
 ### 4.1 Real-time Editing Flow
 
+```mermaid
+sequenceDiagram
+    participant ClientA
+    participant WSGW as WebSocket GW
+    participant OTEngine as OT Engine
+    participant ClientB
+    
+    ClientA->>ClientA: 1. Type "Hello"<br/>(local apply)
+    ClientA->>WSGW: 2. Send operation<br/>insert("Hello", 0)<br/>version: 5
+    WSGW->>OTEngine: 3. Forward to OT
+    OTEngine->>OTEngine: 4. Transform<br/>(no concurrent ops in this case)
+    OTEngine->>OTEngine: 5. Apply & save<br/>version: 6
+    OTEngine->>WSGW: 6. ACK version 6
+    WSGW->>ClientA: 6. ACK version 6
+    WSGW->>ClientB: 7. Broadcast to B
+    ClientB->>ClientB: 8. Apply
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         Real-time Editing Flow                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -393,9 +414,42 @@ Storage:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### 4.2 Concurrent Edit Resolution
 
+```mermaid
+sequenceDiagram
+    participant ClientA
+    participant Server
+    participant ClientB
+    
+    Note over ClientA,ClientB: Initial Document: "The cat" (version 5)
+    
+    ClientA->>ClientA: Insert "big " at pos 4<br/>"The big cat"
+    ClientB->>ClientB: Insert "fat " at pos 4<br/>"The fat cat"
+    
+    ClientA->>Server: Op: insert("big ", 4)<br/>version: 5
+    ClientB->>Server: Op: insert("fat ", 4)<br/>version: 5
+    
+    Server->>Server: Process A first:<br/>Apply insert("big ", 4)<br/>Result: "The big cat"<br/>version: 6
+    
+    Server->>Server: Transform B against A:<br/>insert("fat ", 4+4=8)<br/>Apply: "The big fat cat"<br/>version: 7
+    
+    Server->>ClientA: Broadcast both ops
+    Server->>ClientB: Broadcast both ops
+    
+    ClientA->>ClientA: Receive B's op<br/>Transform locally<br/>"The big fat cat"
+    ClientB->>ClientB: Receive A's op<br/>Transform locally<br/>"The big fat cat"
+    
+    Note over ClientA,ClientB: Final: All clients have "The big fat cat"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                      Concurrent Edit Resolution                               │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -435,9 +489,39 @@ Storage:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ### 4.3 Offline Sync Flow
 
+```mermaid
+sequenceDiagram
+    participant Client as Client (Offline)
+    participant Server
+    
+    Note over Client: T1: Edit while offline
+    Client->>Client: Op1: insert("Hello", 0)<br/>Op2: insert(" World", 5)<br/>(stored locally)
+    
+    Note over Server: T2: Meanwhile, server receives other edits
+    Server->>Server: User B: insert("Hi ", 0)<br/>version: 6 → 7
+    
+    Client->>Server: T3: Client reconnects<br/>last_version: 5
+    
+    Server->>Client: T4: Server sends missed operations<br/>ops since v5: [insert("Hi ", 0)]
+    
+    Note over Client: T5: Client transforms local ops against server ops
+    Client->>Client: Transform Op1:<br/>insert("Hello", 0+3=3)<br/>Transform Op2:<br/>insert(" World", 5+3=8)
+    
+    Client->>Server: T6: Send transformed local ops
+    
+    Note over Server: T7: Server applies
+    Server->>Server: Result: "Hi Hello World"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                           Offline Sync Flow                                   │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -480,6 +564,9 @@ Storage:
 │       │  Result: "Hi Hello World"│                                           │
 │       │                          │                                           │
 └──────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

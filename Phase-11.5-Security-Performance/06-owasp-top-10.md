@@ -21,7 +21,26 @@ Before diving into OWASP Top 10, you should understand:
 
 Most security breaches exploit known vulnerability patterns:
 
+```mermaid
+flowchart LR
+    DEV["What Developers Think:<br/>My app is secure because I use<br/>HTTPS and require login"]
+    
+    ATTACKER["What Attackers Know:<br/>• SQL Injection bypasses authentication<br/>• XSS steals session cookies despite HTTPS<br/>• CSRF makes users perform unwanted actions<br/>• Broken access control lets users see others' data<br/>• Insecure deserialization leads to remote code execution"]
+    
+    RESULT["Result: 70%+ of breaches<br/>exploit known vulnerabilities"]
+    
+    DEV --> ATTACKER
+    ATTACKER --> RESULT
+    
+    style DEV fill:#fff9c4
+    style ATTACKER fill:#ffcdd2
+    style RESULT fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE KNOWLEDGE GAP                                     │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -41,6 +60,8 @@ Most security breaches exploit known vulnerability patterns:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Real-World Impact
 
 | Vulnerability | Notable Breach | Impact |
@@ -55,7 +76,35 @@ Most security breaches exploit known vulnerability patterns:
 
 ## 2️⃣ OWASP Top 10 (2021 Edition)
 
+```mermaid
+flowchart TD
+    A01["A01: Broken Access Control<br/>↑ (was #5)"]
+    A02["A02: Cryptographic Failures<br/>↑ (was #3, renamed)"]
+    A03["A03: Injection<br/>↓ (was #1)"]
+    A04["A04: Insecure Design<br/>NEW"]
+    A05["A05: Security Misconfiguration<br/>↑ (was #6)"]
+    A06["A06: Vulnerable Components<br/>↑ (was #9)"]
+    A07["A07: Auth & Session Failures<br/>↓ (was #2, renamed)"]
+    A08["A08: Software & Data Integrity Failures<br/>NEW (includes A8:2017)"]
+    A09["A09: Security Logging & Monitoring Failures<br/>↑ (was #10)"]
+    A10["A10: Server-Side Request Forgery (SSRF)<br/>NEW"]
+    
+    style A01 fill:#ffcdd2
+    style A02 fill:#ffcdd2
+    style A03 fill:#ffcdd2
+    style A04 fill:#fff9c4
+    style A05 fill:#ffcc80
+    style A06 fill:#ffcc80
+    style A07 fill:#fff9c4
+    style A08 fill:#fff9c4
+    style A09 fill:#fff9c4
+    style A10 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OWASP TOP 10 - 2021                                   │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -74,6 +123,8 @@ Most security breaches exploit known vulnerability patterns:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ A01: Broken Access Control
@@ -84,7 +135,25 @@ Access control enforces that users can only access what they're authorized to. B
 
 ### Common Vulnerabilities
 
+```mermaid
+flowchart TD
+    VULN1["1. IDOR (Insecure Direct Object Reference)<br/>GET /api/users/123/profile → User 123's data<br/>GET /api/users/456/profile → User 456's data (unauthorized!)"]
+    VULN2["2. Missing Function Level Access Control<br/>POST /api/admin/deleteUser → Works even for non-admin users"]
+    VULN3["3. Privilege Escalation<br/>POST /api/users/123 {role: admin} → User makes self admin"]
+    VULN4["4. Path Traversal<br/>GET /files?name=../../../etc/passwd"]
+    VULN5["5. CORS Misconfiguration<br/>Access-Control-Allow-Origin: * → Any site can access API"]
+    
+    style VULN1 fill:#ffcdd2
+    style VULN2 fill:#ffcdd2
+    style VULN3 fill:#ffcdd2
+    style VULN4 fill:#ffcdd2
+    style VULN5 fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BROKEN ACCESS CONTROL EXAMPLES                        │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -107,6 +176,8 @@ Access control enforces that users can only access what they're authorized to. B
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Prevention in Java
 

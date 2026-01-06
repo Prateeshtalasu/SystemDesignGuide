@@ -68,7 +68,63 @@ try {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class TwitterService {
+        - Map~String,User~ users
+        - Map~String,Tweet~ tweets
+        - FeedService feedService
+        + createUser(username, name) User
+        + postTweet(userId, content) Tweet
+        + follow(followerId, followeeId) void
+        + unfollow(followerId, followeeId) void
+        + getTimeline(userId) List~Tweet~
+        + getNewsFeed(userId, limit) List~Tweet~
+        + likeTweet(userId, tweetId) void
+        + retweet(userId, tweetId) Tweet
+    }
+    
+    class User {
+        - String id
+        - String username
+        - String name
+        - String bio
+        - Set~String~ followers
+        - Set~String~ following
+        - List~Tweet~ tweets
+    }
+    
+    class Tweet {
+        - String id
+        - String authorId
+        - String content
+        - long timestamp
+        - Set~String~ likes
+        - int retweets
+        - boolean isRetweet
+    }
+    
+    class FeedService {
+        + generateNewsFeed(userId, limit) List~Tweet~
+    }
+    
+    class Follow {
+        - String follower
+        - String followee
+        - long timestamp
+    }
+    
+    TwitterService --> User
+    TwitterService --> Tweet
+    TwitterService --> FeedService
+    User --> Tweet
+    User --> Follow
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                         TWITTER SYSTEM (SIMPLIFIED)                              │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -108,9 +164,28 @@ try {
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### News Feed Generation Flow
 
+```mermaid
+flowchart TD
+    A["User requests feed"]
+    B["Get followed users"]
+    C["Fetch tweets from each<br/>For each followed user<br/>get recent tweets"]
+    D["Merge & Sort<br/>Sort by timestamp<br/>(most recent first)"]
+    E["Return Feed<br/>Limited to requested count"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────────────────────────────┐
                     │         NEWS FEED GENERATION             │
                     └─────────────────────────────────────────┘
@@ -141,6 +216,8 @@ try {
     │    Feed      │
     └──────────────┘
 ```
+
+</details>
 
 ---
 

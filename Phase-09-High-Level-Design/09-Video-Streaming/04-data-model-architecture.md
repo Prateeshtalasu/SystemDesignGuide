@@ -504,7 +504,32 @@ flowchart TB
 
 ## Video Upload Flow
 
+```mermaid
+sequenceDiagram
+    participant Creator
+    participant UploadService as Upload Service
+    participant ObjectStorage as Object Storage
+    participant ProcessingQueue as Processing Queue
+    
+    Creator->>UploadService: 1. Initiate upload
+    UploadService->>Creator: 2. Upload URL + token
+    Creator->>UploadService: 3. Upload chunk 1
+    UploadService->>ObjectStorage: 4. Store chunk
+    UploadService->>Creator: 5. ACK chunk 1
+    loop Chunks 2...N
+        Creator->>UploadService: 6. Upload chunk 2...N
+        UploadService->>ObjectStorage: Store chunk
+    end
+    UploadService->>Creator: 7. Upload complete
+    UploadService->>ObjectStorage: 8. Assemble chunks
+    UploadService->>ProcessingQueue: 9. Queue processing
+    UploadService->>Creator: 10. Processing started
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          VIDEO UPLOAD FLOW                                           │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -542,11 +567,45 @@ Creator                 Upload Service          Object Storage        Processing
    │ <───────────────────────│                       │                      │
 ```
 
+</details>
+```
+
 ---
 
 ## Video Processing Pipeline
 
+```mermaid
+flowchart TD
+    Original["Original Video<br/>(S3: /originals/)"]
+    Queue["Processing Queue<br/>(Kafka)"]
+    
+    Original --> Queue
+    
+    Queue --> Transcoding["Transcoding Workers (GPU)"]
+    Queue --> Thumbnail["Thumbnail Generator"]
+    Queue --> Metadata["Metadata Extractor"]
+    
+    Transcoding --> P240["240p H.264"]
+    Transcoding --> P720["720p H.264"]
+    Transcoding --> P1080["1080p H.264"]
+    
+    P240 --> S3
+    P720 --> S3
+    P1080 --> S3
+    Thumbnail --> S3
+    Metadata --> S3
+    
+    subgraph S3["OBJECT STORAGE (S3)"]
+        Structure["/encoded/{video_id}/<br/>├── master.m3u8<br/>├── 240p/<br/>│   ├── playlist.m3u8<br/>│   ├── segment_0.ts<br/>│   └── segment_N.ts<br/>├── 720p/<br/>├── 1080p/<br/>└── thumbnails/<br/>    ├── thumb_0.jpg<br/>    ├── thumb_1.jpg<br/>    └── sprite.jpg"]
+    end
+    
+    S3 --> CDN["CDN Distribution<br/>(Push to Edge)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          VIDEO PROCESSING PIPELINE                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -602,6 +661,9 @@ Creator                 Upload Service          Object Storage        Processing
                     │   CDN Distribution    │
                     │   (Push to Edge)      │
                     └───────────────────────┘
+```
+
+</details>
 ```
 
 ---

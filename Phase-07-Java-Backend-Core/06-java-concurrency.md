@@ -14,7 +14,31 @@ Before diving into Java Concurrency, you need to understand:
 
 Quick mental model:
 
+```mermaid
+flowchart TD
+    Process["PROCESS (Your Java Application)"]
+    
+    subgraph ProcessContent[" "]
+        Heap["Heap Memory (shared by all threads)<br/>Objects, Arrays, Class instances"]
+        
+        Thread1["Thread 1<br/>Stack (own)"]
+        Thread2["Thread 2<br/>Stack (own)"]
+        Thread3["Thread 3<br/>Stack (own)"]
+    end
+    
+    Process --> ProcessContent
+    ProcessContent --> Heap
+    ProcessContent --> Thread1
+    ProcessContent --> Thread2
+    ProcessContent --> Thread3
+    
+    Note["Key insight: Threads share heap but have their own stack<br/>This is why concurrent access to shared objects is dangerous"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PROCESS vs THREAD                                     │
 │                                                                          │
@@ -38,6 +62,8 @@ Quick mental model:
 │   This is why concurrent access to shared objects is dangerous          │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 If you understand that threads can run simultaneously and share memory, you're ready.
@@ -120,7 +146,41 @@ synchronized(lock) {
 
 Think of concurrency like a busy restaurant kitchen:
 
+```mermaid
+flowchart TD
+    subgraph SingleThreaded["SINGLE-THREADED (One Chef)"]
+        Chef1["Chef: [Prep Order 1][Cook Order 1][Plate Order 1]<br/>[Prep Order 2][Cook Order 2][Plate Order 2]<br/>[Prep Order 3]...<br/>One order at a time. Customers wait forever."]
+    end
+    
+    subgraph MultiThreaded["MULTI-THREADED (Multiple Chefs)"]
+        Chef2["Chef 1: [Prep Order 1][Cook Order 1][Plate Order 1]"]
+        Chef3["Chef 2: [Prep Order 2][Cook Order 2][Plate Order 2]"]
+        Chef4["Chef 3: [Prep Order 3][Cook Order 3][Plate Order 3]"]
+        Note1["Multiple orders in parallel. Fast service!"]
+    end
+    
+    subgraph SharedResources["SHARED RESOURCES (The Oven)"]
+        Oven1["Chef 1: 'I need the oven' → [Uses Oven]"]
+        Oven2["Chef 2: 'I need the oven' → [Waits...] → [Uses Oven]"]
+        Oven3["Chef 3: 'I need the oven' → [Waits...] → [Waits...] → [Uses]"]
+        Note2["Only one chef can use the oven at a time!<br/>The oven is a LOCK. Only one thread can hold it."]
+    end
+    
+    subgraph Deadlock["DEADLOCK (Knife and Cutting Board)"]
+        Deadlock1["Chef 1: Has knife, waiting for cutting board"]
+        Deadlock2["Chef 2: Has cutting board, waiting for knife"]
+        Note3["Neither can proceed! Kitchen stops!"]
+    end
+    
+    SingleThreaded --> MultiThreaded
+    MultiThreaded --> SharedResources
+    SharedResources --> Deadlock
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    RESTAURANT KITCHEN ANALOGY                            │
 │                                                                          │
@@ -163,6 +223,8 @@ Think of concurrency like a busy restaurant kitchen:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 
@@ -178,7 +240,40 @@ Think of concurrency like a busy restaurant kitchen:
 
 ### Thread Lifecycle
 
+```mermaid
+stateDiagram-v2
+    [*] --> NEW: Thread created
+    NEW --> RUNNABLE: start()
+    RUNNABLE --> WAITING: wait()
+    RUNNABLE --> TIMED_WAITING: sleep(), join()
+    RUNNABLE --> BLOCKED: Waiting for lock
+    WAITING --> RUNNABLE: notify(), notifyAll()
+    TIMED_WAITING --> RUNNABLE: sleep() expires, join() returns
+    BLOCKED --> RUNNABLE: lock acquired, I/O complete
+    RUNNABLE --> TERMINATED: run() completes or exception
+    TERMINATED --> [*]
+    
+    note right of NEW
+        Thread created, not started
+    end note
+    
+    note right of RUNNABLE
+        Ready to run or running
+    end note
+    
+    note right of BLOCKED
+        Waiting for lock
+    end note
+    
+    note right of TERMINATED
+        Thread finished
+    end note
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THREAD LIFECYCLE                                      │
 │                                                                          │
@@ -212,6 +307,8 @@ Think of concurrency like a busy restaurant kitchen:
 │                        └─────────┘                                      │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Creating Threads
@@ -288,7 +385,30 @@ public class Counter {
 
 ### Why count++ is Not Atomic
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1
+    participant Memory as Memory (count)
+    participant T2 as Thread 2
+    
+    Note over Memory: Initial value: count = 0
+    
+    T1->>Memory: READ count (0)
+    T2->>Memory: READ count (0)
+    T1->>T1: ADD 1 (now 1)
+    T2->>T2: ADD 1 (now 1)
+    T1->>Memory: WRITE count (1)
+    T2->>Memory: WRITE count (1)
+    
+    Note over Memory: Expected: count = 2<br/>Actual: count = 1 ← LOST UPDATE!<br/>This is a RACE CONDITION
+    
+    Note over T1,T2: count++ is actually THREE operations:<br/>1. READ: Load count from memory into register<br/>2. MODIFY: Add 1 to register<br/>3. WRITE: Store register back to memory
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHY count++ IS DANGEROUS                              │
 │                                                                          │
@@ -314,6 +434,8 @@ public class Counter {
 │   This is a RACE CONDITION                                              │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -362,7 +484,27 @@ public void transferBroken(BankAccount from, BankAccount to, double amount) {
 
 ### Trace: Deadlock Scenario
 
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1<br/>Transfer $100<br/>A → B
+    participant A as Account A
+    participant B as Account B
+    participant T2 as Thread 2<br/>Transfer $50<br/>B → A
+    
+    Note over T1,T2: BROKEN CODE:<br/>synchronized(from) {<br/>    synchronized(to) {<br/>        from.withdraw(amt);<br/>        to.deposit(amt);<br/>    }<br/>}
+    
+    T1->>A: synchronized(A) ← ACQUIRED
+    T2->>B: synchronized(B) ← ACQUIRED
+    T1->>B: synchronized(B) ← WAITING...
+    T2->>A: synchronized(A) ← WAITING...
+    
+    Note over T1,T2: ╔═══════════════════════════════════════════════════════════════════╗<br/>║  DEADLOCK! Both threads waiting for each other forever!           ║<br/>╚═══════════════════════════════════════════════════════════════════╝<br/><br/>Thread 1 holds A, wants B<br/>Thread 2 holds B, wants A<br/>Neither can proceed!
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DEADLOCK SCENARIO                                     │
 │                                                                          │
@@ -398,6 +540,8 @@ public void transferBroken(BankAccount from, BankAccount to, double amount) {
 │   Neither can proceed!                                                  │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Fix: Consistent Lock Ordering
@@ -1161,7 +1305,40 @@ Mono.fromCallable(() -> fetchUser(id))
 
 ### Concurrency Models Comparison
 
+```mermaid
+graph TD
+    subgraph SharedMemory["SHARED MEMORY (Java threads)"]
+        SM1["Threads share heap memory"]
+        SM2["Synchronization via locks"]
+        SM3["Prone to race conditions, deadlocks"]
+        SM4["Familiar to most developers"]
+    end
+    
+    subgraph ActorModel["ACTOR MODEL (Akka)"]
+        AM1["Actors communicate via messages"]
+        AM2["No shared state"]
+        AM3["Location transparent"]
+        AM4["Good for distributed systems"]
+    end
+    
+    subgraph CSP["CSP (Go goroutines)"]
+        CSP1["Lightweight threads (goroutines)"]
+        CSP2["Communicate via channels"]
+        CSP3["'Don't communicate by sharing memory;<br/>share memory by communicating'"]
+    end
+    
+    subgraph VirtualThreads["VIRTUAL THREADS (Java 21+)"]
+        VT1["Lightweight threads managed by JVM"]
+        VT2["Millions of concurrent threads"]
+        VT3["Same programming model as platform threads"]
+        VT4["Great for I/O-bound workloads"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CONCURRENCY MODELS                                    │
 │                                                                          │
@@ -1194,6 +1371,8 @@ Mono.fromCallable(() -> fetchUser(id))
 │   Great for I/O-bound workloads                                         │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Java Concurrency Mechanisms Comparison

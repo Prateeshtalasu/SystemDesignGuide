@@ -14,7 +14,22 @@ Before diving into Testing in Java, you need to understand:
 
 ## 1️⃣ Why Testing Matters
 
+```mermaid
+flowchart TD
+    E2E["E2E Tests<br/>(Few, Slow, Expensive)"]
+    Integration["Integration Tests<br/>(Some, Medium Speed)"]
+    Unit["Unit Tests<br/>(Many, Fast, Cheap)"]
+    
+    Unit --> Integration
+    Integration --> E2E
+    
+    Note["UNIT TESTS: Test individual classes/methods in isolation<br/>INTEGRATION TESTS: Test multiple components together<br/>E2E TESTS: Test entire system from user perspective<br/><br/>Rule of thumb: 70% unit, 20% integration, 10% E2E"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE TESTING PYRAMID                                   │
 │                                                                          │
@@ -39,6 +54,8 @@ Before diving into Testing in Java, you need to understand:
 │   Rule of thumb: 70% unit, 20% integration, 10% E2E                    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -744,7 +761,21 @@ class IntegrationTest {
 
 ### TDD Cycle
 
+```mermaid
+flowchart TD
+    Red["RED<br/>1. Write failing test"]
+    Green["GREEN<br/>2. Write minimal code to pass"]
+    Refactor["REFACTOR<br/>3. Improve code, keep tests green"]
+    
+    Red --> Green
+    Green --> Refactor
+    Refactor -->|Repeat| Red
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TDD CYCLE (Red-Green-Refactor)                        │
 │                                                                          │
@@ -774,6 +805,8 @@ class IntegrationTest {
 │                                     Repeat                              │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### TDD Example

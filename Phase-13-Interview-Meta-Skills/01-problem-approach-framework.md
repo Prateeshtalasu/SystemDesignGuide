@@ -78,7 +78,21 @@ A good pitch follows this structure:
 
 ### The Framework as a Map
 
+```mermaid
+flowchart TD
+    Start["START"] --> Req["1. REQUIREMENTS<br/>(5-10 min)<br/>What are we building?<br/>For whom? What scale?"]
+    Req --> Est["2. CAPACITY<br/>(3-5 min)<br/>How many users? QPS?<br/>Storage? Bandwidth?"]
+    Est --> HLD["3. HIGH-LEVEL DESIGN<br/>(15-20 min)<br/>Main components<br/>and connections"]
+    HLD --> Deep["4. DEEP DIVE<br/>(15-20 min)<br/>Most complex or<br/>interesting component"]
+    Deep --> Trade["5. TRADE-OFFS<br/>(5-10 min)<br/>Why these choices?<br/>Alternatives?"]
+    Trade --> Wrap["6. WRAP-UP<br/>(5 min)<br/>Summary. Monitoring.<br/>Future work. Questions?"]
+    Wrap --> End["END"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    SYSTEM DESIGN INTERVIEW MAP                       │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -126,6 +140,7 @@ A good pitch follows this structure:
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 This map ensures you never get lost. At any point, you know where you are and where you're going next.
 
@@ -286,7 +301,44 @@ This tells us:
 
 **Example: Twitter high-level design**
 
+```mermaid
+flowchart TD
+    Users["Users<br/>(Mobile/Web)"] --> CDN["CDN<br/>(Static assets + media)"]
+    CDN --> LB["Load Balancer"]
+    LB --> AG1["API Gateway"]
+    LB --> AG2["API Gateway"]
+    LB --> AG3["API Gateway"]
+    
+    subgraph Services["Application Services"]
+        TS["Tweet Service"]
+        TLS["Timeline Service"]
+        US["User Service"]
+    end
+    
+    AG1 --> TS
+    AG1 --> TLS
+    AG1 --> US
+    AG2 --> TS
+    AG2 --> TLS
+    AG2 --> US
+    AG3 --> TS
+    AG3 --> TLS
+    AG3 --> US
+    
+    TS --> TDB["Tweet DB<br/>(Sharded)"]
+    TLS --> TC["Timeline Cache<br/>(Redis)"]
+    US --> UDB["User DB<br/>(Sharded)"]
+    
+    TDB --> FS["Fanout Service"]
+    FS --> Kafka["Kafka<br/>(Events)"]
+    FS --> TC2["Timeline Cache<br/>(Update)"]
+    Kafka --> TC2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         TWITTER ARCHITECTURE                         │
 └─────────────────────────────────────────────────────────────────────┘
@@ -348,6 +400,7 @@ This tells us:
    └─────────────┘              │  (Update)   │
                                 └─────────────┘
 ```
+</details>
 
 **Explanation flow**:
 
@@ -395,7 +448,20 @@ The key insight is we pre-compute timelines. When you post a tweet, we push it t
 
 **The Solution**: Hybrid fanout approach.
 
+```mermaid
+flowchart TD
+    Start["User Posts Tweet"] --> Check["Check Follower Count"]
+    Check -->|"Followers < 10,000"| Regular["Regular User"]
+    Check -->|"Followers >= 10,000"| Celebrity["Celebrity"]
+    Regular --> WriteFanout["FANOUT ON WRITE<br/>Push tweet to all followers' timeline caches"]
+    Celebrity --> ReadFanout["FANOUT ON READ<br/>Store tweet in celebrity cache"]
+    ReadFanout --> Merge["When follower reads timeline, merge:<br/>- Pre-computed cache<br/>- Celebrity tweets"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      HYBRID FANOUT STRATEGY                          │
 └─────────────────────────────────────────────────────────────────────┘
@@ -428,6 +494,7 @@ The key insight is we pre-compute timelines. When you post a tweet, we push it t
                                      - Pre-computed cache
                                      - Celebrity tweets
 ```
+</details>
 
 **Why hybrid?**
 
@@ -615,7 +682,25 @@ This is manageable. We'll need good caching for the 30K read QPS."
 
 **Candidate**: "Let me draw the high-level architecture."
 
+```mermaid
+flowchart TD
+    Users["Users"] --> Create["Create URL"]
+    Users --> Access["Access URL"]
+    Create --> APIGW["API Gateway<br/>(Write Path)"]
+    Access --> CDN["CDN<br/>(Read Path)"]
+    APIGW --> Shortener["Shortener Service"]
+    CDN --> Redirect["Redirect Service"]
+    Shortener --> IDGen["ID Generator Service"]
+    Shortener --> Redis["Redis Cache<br/>(URL Mappings)"]
+    Redirect --> Redis
+    Redis --> URLDB["URL DB<br/>(Sharded)"]
+    URLDB --> Analytics["Analytics Service"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     URL SHORTENER ARCHITECTURE                       │
 └─────────────────────────────────────────────────────────────────────┘
@@ -660,6 +745,7 @@ This is manageable. We'll need good caching for the 30K read QPS."
                              │   Service    │
                              └──────────────┘
 ```
+</details>
 
 **Candidate**: "Let me explain each component:
 
@@ -726,7 +812,25 @@ Cons: Too long (36 chars), not URL-friendly, no ordering
 
 This is what I'd recommend. Let me explain:
 
+```mermaid
+flowchart LR
+    subgraph ID["64-bit ID Structure"]
+        Sign["Sign (1 bit)<br/>0"]
+        Timestamp["Timestamp (41 bits)<br/>ms since epoch"]
+        Machine["Machine (10 bits)<br/>0-1023 machines"]
+        Sequence["Sequence (12 bits)<br/>0-4095 per ms per machine"]
+    end
+    
+    Sign --> Timestamp --> Machine --> Sequence
+    
+    Total["Total: 64 bits = 8 bytes<br/>Base62 encoded: 11 characters"]
+    Sequence --> Total
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    SNOWFLAKE ID STRUCTURE (64 bits)                  │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -742,6 +846,7 @@ This is what I'd recommend. Let me explain:
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **How it works**:
 
@@ -1048,7 +1153,30 @@ Master this framework, practice it until it's automatic, and you'll walk into an
 
 ## Quick Reference Card
 
+```mermaid
+flowchart TD
+    P1["PHASE 1: REQUIREMENTS (5-10 min)<br/>□ Functional: What features?<br/>□ Non-functional: Scale, latency, consistency, availability<br/>□ Constraints: Tech stack, budget, geography"]
+    P2["PHASE 2: ESTIMATION (3-5 min)<br/>□ QPS (read and write)<br/>□ Storage (daily, yearly, 5-year)<br/>□ Bandwidth<br/>□ Cache size"]
+    P3["PHASE 3: HIGH-LEVEL DESIGN (15-20 min)<br/>□ Draw architecture diagram<br/>□ Explain each component<br/>□ Show data flow for key operations<br/>□ Identify complex components for deep dive"]
+    P4["PHASE 4: DEEP DIVE (15-20 min)<br/>□ Pick most interesting/complex component<br/>□ Explain internal architecture<br/>□ Discuss algorithms and data structures<br/>□ Handle edge cases and failures"]
+    P5["PHASE 5: TRADE-OFFS (5-10 min)<br/>□ Key decisions and alternatives<br/>□ What breaks at 10x scale<br/>□ What you'd do with more time"]
+    P6["PHASE 6: WRAP-UP (5 min)<br/>□ Summarize design in 2-3 sentences<br/>□ Monitoring and metrics<br/>□ Future improvements<br/>□ Questions for interviewer"]
+    
+    Throughout["THROUGHOUT:<br/>□ Think out loud<br/>□ Check in with interviewer<br/>□ Be ready to adapt"]
+    
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6
+    Throughout -.->|"Apply to all phases"| P1
+    Throughout -.->|"Apply to all phases"| P2
+    Throughout -.->|"Apply to all phases"| P3
+    Throughout -.->|"Apply to all phases"| P4
+    Throughout -.->|"Apply to all phases"| P5
+    Throughout -.->|"Apply to all phases"| P6
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                 SYSTEM DESIGN INTERVIEW CHEAT SHEET                  │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -1094,4 +1222,5 @@ Master this framework, practice it until it's automatic, and you'll walk into an
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 

@@ -91,7 +91,60 @@ public class VendingMachine {
 
 **Purchase Flow:**
 
+```mermaid
+flowchart TD
+    A["User → VendingMachine.insertCoin(DOLLAR)"]
+    B["currentState.insertCoin(this, DOLLAR)"]
+    C{"State Type?"}
+    D["If IdleState:<br/>addToBalance(100)<br/>setState(new HasMoneyState())"]
+    E["If HasMoneyState:<br/>addToBalance(100)<br/>(stay in HasMoneyState)"]
+    
+    A --> B
+    B --> C
+    C -->|IdleState| D
+    C -->|HasMoneyState| E
 ```
+
+```mermaid
+flowchart TD
+    A["User → VendingMachine.selectProduct('A1')"]
+    B["currentState.selectProduct(this, 'A1')"]
+    C["inventory.getProduct('A1')"]
+    D{"currentBalance >= product.getPrice()?"}
+    E["selectedProduct = product<br/>setState(new DispensingState())"]
+    F["Show 'Insufficient funds'"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D -->|Yes| E
+    D -->|No| F
+```
+
+```mermaid
+flowchart TD
+    A["User → VendingMachine.dispense()"]
+    B["currentState.dispense(this)"]
+    C["inventory.dispenseProduct('A1')"]
+    D["slot.getProduct()<br/>slot.decreaseQuantity()"]
+    E["calculateChange(balance - productPrice)"]
+    F["Return coins list"]
+    G["balance = 0<br/>setState(new IdleState())"]
+    H["Return product"]
+    
+    A --> B
+    B --> C
+    C --> D
+    B --> E
+    E --> F
+    B --> G
+    B --> H
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 User → VendingMachine.insertCoin(DOLLAR)
          │
          ▼
@@ -108,9 +161,7 @@ User → VendingMachine.insertCoin(DOLLAR)
                    ▼
               addToBalance(100)
               (stay in HasMoneyState)
-```
 
-```
 User → VendingMachine.selectProduct("A1")
          │
          ▼
@@ -126,9 +177,7 @@ User → VendingMachine.selectProduct("A1")
          │    setState(new DispensingState())
          │
          └──► Else: Show "Insufficient funds"
-```
 
-```
 User → VendingMachine.dispense()
          │
          ▼
@@ -150,6 +199,8 @@ User → VendingMachine.dispense()
          │
          └──► Return product
 ```
+
+</details>
 
 ---
 

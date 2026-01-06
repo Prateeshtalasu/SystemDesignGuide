@@ -123,7 +123,34 @@ Think of chaos engineering as **fire drills for your systems**.
 
 ### Chaos Engineering Mental Model
 
+```mermaid
+flowchart TD
+    STEP1["1. STEADY STATE HYPOTHESIS<br/>Define what normal looks like<br/>System processes 1000 requests/sec<br/>with <1% error rate"]
+    STEP2["2. INTRODUCE FAILURE<br/>Inject controlled failure<br/>Kill 1 of 3 database replicas"]
+    STEP3["3. OBSERVE<br/>Monitor system behavior<br/>Does error rate stay <1%?"]
+    STEP4["4. LEARN<br/>Analyze results<br/>System handled failure or<br/>System failed"]
+    STEP5["5. IMPROVE<br/>Fix weaknesses found<br/>Add connection pool refresh<br/>on failover"]
+    STEP6["6. REPEAT"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP1
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
+    style STEP6 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CHAOS ENGINEERING CYCLE                       │
 │                                                                  │
@@ -148,6 +175,7 @@ Think of chaos engineering as **fire drills for your systems**.
 │     "Add connection pool refresh on failover"                   │
 │                                                                  │
 │  6. REPEAT                                                      │
+```
 │     Continuously test resilience                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -181,7 +209,36 @@ Think of chaos engineering as **fire drills for your systems**.
 
 ### Chaos Experiment Structure
 
+```mermaid
+flowchart TD
+    EXP["CHAOS EXPERIMENT<br/>Experiment: Database Failover"]
+    SCOPE["1. SCOPE<br/>Target: payment-db-primary<br/>Blast radius: 10% of traffic<br/>Duration: 5 minutes"]
+    STEADY["2. STEADY STATE<br/>Metric: payment_success_rate<br/>Expected: >= 99.9%<br/>Metric: payment_latency_p95<br/>Expected: < 500ms"]
+    HYP["3. HYPOTHESIS<br/>When primary database fails, system<br/>fails over to replica and maintains<br/>steady state within 30 seconds"]
+    EXPERIMENT["4. EXPERIMENT<br/>Action: Kill primary database pod<br/>Method: kubectl delete pod<br/>payment-db-primary"]
+    ROLLBACK["5. ROLLBACK<br/>Automatic: Kubernetes restarts pod<br/>Manual: kubectl scale deployment<br/>payment-db --replicas=3"]
+    ABORT["6. ABORT CONDITIONS<br/>If error_rate > 5%: Abort immediately<br/>If latency_p95 > 2s: Abort immediately"]
+    
+    EXP --> SCOPE
+    SCOPE --> STEADY
+    STEADY --> HYP
+    HYP --> EXPERIMENT
+    EXPERIMENT --> ROLLBACK
+    EXPERIMENT --> ABORT
+    
+    style EXP fill:#e3f2fd
+    style SCOPE fill:#fff9c4
+    style STEADY fill:#c8e6c9
+    style HYP fill:#fce4ec
+    style EXPERIMENT fill:#ffcdd2
+    style ROLLBACK fill:#fff9c4
+    style ABORT fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CHAOS EXPERIMENT                              │
 │                                                                  │
@@ -215,6 +272,8 @@ Think of chaos engineering as **fire drills for your systems**.
 │     If latency_p95 > 2s: Abort immediately                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Failure Injection Types
 

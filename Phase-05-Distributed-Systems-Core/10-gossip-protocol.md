@@ -1714,7 +1714,16 @@ if (partitionDetected()) {
 **A**: At this scale, we need careful optimization of the gossip protocol.
 
 **Architecture**:
+```mermaid
+flowchart TD
+    Config["Configuration Source<br/>Git, Config Server"] --> Seed["Seed Nodes (10)<br/>- Receive config updates<br/>- Bootstrap new nodes"]
+    Seed --> All["All Nodes (10,000)<br/>- Gossip with random peers<br/>- Apply config when received"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Configuration Source                      │
 │                    (Git, Config Server)                      │
@@ -1734,6 +1743,7 @@ if (partitionDetected()) {
 │                    - Apply config when received              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key Design Decisions**:
 

@@ -125,7 +125,22 @@ Think of Strangler Pattern like building a new bridge while the old one is still
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    Clients["Clients"]
+    Gateway["API Gateway / Router<br/>(Strangler Facade)"]
+    Monolith["Monolith (Old)<br/>- Feature A<br/>- Feature B<br/>- Feature C<br/>- Feature D"]
+    Microservices["Microservices (New)<br/>- Feature B ✓<br/>- Feature C ✓<br/>- Feature D ✓"]
+    
+    Clients -->|All requests| Gateway
+    Gateway --> Monolith
+    Gateway --> Microservices
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐
 │   Clients   │
 └──────┬──────┘
@@ -150,6 +165,7 @@ Think of Strangler Pattern like building a new bridge while the old one is still
 │  - Feature D│   │                 │
 └─────────────┘   └──────────────────┘
 ```
+</details>
 
 ### Core Components
 

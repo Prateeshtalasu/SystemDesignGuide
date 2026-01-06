@@ -60,7 +60,41 @@ public class OrderService {
 
 In the 1990s-2000s, many codebases became "Big Ball of Mud":
 
+```mermaid
+flowchart TD
+    A["A"]
+    B["B"]
+    C["C"]
+    D["D"]
+    E["E"]
+    F["F"]
+    
+    A <--> B
+    B <--> C
+    A <--> D
+    A <--> E
+    B <--> D
+    B <--> E
+    C <--> E
+    C <--> F
+    D <--> E
+    E <--> F
+    
+    Note["Everything connected to everything<br/>Change one thing → Everything might break"]
+    
+    style A fill:#ffcccc
+    style B fill:#ffcccc
+    style C fill:#ffcccc
+    style D fill:#ffcccc
+    style E fill:#ffcccc
+    style F fill:#ffcccc
+    style Note fill:#ffeeee
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        BIG BALL OF MUD                                   │
 │                                                                          │
@@ -86,6 +120,7 @@ In the 1990s-2000s, many codebases became "Big Ball of Mud":
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without SOLID
 
@@ -109,7 +144,35 @@ In the 1990s-2000s, many codebases became "Big Ball of Mud":
 
 Think of SOLID principles like building with LEGO:
 
+```mermaid
+flowchart LR
+    subgraph Bad["BAD Design (Glued together)"]
+        Glued["Everything glued<br/>into one piece<br/><br/>Can't change<br/>Can't reuse<br/>Can't extend"]
+    end
+    
+    subgraph Good["GOOD Design (SOLID)"]
+        A["A"]
+        B["B"]
+        C["C"]
+        Connectors["Standard<br/>Connectors"]
+        
+        A --> Connectors
+        B --> Connectors
+        C --> Connectors
+        
+        Note["Each piece:<br/>- Does one thing<br/>- Standard interface<br/>- Replaceable<br/>- Reusable"]
+    end
+    
+    style Bad fill:#ffcccc
+    style Good fill:#ccffcc
+    style Glued fill:#ffaaaa
+    style Connectors fill:#ffffcc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         THE LEGO ANALOGY                                 │
 │                                                                          │
@@ -134,6 +197,7 @@ Think of SOLID principles like building with LEGO:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: SOLID principles help you build software like LEGO, small, focused pieces with standard interfaces that snap together and can be rearranged.
 
@@ -152,6 +216,27 @@ This analogy will be referenced throughout:
 ### The Five SOLID Principles
 
 ```
+```mermaid
+flowchart TD
+    SOLID["SOLID PRINCIPLES"]
+    SOLID --> S["S - Single Responsibility Principle<br/>'A class should have only one reason to change'"]
+    SOLID --> O["O - Open/Closed Principle<br/>'Open for extension, closed for modification'"]
+    SOLID --> L["L - Liskov Substitution Principle<br/>'Subtypes must be substitutable for their base types'"]
+    SOLID --> I["I - Interface Segregation Principle<br/>'Many specific interfaces are better than one general interface'"]
+    SOLID --> D["D - Dependency Inversion Principle<br/>'Depend on abstractions, not concretions'"]
+    
+    style SOLID fill:#e1f5ff
+    style S fill:#ffe1f5
+    style O fill:#f5ffe1
+    style L fill:#fff5e1
+    style I fill:#e1fff5
+    style D fill:#f5e1ff
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         SOLID PRINCIPLES                                 │
 │                                                                          │
@@ -171,6 +256,8 @@ This analogy will be referenced throughout:
 │       "Depend on abstractions, not concretions"                         │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 Let's understand each one deeply with code examples.
@@ -1219,7 +1306,44 @@ public class Application {
 
 ### The Dependency Inversion Diagram
 
+```mermaid
+flowchart TD
+    subgraph Wrong["WITHOUT DIP (Wrong)"]
+        OS1["OrderService<br/>(High-Level)"]
+        MySQL["MySQLDatabase<br/>(Low-Level)"]
+        SMTP["SmtpEmailSender<br/>(Low-Level)"]
+        
+        OS1 -->|"depends on"| MySQL
+        OS1 -->|"depends on"| SMTP
+        
+        Note1["High-level directly depends on low-level<br/>= TIGHT COUPLING"]
+    end
+    
+    subgraph Correct["WITH DIP (Correct)"]
+        OS2["OrderService<br/>(High-Level)"]
+        OR["OrderRepository<br/>(Interface)"]
+        NS["NotificationService<br/>(Interface)"]
+        MySQLImpl["MySQLOrderRepo<br/>PostgreSQLOrderRepo<br/>(Low-Level)"]
+        EmailImpl["EmailNotification<br/>SmsNotification<br/>(Low-Level)"]
+        
+        OS2 -->|"depends on"| OR
+        OS2 -->|"depends on"| NS
+        OR <--|"implements"| MySQLImpl
+        NS <--|"implements"| EmailImpl
+        
+        Note2["Both high-level and low-level depend on abstractions<br/>Arrows point INWARD toward abstractions = INVERTED"]
+    end
+    
+    style Wrong fill:#ffcccc
+    style Correct fill:#ccffcc
+    style OR fill:#ffffcc
+    style NS fill:#ffffcc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WITHOUT DIP (Wrong)                                   │
 │                                                                          │
@@ -1264,6 +1388,7 @@ public class Application {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -2548,7 +2673,40 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 ### SOLID vs Other Design Principles
 
+```mermaid
+flowchart LR
+    subgraph SOLID["SOLID"]
+        S1["Focus: Class design<br/>Goal: Maintainability<br/>When: OOP design"]
+        S2["Can add complexity<br/>Worth it for flexibility<br/>Balance needed!"]
+        S3["Design for extension<br/>Prepare for change<br/>Balance needed!"]
+    end
+    
+    subgraph DRY["DRY (Don't Repeat Yourself)"]
+        D1["Focus: Code duplication<br/>Goal: Single source of truth<br/>When: Any code"]
+    end
+    
+    subgraph KISS["KISS (Keep It Simple, Stupid)"]
+        K1["Minimize complexity<br/>Simplest solution that works<br/>Sometimes conflicts with SOLID"]
+    end
+    
+    subgraph YAGNI["YAGNI (You Aren't Gonna Need It)"]
+        Y1["Don't build what you don't need<br/>Implement when needed<br/>Sometimes conflicts with OCP"]
+    end
+    
+    SOLID -.->|"vs"| DRY
+    SOLID -.->|"vs"| KISS
+    SOLID -.->|"vs"| YAGNI
+    
+    style SOLID fill:#e1f5ff
+    style DRY fill:#f5ffe1
+    style KISS fill:#fff5e1
+    style YAGNI fill:#ffe1f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DESIGN PRINCIPLES COMPARISON                          │
 │                                                                          │
@@ -2572,6 +2730,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### When Each Principle Applies
 

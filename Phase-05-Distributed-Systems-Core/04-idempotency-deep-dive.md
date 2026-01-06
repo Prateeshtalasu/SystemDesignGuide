@@ -128,7 +128,32 @@ Imagine a bank teller processing your request to transfer money.
 
 ### The Idempotency Spectrum
 
-```
+**Idempotency Spectrum**
+
+**NATURALLY IDEMPOTENT**
+- SET x = 5 (absolute value)
+- DELETE WHERE id = 123
+- PUT /users/123 {name: "John"}
+
+**IDEMPOTENT WITH KEY**
+- Create order with idempotency key
+- Process payment with request ID
+- Send notification with message ID
+
+**IDEMPOTENT WITH VERSIONING**
+- Update if version matches
+- Conditional writes (ETags)
+- Compare-and-swap operations
+
+**IDEMPOTENT WITH SAGA**
+- Multi-step workflows with compensation
+- Distributed transactions
+- Event sourcing with deduplication
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                  IDEMPOTENCY SPECTRUM                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -155,6 +180,7 @@ Imagine a bank teller processing your request to transfer money.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

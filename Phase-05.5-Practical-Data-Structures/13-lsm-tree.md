@@ -109,7 +109,23 @@ Imagine you're organizing mail:
 - Periodically, sort inbox and merge into filing cabinet
 - Finding a letter requires checking inbox first, then cabinet
 
-```
+**LSM Tree Mental Model**
+
+**Write Path (fast):**
+1. Drop letter in inbox (MemTable)
+2. When inbox full, sort and file (flush to SSTable)
+
+**Read Path (check multiple places):**
+1. Check inbox (MemTable)
+2. Check recent files (Level 0 SSTables)
+3. Check older files (Level 1, 2, ... SSTables)
+
+**Background:** Merge and compact files periodically
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LSM TREE MENTAL MODEL                         │
 ├─────────────────────────────────────────────────────────────────┤
@@ -127,10 +143,24 @@ Imagine you're organizing mail:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight
 
-```
+**LSM Tree Key Insight**: "Trade read performance for write performance"
+
+- Writes: O(1) amortized (just append to MemTable)
+- Reads: O(log n) × number of levels (check each level)
+
+**The tradeoff is tunable:**
+- More levels = better write performance, worse reads
+- Fewer levels = worse write performance, better reads
+- Bloom filters reduce read amplification
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LSM TREE KEY INSIGHT                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -147,6 +177,7 @@ Imagine you're organizing mail:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -154,7 +185,20 @@ Imagine you're organizing mail:
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    MemTable["MemTable<br/>In-memory, sorted<br/>Red-Black Tree/SkipList<br/>writes go here"] -->|flush when full| Level0["Level 0<br/>Recently flushed<br/>may overlap"]
+    Level0 --> SST1["SST 1"]
+    Level0 --> SST2["SST 2"]
+    Level0 --> SST3["SST 3"]
+    Level0 -->|compaction| Level1["Level 1<br/>Compacted<br/>no overlap"]
+    Level1 -->|compaction| Level2["Level 2<br/>Larger, older"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────┐
                     │    MemTable     │ ← In-memory, sorted
                     │   (Red-Black    │   (writes go here)
@@ -185,6 +229,7 @@ Imagine you're organizing mail:
               │  └─────────────────────────┘ │
               └──────────────────────────────┘
 ```
+</details>
 
 ### Write Path
 
@@ -212,7 +257,36 @@ Imagine you're organizing mail:
 
 ### SSTable Format
 
+```mermaid
+flowchart TD
+    subgraph File["SSTable File"]
+        subgraph Data["Data Blocks"]
+            B1["Block 1:<br/>key1→val1, key2→val2, key3→val3, ..."]
+            B2["Block 2:<br/>key100→val100, key101→val101, ..."]
+            BN["Block N: ..."]
+            B1 --> B2 --> BN
+        end
+        
+        subgraph Index["Index Block"]
+            I1["Block 1: first_key=key1, offset=0"]
+            I2["Block 2: first_key=key100, offset=4096"]
+            I3["..."]
+            I1 --> I2 --> I3
+        end
+        
+        BF["Bloom Filter"]
+        Footer["Footer<br/>index_offset, bloom_offset, metadata"]
+        
+        Data --> Index
+        Index --> BF
+        BF --> Footer
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────────────────────────────────────────────────────────┐
 │                      SSTable File                          │
 ├────────────────────────────────────────────────────────────┤
@@ -241,6 +315,7 @@ Imagine you're organizing mail:
 │  └──────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Compaction Strategies
 
@@ -362,7 +437,10 @@ Level 1: [SST4: A→10, B→20, C→3, D→4]
 
 Cassandra uses LSM Trees for its storage engine:
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CASSANDRA STORAGE                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -387,6 +465,7 @@ Cassandra uses LSM Trees for its storage engine:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### RocksDB (Facebook)
 
@@ -952,7 +1031,10 @@ Leveled: Lower space amplification (~10%)
 
 ### Tuning Trade-offs
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    AMPLIFICATION TRADE-OFFS                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -971,6 +1053,7 @@ Leveled: Lower space amplification (~10%)
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

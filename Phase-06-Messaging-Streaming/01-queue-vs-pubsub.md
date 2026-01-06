@@ -33,7 +33,32 @@ Imagine you're building an e-commerce system. When a customer places an order, y
 
 **The synchronous nightmare:**
 
+```mermaid
+flowchart TD
+  Customer["Customer clicks Place Order"]
+  OrderService["Order Service\nwaits for ALL sequentially"]
+  DB["Save to DB: 50ms"]
+  Email["Call Email Service: 200ms"]
+  Warehouse["Call Warehouse Service: 150ms"]
+  Inventory["Call Inventory Service: 100ms"]
+  Payment["Call Payment Service: 300ms"]
+  Analytics["Call Analytics Service: 50ms"]
+  Result["Customer sees Order Placed\nTOTAL: 850ms"]
+  
+  Customer --> OrderService
+  OrderService --> DB
+  DB --> Email
+  Email --> Warehouse
+  Warehouse --> Inventory
+  Inventory --> Payment
+  Payment --> Analytics
+  Analytics --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Customer clicks "Place Order"
     │
     ▼
@@ -54,6 +79,8 @@ Customer clicks "Place Order"
 Customer sees "Order Placed" (almost 1 second later)
 ```
 
+</details>
+
 **What if Email Service is down?**
 - Does the entire order fail?
 - Should the customer wait while you retry?
@@ -63,7 +90,20 @@ Customer sees "Order Placed" (almost 1 second later)
 
 In early web applications, all communication was synchronous HTTP calls:
 
+```mermaid
+flowchart LR
+  A["Service A\n(blocked)"]
+  B["Service B"]
+  A -- "HTTP Request" --> B
+  B -- "Response" --> A
+  
+  Problems["Problems:\n- A is blocked until B responds\n- If B is slow, A is slow\n- If B crashes, A might crash\n- A must know B's address\n- A must handle B's failures"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐      HTTP       ┌─────────────┐
 │  Service A  │ ──────────────► │  Service B  │
 │  (blocked)  │ ◄────────────── │             │
@@ -76,6 +116,8 @@ Problems:
 - A must know B's address
 - A must handle B's failures
 ```
+
+</details>
 
 ### What Breaks Without Messaging
 
@@ -119,7 +161,22 @@ Think of messaging systems like different postal services:
 
 **Queue (Point-to-Point) = Registered Mail with One Recipient**
 
+```mermaid
+flowchart LR
+  Sender["You (Sender)"]
+  PostOffice["Post Office\n(Queue)"]
+  Recipient["ONE Recipient"]
+  
+  Sender --> PostOffice
+  PostOffice --> Recipient
+  
+  Notes["Registered Mail:\n- Letter goes to exactly ONE person\n- If recipient is busy, letter waits\n- Once delivered, letter is gone\n- Multiple letters: delivered one at a time"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    REGISTERED MAIL                           │
 │                                                              │
@@ -133,9 +190,30 @@ Think of messaging systems like different postal services:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Pub/Sub (Publish-Subscribe) = Newspaper Subscription**
 
+```mermaid
+flowchart TD
+  Publisher["Publisher\n(Newspaper)"]
+  Topic["Topic"]
+  SubA["Subscriber A\n(gets copy)"]
+  SubB["Subscriber B\n(gets copy)"]
+  SubC["Subscriber C\n(gets copy)"]
+  
+  Publisher --> Topic
+  Topic --> SubA
+  Topic --> SubB
+  Topic --> SubC
+  
+  Notes["Newspaper Subscription:\n- Same newspaper goes to ALL subscribers\n- Each subscriber gets their own copy\n- New subscriber? They start getting newspapers too\n- Publisher doesn't know/care who subscribes"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   NEWSPAPER SUBSCRIPTION                     │
 │                                                              │
@@ -149,6 +227,8 @@ Think of messaging systems like different postal services:
 │   • Publisher doesn't know/care who subscribes              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### The Core Difference
 
@@ -169,7 +249,32 @@ A queue is a data structure that holds messages until a consumer processes them.
 
 **Internal Structure:**
 
+```mermaid
+flowchart LR
+  subgraph Queue["QUEUE"]
+    M1["M1"]
+    M2["M2"]
+    M3["M3"]
+    M4["M4"]
+    M5["M5"]
+    M6["M6"]
+    M7["M7"]
+    M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
+  end
+  
+  HEAD["HEAD\n(oldest, next to deliver)"]
+  TAIL["TAIL\n(newest, just added)"]
+  
+  HEAD -.-> M1
+  M7 -.-> TAIL
+  
+  FIFO["FIFO: First In, First Out"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                         QUEUE                                │
 │                                                              │
@@ -187,43 +292,43 @@ A queue is a data structure that holds messages until a consumer processes them.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **How Delivery Works:**
 
-```
-Step 1: Producer sends message
-┌──────────┐                     ┌─────────────────┐
-│ Producer │ ───── M8 ─────────► │ Queue           │
-└──────────┘                     │ [M1,M2,M3...M8] │
-                                 └─────────────────┘
-
-Step 2: Consumer requests message
-┌─────────────────┐              ┌──────────┐
-│ Queue           │ ──── M1 ───► │ Consumer │
-│ [M2,M3,M4...M8] │              └──────────┘
-└─────────────────┘
-M1 is removed from queue (or marked as "in-flight")
-
-Step 3: Consumer acknowledges (ACK)
-┌──────────┐                     ┌─────────────────┐
-│ Consumer │ ───── ACK ────────► │ Queue           │
-└──────────┘                     │ M1 permanently  │
-                                 │ deleted         │
-                                 └─────────────────┘
+```mermaid
+sequenceDiagram
+  participant P as Producer
+  participant Q as Queue
+  participant C as Consumer
+  
+  Note over P,Q: Step 1: Producer sends message
+  P->>Q: M8
+  Note over Q: [M1,M2,M3...M8]
+  
+  Note over Q,C: Step 2: Consumer requests message
+  Q->>C: M1
+  Note over Q: [M2,M3,M4...M8]\nM1 removed or in-flight
+  
+  Note over C,Q: Step 3: Consumer acknowledges (ACK)
+  C->>Q: ACK
+  Note over Q: M1 permanently deleted
 ```
 
 **Multiple Consumers (Competing Consumers):**
 
-```
-                                 ┌────────────┐
-                           ┌───► │ Consumer 1 │ (gets M1)
-┌──────────┐              │     └────────────┘
-│ Producer │ ──► Queue ───┤
-└──────────┘              │     ┌────────────┐
-                          └───► │ Consumer 2 │ (gets M2)
-                                └────────────┘
-
-Each message goes to ONLY ONE consumer.
-This distributes work across consumers.
+```mermaid
+flowchart TD
+  Producer["Producer"]
+  Queue["Queue"]
+  C1["Consumer 1\n(gets M1)"]
+  C2["Consumer 2\n(gets M2)"]
+  
+  Producer --> Queue
+  Queue --> C1
+  Queue --> C2
+  
+  Note["Each message goes to ONLY ONE consumer.\nThis distributes work across consumers."]
 ```
 
 ### Pub/Sub (Publish-Subscribe)
@@ -232,53 +337,51 @@ In Pub/Sub, messages are published to a "topic" and all subscribers to that topi
 
 **Internal Structure:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         TOPIC                                │
-│                                                              │
-│   Messages: [M1, M2, M3, M4, M5]                            │
-│                                                              │
-│   Subscriptions:                                             │
-│   ┌─────────────────┐                                       │
-│   │ Subscription A  │ ──► Consumer A (offset: 3, next: M4)  │
-│   │ (Email Service) │                                       │
-│   └─────────────────┘                                       │
-│   ┌─────────────────┐                                       │
-│   │ Subscription B  │ ──► Consumer B (offset: 5, next: M6)  │
-│   │ (Analytics)     │                                       │
-│   └─────────────────┘                                       │
-│   ┌─────────────────┐                                       │
-│   │ Subscription C  │ ──► Consumer C (offset: 1, next: M2)  │
-│   │ (Warehouse)     │                                       │
-│   └─────────────────┘                                       │
-│                                                              │
-│   Each subscription tracks its own position independently   │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Topic["TOPIC"]
+    Messages["Messages: [M1, M2, M3, M4, M5]"]
+  end
+  
+  SubA["Subscription A\n(Email Service)"]
+  SubB["Subscription B\n(Analytics)"]
+  SubC["Subscription C\n(Warehouse)"]
+  
+  CA["Consumer A\n(offset: 3, next: M4)"]
+  CB["Consumer B\n(offset: 5, next: M6)"]
+  CC["Consumer C\n(offset: 1, next: M2)"]
+  
+  Topic --> SubA
+  Topic --> SubB
+  Topic --> SubC
+  
+  SubA --> CA
+  SubB --> CB
+  SubC --> CC
+  
+  Note["Each subscription tracks its own position independently"]
 ```
 
 **How Delivery Works:**
 
-```
-Step 1: Publisher sends message
-┌───────────┐                    ┌─────────────────┐
-│ Publisher │ ───── M6 ────────► │ Topic           │
-└───────────┘                    │ [M1,M2,M3,M4,   │
-                                 │  M5,M6]         │
-                                 └─────────────────┘
-
-Step 2: Each subscriber gets the message independently
-┌─────────────────┐
-│ Topic           │
-│ [M1,M2...M6]    │
-└────────┬────────┘
-         │
-         ├──────────► Consumer A (Email) receives M6
-         │
-         ├──────────► Consumer B (Analytics) receives M6
-         │
-         └──────────► Consumer C (Warehouse) receives M6
-
-ALL subscribers get M6. It's not removed after delivery.
+```mermaid
+sequenceDiagram
+  participant Pub as Publisher
+  participant T as Topic
+  participant CA as Consumer A (Email)
+  participant CB as Consumer B (Analytics)
+  participant CC as Consumer C (Warehouse)
+  
+  Note over Pub,T: Step 1: Publisher sends message
+  Pub->>T: M6
+  Note over T: [M1,M2,M3,M4,M5,M6]
+  
+  Note over T,CC: Step 2: Each subscriber gets message independently
+  T->>CA: M6
+  T->>CB: M6
+  T->>CC: M6
+  
+  Note over CA,CC: ALL subscribers get M6.\nIt's not removed after delivery.
 ```
 
 ### Key Internal Differences
@@ -307,155 +410,114 @@ Let's trace through both patterns with a concrete example.
 
 **Use case**: Distributing email sending work across multiple email workers.
 
-```
-Time 0ms: Order Service produces message to "email-queue"
-┌─────────────────┐
-│ email-queue     │
-│ ┌─────────────┐ │
-│ │ {           │ │
-│ │  orderId:   │ │
-│ │  "ORD-123", │ │
-│ │  email:     │ │
-│ │  "a@b.com", │ │
-│ │  type:      │ │
-│ │  "confirm"  │ │
-│ │ }           │ │
-│ └─────────────┘ │
-└─────────────────┘
-
-Time 5ms: Email Worker 1 pulls message
-┌─────────────────┐              ┌────────────────┐
-│ email-queue     │              │ Email Worker 1 │
-│ (empty or       │ ──────────►  │ Processing     │
-│  in-flight)     │              │ ORD-123 email  │
-└─────────────────┘              └────────────────┘
-
-Time 50ms: Email Worker 1 sends email, ACKs message
-┌────────────────┐              ┌─────────────────┐
-│ Email Worker 1 │ ──── ACK ──► │ email-queue     │
-│ "Done!"        │              │ Message deleted │
-└────────────────┘              └─────────────────┘
-
-Result: Email sent exactly once by exactly one worker.
+```mermaid
+sequenceDiagram
+  participant OS as Order Service
+  participant Q as email-queue
+  participant W1 as Email Worker 1
+  
+  Note over OS,Q: Time 0ms: Order Service produces message
+  OS->>Q: {orderId: "ORD-123", email: "a@b.com", type: "confirm"}
+  
+  Note over Q,W1: Time 5ms: Email Worker 1 pulls message
+  Q->>W1: Message
+  Note over W1: Processing ORD-123 email
+  
+  Note over W1,Q: Time 50ms: Email Worker 1 sends email, ACKs
+  W1->>Q: ACK
+  Note over Q: Message deleted
+  
+  Note over OS,W1: Result: Email sent exactly once by exactly one worker.
 ```
 
 **What if we have 1000 emails to send?**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     email-queue                              │
-│ [Email1, Email2, Email3, ... Email1000]                     │
-└─────────────────────────────────────────────────────────────┘
-         │           │           │           │
-         ▼           ▼           ▼           ▼
-    ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐
-    │Worker 1│  │Worker 2│  │Worker 3│  │Worker 4│
-    │Email1,5│  │Email2,6│  │Email3,7│  │Email4,8│
-    │9,13... │  │10,14...│  │11,15...│  │12,16...│
-    └────────┘  └────────┘  └────────┘  └────────┘
-
-Each worker gets different emails. Work is distributed.
-Add more workers = process faster.
+```mermaid
+flowchart TD
+  Queue["email-queue\n[Email1, Email2, Email3, ... Email1000]"]
+  W1["Worker 1\nEmail1,5,9,13..."]
+  W2["Worker 2\nEmail2,6,10,14..."]
+  W3["Worker 3\nEmail3,7,11,15..."]
+  W4["Worker 4\nEmail4,8,12,16..."]
+  
+  Queue --> W1
+  Queue --> W2
+  Queue --> W3
+  Queue --> W4
+  
+  Note["Each worker gets different emails. Work is distributed.\nAdd more workers = process faster."]
 ```
 
 ### Pub/Sub Pattern Simulation
 
 **Use case**: Broadcasting order event to multiple interested services.
 
-```
-Time 0ms: Order Service publishes to "order-events" topic
-┌─────────────────────────────────────────────────────────────┐
-│                    order-events topic                        │
-│                                                              │
-│ Message: {                                                   │
-│   eventType: "ORDER_PLACED",                                │
-│   orderId: "ORD-123",                                       │
-│   item: "Laptop",                                           │
-│   price: 999,                                               │
-│   timestamp: "2024-01-15T10:30:00Z"                         │
-│ }                                                            │
-│                                                              │
-│ Subscriptions:                                               │
-│   - email-service (offset: 0)                               │
-│   - warehouse-service (offset: 0)                           │
-│   - analytics-service (offset: 0)                           │
-└─────────────────────────────────────────────────────────────┘
-
-Time 5ms: All subscribers receive the SAME message
-
-┌────────────────┐
-│ Email Service  │ ◄── {ORDER_PLACED, ORD-123, ...}
-│ Sends confirm  │     (processes independently)
-│ email          │
-└────────────────┘
-
-┌────────────────┐
-│ Warehouse Svc  │ ◄── {ORDER_PLACED, ORD-123, ...}
-│ Reserves stock │     (same message, different action)
-└────────────────┘
-
-┌────────────────┐
-│ Analytics Svc  │ ◄── {ORDER_PLACED, ORD-123, ...}
-│ Updates metrics│     (same message, different action)
-└────────────────┘
-
-Result: One event, three services notified, each does different work.
+```mermaid
+sequenceDiagram
+  participant OS as Order Service
+  participant T as order-events topic
+  participant ES as Email Service
+  participant WS as Warehouse Service
+  participant AS as Analytics Service
+  
+  Note over OS,T: Time 0ms: Order Service publishes
+  OS->>T: {eventType: "ORDER_PLACED", orderId: "ORD-123", item: "Laptop", price: 999}
+  Note over T: Subscriptions: email-service, warehouse-service, analytics-service
+  
+  Note over T,AS: Time 5ms: All subscribers receive SAME message
+  T->>ES: {ORDER_PLACED, ORD-123, ...}
+  T->>WS: {ORDER_PLACED, ORD-123, ...}
+  T->>AS: {ORDER_PLACED, ORD-123, ...}
+  
+  Note over ES: Sends confirm email\n(processes independently)
+  Note over WS: Reserves stock\n(same message, different action)
+  Note over AS: Updates metrics\n(same message, different action)
+  
+  Note over OS,AS: Result: One event, three services notified, each does different work.
 ```
 
 **What if we add a new service (Fraud Detection)?**
 
-```
-Before: 3 subscribers
-After:  4 subscribers (just subscribe to the topic)
-
-┌─────────────────────────────────────────────────────────────┐
-│                    order-events topic                        │
-│                                                              │
-│ Subscriptions:                                               │
-│   - email-service                                           │
-│   - warehouse-service                                       │
-│   - analytics-service                                       │
-│   - fraud-detection-service  ◄── NEW! No code change in     │
-│                                   Order Service needed!     │
-└─────────────────────────────────────────────────────────────┘
-
-The publisher (Order Service) doesn't know or care about subscribers.
+```mermaid
+flowchart TD
+  Topic["order-events topic"]
+  ES["email-service"]
+  WS["warehouse-service"]
+  AS["analytics-service"]
+  FDS["fraud-detection-service\nNEW! No code change in\nOrder Service needed!"]
+  
+  Topic --> ES
+  Topic --> WS
+  Topic --> AS
+  Topic --> FDS
+  
+  Note["Before: 3 subscribers\nAfter: 4 subscribers (just subscribe to topic)\n\nThe publisher (Order Service) doesn't know or care about subscribers."]
 ```
 
 ### Combined Pattern (Real-World)
 
 In practice, you often combine both:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    COMBINED PATTERN                          │
-│                                                              │
-│   Order Service                                              │
-│        │                                                     │
-│        ▼                                                     │
-│   ┌─────────────┐                                           │
-│   │ order-events│  (Pub/Sub Topic)                          │
-│   │   topic     │                                           │
-│   └──────┬──────┘                                           │
-│          │                                                   │
-│    ┌─────┴─────┬─────────────┬─────────────┐               │
-│    ▼           ▼             ▼             ▼               │
-│ ┌──────┐  ┌──────┐     ┌──────────┐  ┌──────────┐         │
-│ │Email │  │Ware- │     │Analytics │  │ Fraud    │         │
-│ │Queue │  │house │     │ Service  │  │Detection │         │
-│ └──┬───┘  │Queue │     └──────────┘  └──────────┘         │
-│    │      └──┬───┘                                         │
-│    ▼         ▼                                              │
-│ ┌──────┐  ┌──────┐                                         │
-│ │Email │  │Ware- │     (Queues for work distribution)      │
-│ │Worker│  │house │                                         │
-│ │ x 3  │  │Worker│                                         │
-│ └──────┘  │ x 5  │                                         │
-│           └──────┘                                          │
-│                                                              │
-│ Topic broadcasts to all subscribers.                        │
-│ Each subscriber can have its own queue for load balancing. │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  OS["Order Service"]
+  Topic["order-events topic\n(Pub/Sub Topic)"]
+  EQ["Email Queue"]
+  WQ["Warehouse Queue"]
+  AS["Analytics Service"]
+  FD["Fraud Detection"]
+  EW1["Email Worker x 3"]
+  WW1["Warehouse Worker x 5"]
+  
+  OS --> Topic
+  Topic --> EQ
+  Topic --> WQ
+  Topic --> AS
+  Topic --> FD
+  EQ --> EW1
+  WQ --> WW1
+  
+  Note["Topic broadcasts to all subscribers.\nEach subscriber can have its own queue for load balancing.\n(Queues for work distribution)"]
 ```
 
 ---
@@ -469,29 +531,20 @@ Amazon uses this pattern extensively:
 **SNS (Simple Notification Service)**: Pub/Sub topics
 **SQS (Simple Queue Service)**: Queues
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              AMAZON'S SNS + SQS PATTERN                      │
-│                                                              │
-│   Order Service                                              │
-│        │                                                     │
-│        ▼                                                     │
-│   ┌─────────────┐                                           │
-│   │  SNS Topic  │  "order-events"                           │
-│   └──────┬──────┘                                           │
-│          │                                                   │
-│    ┌─────┴─────┬─────────────┐                              │
-│    ▼           ▼             ▼                              │
-│ ┌──────┐  ┌──────┐     ┌──────┐                            │
-│ │ SQS  │  │ SQS  │     │ SQS  │                            │
-│ │Queue │  │Queue │     │Queue │                            │
-│ │Email │  │Ware- │     │Fraud │                            │
-│ └──────┘  │house │     └──────┘                            │
-│           └──────┘                                          │
-│                                                              │
-│ SNS fans out to multiple SQS queues.                        │
-│ Each SQS queue can have multiple consumers.                 │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  OS["Order Service"]
+  SNS["SNS Topic\norder-events"]
+  SQS1["SQS Queue\nEmail"]
+  SQS2["SQS Queue\nWarehouse"]
+  SQS3["SQS Queue\nFraud"]
+  
+  OS --> SNS
+  SNS --> SQS1
+  SNS --> SQS2
+  SNS --> SQS3
+  
+  Note["SNS fans out to multiple SQS queues.\nEach SQS queue can have multiple consumers."]
 ```
 
 **Why this pattern?**
@@ -1273,14 +1326,28 @@ I would use a combination:
 2. **Queue for work distribution within each service**: The push notification service might have a queue internally. Multiple workers consume from this queue to actually send the push notifications to Apple/Google.
 
 Architecture:
-```
-Event → Topic (Pub/Sub)
-           ├── Push Notification Service
-           │         └── Push Queue → Workers (send to APNS/FCM)
-           ├── Email Service
-           │         └── Email Queue → Workers (send via SMTP)
-           └── In-App Service
-                     └── Stores in DB for user to see
+```mermaid
+flowchart TD
+  Event["Event"]
+  Topic["Topic (Pub/Sub)"]
+  PNS["Push Notification Service"]
+  ES["Email Service"]
+  IAS["In-App Service"]
+  PQ["Push Queue"]
+  EQ["Email Queue"]
+  Workers1["Workers\n(send to APNS/FCM)"]
+  Workers2["Workers\n(send via SMTP)"]
+  DB["Stores in DB\nfor user to see"]
+  
+  Event --> Topic
+  Topic --> PNS
+  Topic --> ES
+  Topic --> IAS
+  PNS --> PQ
+  ES --> EQ
+  PQ --> Workers1
+  EQ --> Workers2
+  IAS --> DB
 ```
 
 This gives us:
@@ -1386,7 +1453,21 @@ Queue and Pub/Sub are the two fundamental messaging patterns. A **Queue** delive
 
 ## Quick Reference Card
 
+```mermaid
+flowchart TD
+  subgraph CheatSheet["QUEUE vs PUB/SUB CHEAT SHEET"]
+    Queue["QUEUE (Point-to-Point):\n- Each message to ONE consumer\n- Consumers COMPETE\n- Message DELETED after processing\n- Use for: Work distribution, load leveling\n- Example: Email sending, order processing"]
+    PubSub["PUB/SUB (Publish-Subscribe):\n- Each message to ALL subscribers\n- Subscribers INDEPENDENT\n- Message RETAINED (until TTL)\n- Use for: Event notification, broadcasting\n- Example: Order events, user activity"]
+    Combined["COMBINED PATTERN:\nTopic (Pub/Sub) to Multiple Queues to Workers\n- Fan-out via topic\n- Work distribution via queue\n- Best of both worlds"]
+    Decision["DECISION GUIDE:\nShould each consumer get all messages?\nYES to Pub/Sub, NO to Queue\nIs this work or event?\nWORK to Queue, EVENT to Pub/Sub"]
+    Tech["COMMON TECHNOLOGIES:\nQueue: RabbitMQ, SQS, Redis Lists\nPub/Sub: Kafka, SNS, Redis Pub/Sub, Google Pub/Sub\nBoth: RabbitMQ (exchanges), Kafka (consumer groups)"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              QUEUE vs PUB/SUB CHEAT SHEET                   │
 ├─────────────────────────────────────────────────────────────┤
@@ -1425,4 +1506,6 @@ Queue and Pub/Sub are the two fundamental messaging patterns. A **Queue** delive
 │   Both: RabbitMQ (exchanges), Kafka (consumer groups)      │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 

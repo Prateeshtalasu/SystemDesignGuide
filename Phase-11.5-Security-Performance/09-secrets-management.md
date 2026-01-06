@@ -107,7 +107,25 @@ This is exactly what secrets management does: one secure system manages all secr
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    App["Application<br/>(Your Code)"]
+    SM["Secrets Manager<br/>(Vault/AWS SM)"]
+    KMS["Encryption Service<br/>(KMS)"]
+    Storage["Storage<br/>(Encrypted DB)"]
+    Audit["Audit Log<br/>(Who, When, What)"]
+    
+    App -->|Request secret| SM
+    SM -->|Decrypt| KMS
+    KMS -->|Retrieve| Storage
+    SM -->|Log access| Audit
+    App -.->|Access logged| Audit
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SECRETS MANAGEMENT ARCHITECTURE              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -133,6 +151,7 @@ This is exactly what secrets management does: one secure system manages all secr
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Step-by-Step: How an Application Retrieves a Secret
 
@@ -166,7 +185,22 @@ String dbPassword = secretsManager.getSecret("prod-db-password");
 
 ### Secret Lifecycle
 
+```mermaid
+flowchart LR
+    Create["Create Secret"] --> Store["Store Encrypted"]
+    Store --> Access["Access (Read)"]
+    Access --> Rotate["Rotate Secret"]
+    
+    Create --> Version["Version Control"]
+    Store --> AccessControl["Access Control"]
+    Access --> Audit["Audit Logging"]
+    Rotate --> Revoke["Revoke Access"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │  Create  │────▶│  Store   │────▶│  Access  │────▶│  Rotate  │
 │  Secret  │     │ Encrypted│     │  (Read)  │     │  Secret  │
@@ -179,6 +213,7 @@ String dbPassword = secretsManager.getSecret("prod-db-password");
 │  Control │     │  Control │     │  Logging │     │  Access  │
 └──────────┘     └──────────┘     └──────────┘     └──────────┘
 ```
+</details>
 
 ### Encryption at Rest
 
@@ -249,7 +284,23 @@ public class DatabaseConfig {
 
 **Step 3: What Happens Behind the Scenes**
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant SM as AWS Secrets Manager
+    participant KMS as AWS KMS
+    
+    App->>SM: getSecret('prod-db')
+    SM->>KMS: Decrypt with KEK
+    KMS-->>SM: Plaintext secret
+    SM-->>App: actualPassword123
+    SM->>KMS: Log access (audit trail)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Application                    AWS Secrets Manager              AWS KMS
      │                                │                            │
      │─── getSecret("prod-db") ──────▶│                            │
@@ -263,6 +314,7 @@ Application                    AWS Secrets Manager              AWS KMS
      │                                │─── Log access ─────────────▶│
      │                                │   (audit trail)            │
 ```
+</details>
 
 **Step 4: Secret Used for Database Connection**
 ```java
@@ -969,7 +1021,20 @@ Service mesh with centralized secrets:
 4. **Automatic Rotation**: Vault rotates secrets, services pick up new values
 5. **Least Privilege**: Each service only accesses its own secrets
 
+```mermaid
+flowchart TD
+    ServiceA["Service A<br/>(IAM Role)"]
+    ServiceB["Service B<br/>(IAM Role)"]
+    SM["Secrets Manager<br/>(Centralized)"]
+    
+    ServiceA -->|Authenticate<br/>(with IAM role)| SM
+    ServiceB -->|Authenticate<br/>(with IAM role)| SM
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐         ┌─────────────┐
 │  Service A  │         │  Service B  │
 │  (IAM Role) │         │  (IAM Role) │
@@ -985,6 +1050,7 @@ Service mesh with centralized secrets:
            │  (Centralized)  │
            └────────────────┘
 ```
+</details>
 
 ### Question 4: "What's the difference between encryption at rest and encryption in transit for secrets?"
 

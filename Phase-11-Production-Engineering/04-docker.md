@@ -125,7 +125,79 @@ Docker containers are the same idea for software:
 
 ### Containers vs Virtual Machines
 
+```mermaid
+flowchart TD
+    subgraph VM["VIRTUAL MACHINES"]
+        direction TB
+        subgraph VM1["VM 1"]
+            APP1["App A"]
+            BIN1["Bins/Libs"]
+            OS1["Guest OS<br/>(Ubuntu)"]
+            APP1 --> BIN1
+            BIN1 --> OS1
+        end
+        subgraph VM2["VM 2"]
+            APP2["App B"]
+            BIN2["Bins/Libs"]
+            OS2["Guest OS<br/>(CentOS)"]
+            APP2 --> BIN2
+            BIN2 --> OS2
+        end
+        subgraph VM3["VM 3"]
+            APP3["App C"]
+            BIN3["Bins/Libs"]
+            OS3["Guest OS<br/>(Debian)"]
+            APP3 --> BIN3
+            BIN3 --> OS3
+        end
+        HYPERVISOR["HYPERVISOR"]
+        HOSTOS1["HOST OS"]
+        HARDWARE1["HARDWARE"]
+        OS1 --> HYPERVISOR
+        OS2 --> HYPERVISOR
+        OS3 --> HYPERVISOR
+        HYPERVISOR --> HOSTOS1
+        HOSTOS1 --> HARDWARE1
+    end
+    
+    subgraph CONTAINERS["CONTAINERS"]
+        direction TB
+        subgraph C1["Container 1"]
+            APP4["App A"]
+            BIN4["Bins/Libs<br/>(Shared kernel)"]
+            APP4 --> BIN4
+        end
+        subgraph C2["Container 2"]
+            APP5["App B"]
+            BIN5["Bins/Libs<br/>(Shared kernel)"]
+            APP5 --> BIN5
+        end
+        subgraph C3["Container 3"]
+            APP6["App C"]
+            BIN6["Bins/Libs<br/>(Shared kernel)"]
+            APP6 --> BIN6
+        end
+        DOCKER["DOCKER ENGINE"]
+        HOSTOS2["HOST OS"]
+        HARDWARE2["HARDWARE"]
+        BIN4 --> DOCKER
+        BIN5 --> DOCKER
+        BIN6 --> DOCKER
+        DOCKER --> HOSTOS2
+        HOSTOS2 --> HARDWARE2
+    end
+    
+    style OS1 fill:#ffcdd2
+    style OS2 fill:#ffcdd2
+    style OS3 fill:#ffcdd2
+    style HYPERVISOR fill:#fff9c4
+    style DOCKER fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    VIRTUAL MACHINES                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -162,6 +234,8 @@ Docker containers are the same idea for software:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Key differences**:
 
 | Aspect | Virtual Machine | Container |
@@ -179,7 +253,43 @@ Docker containers are the same idea for software:
 
 ### Docker Architecture
 
+```mermaid
+flowchart TD
+    CLIENT["DOCKER CLIENT<br/>(docker CLI, APIs)"]
+    DAEMON["DOCKER DAEMON<br/>(dockerd)"]
+    IMAGES["Images"]
+    CONTAINERS["Containers"]
+    NETWORKS["Networks"]
+    VOLUMES["Volumes"]
+    PLUGINS["Plugins"]
+    RUNTIME["CONTAINER RUNTIME<br/>(containerd)"]
+    KERNEL["LINUX KERNEL"]
+    NS["Namespaces"]
+    CG["Cgroups"]
+    UFS["UnionFS"]
+    
+    CLIENT -->|REST API| DAEMON
+    DAEMON --> IMAGES
+    DAEMON --> CONTAINERS
+    DAEMON --> NETWORKS
+    DAEMON --> VOLUMES
+    DAEMON --> PLUGINS
+    DAEMON --> RUNTIME
+    RUNTIME --> KERNEL
+    KERNEL --> NS
+    KERNEL --> CG
+    KERNEL --> UFS
+    
+    style CLIENT fill:#e3f2fd
+    style DAEMON fill:#fff9c4
+    style RUNTIME fill:#c8e6c9
+    style KERNEL fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        DOCKER CLIENT                             │
 │                     (docker CLI, APIs)                          │
@@ -211,6 +321,8 @@ Docker containers are the same idea for software:
 │  └─────────────┘  └─────────────┘  └─────────────┘             │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Linux Kernel Features Docker Uses
 
@@ -245,7 +357,27 @@ docker run --memory=512m --cpus=1 myapp
 
 Docker images are built in layers:
 
+```mermaid
+flowchart TD
+    L4["Layer 4: COPY app.jar<br/>(your code)<br/>← Changes often"]
+    L3["Layer 3: RUN apt-get install curl<br/>← Changes rarely"]
+    L2["Layer 2: ENV JAVA_HOME=/opt/java<br/>← Changes rarely"]
+    L1["Layer 1: eclipse-temurin:17-jre<br/>← Base image"]
+    
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    
+    style L4 fill:#ffcdd2
+    style L3 fill:#fff9c4
+    style L2 fill:#fff9c4
+    style L1 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────┐
 │  Layer 4: COPY app.jar (your code) │  ← Changes often
 ├─────────────────────────────────────┤
@@ -257,6 +389,8 @@ Docker images are built in layers:
 └─────────────────────────────────────┘
 ```
 
+</details>
+
 Benefits:
 - Layers are cached and reused
 - Multiple images can share base layers
@@ -264,7 +398,30 @@ Benefits:
 
 ### Images vs Containers
 
+```mermaid
+flowchart LR
+    IMAGE["IMAGE<br/>(Blueprint)<br/><br/>- Read-only<br/>- Immutable<br/>- Shareable"]
+    CONTAINER["CONTAINER<br/>(Instance)<br/><br/>- Running<br/>- Writable<br/>- Isolated"]
+    C1["Container 1<br/>(Production)"]
+    C2["Container 2<br/>(Staging)"]
+    C3["Container 3<br/>(Dev)"]
+    
+    IMAGE -->|docker run| CONTAINER
+    IMAGE --> C1
+    IMAGE --> C2
+    IMAGE --> C3
+    
+    style IMAGE fill:#e3f2fd
+    style CONTAINER fill:#fff9c4
+    style C1 fill:#c8e6c9
+    style C2 fill:#c8e6c9
+    style C3 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐                    ┌─────────────────┐
 │     IMAGE       │                    │    CONTAINER    │
 │  (Blueprint)    │  ───docker run───▶ │   (Instance)    │
@@ -282,6 +439,8 @@ Benefits:
 │  (Production)   │  │  (Staging)      │  │  (Dev)          │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
 ```
+
+</details>
 
 **Analogy**: 
 - Image = Class definition in Java
@@ -839,7 +998,24 @@ docker run -p 8080:80 nginx
 # Access via http://localhost:8080
 ```
 
+```mermaid
+flowchart TD
+    HOST["HOST MACHINE"]
+    LOCAL["localhost:8080"]
+    CONTAINER["CONTAINER<br/><br/>nginx listening on :80"]
+    
+    HOST --> LOCAL
+    LOCAL --> CONTAINER
+    
+    style HOST fill:#e3f2fd
+    style LOCAL fill:#fff9c4
+    style CONTAINER fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────┐
 │              HOST MACHINE               │
 │                                         │
@@ -855,6 +1031,8 @@ docker run -p 8080:80 nginx
 │                                         │
 └─────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

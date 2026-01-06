@@ -20,7 +20,29 @@ Before diving into this topic, you need to understand:
 
 In a traditional monolith, all features share one database:
 
+```mermaid
+flowchart TD
+    Monolith["Monolith Application"]
+    UserSvc["User Service<br/>(uses users table)"]
+    OrderSvc["Order Service<br/>(uses orders table)"]
+    PaymentSvc["Payment Service<br/>(uses payments table)"]
+    InventorySvc["Inventory Service<br/>(uses products table)"]
+    DB["Single Database (PostgreSQL)"]
+    
+    Monolith --> UserSvc
+    Monolith --> OrderSvc
+    Monolith --> PaymentSvc
+    Monolith --> InventorySvc
+    UserSvc --> DB
+    OrderSvc --> DB
+    PaymentSvc --> DB
+    InventorySvc --> DB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Monolith Application
 ├── User Service (uses users table)
 ├── Order Service (uses orders table)
@@ -29,6 +51,7 @@ Monolith Application
          ↓
     Single Database (PostgreSQL)
 ```
+</details>
 
 **Problems with Shared Database:**
 
@@ -109,7 +132,28 @@ Payment Service needs to add "payment_method_details" JSON column
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    OrderSvc["Order Service"]
+    OrderDB["Order Database<br/>(PostgreSQL)"]
+    PaymentSvc["Payment Service"]
+    PaymentDB["Payment Database<br/>(MongoDB)"]
+    InventorySvc["Inventory Service"]
+    ProductDB["Product Database<br/>(Cassandra)"]
+    Gateway["API Gateway / Events"]
+    
+    OrderSvc --> OrderDB
+    PaymentSvc --> PaymentDB
+    InventorySvc --> ProductDB
+    OrderSvc --> Gateway
+    PaymentSvc --> Gateway
+    InventorySvc --> Gateway
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  Order Service  │     │ Payment Service │     │ Inventory Service│
 │                 │     │                 │     │                 │
@@ -121,6 +165,7 @@ Payment Service needs to add "payment_method_details" JSON column
                           │
                    API Gateway / Events
 ```
+</details>
 
 ### Key Principles
 
@@ -801,12 +846,28 @@ CREATE SCHEMA product_service;
 ### Migration Path from Shared Database
 
 **Step 1: Identify Service Boundaries**
+```mermaid
+flowchart TD
+    SharedDB["Shared Database"]
+    Users["users table → User Service"]
+    Orders["orders table → Order Service"]
+    Products["products table → Product Service"]
+    
+    SharedDB --> Users
+    SharedDB --> Orders
+    SharedDB --> Products
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Shared Database
 ├── users table → User Service
 ├── orders table → Order Service
 └── products table → Product Service
 ```
+</details>
 
 **Step 2: Create Separate Databases**
 ```

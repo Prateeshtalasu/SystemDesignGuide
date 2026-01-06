@@ -122,7 +122,65 @@ try {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class InstagramService {
+        - Map~String,User~ users
+        - Map~String,Post~ posts
+        - FeedService feedService
+        + createUser(username, name) User
+        + uploadPhoto(userId, imageUrl, caption) Post
+        + follow(followerId, followeeId) void
+        + unfollow(followerId, followeeId) void
+        + getNewsFeed(userId, limit) List~Post~
+        + likePost(userId, postId) void
+        + addComment(userId, postId, text) Comment
+    }
+    
+    class User {
+        - String id
+        - String username
+        - String name
+        - String bio
+        - Set~String~ followers
+        - Set~String~ following
+        - List~Post~ posts
+    }
+    
+    class Post {
+        - String id
+        - String authorId
+        - String imageUrl
+        - String caption
+        - long timestamp
+        - Set~String~ likes
+        - List~Comment~ comments
+    }
+    
+    class Comment {
+        - String id
+        - String authorId
+        - String postId
+        - String text
+        - long timestamp
+    }
+    
+    class FeedService {
+        + generateNewsFeed(userId, limit) List~Post~
+    }
+    
+    InstagramService --> User
+    InstagramService --> Post
+    InstagramService --> Comment
+    InstagramService --> FeedService
+    User --> Post
+    Post --> Comment
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        INSTAGRAM SYSTEM (SIMPLIFIED)                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -160,6 +218,8 @@ try {
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### User Profile Layout
 

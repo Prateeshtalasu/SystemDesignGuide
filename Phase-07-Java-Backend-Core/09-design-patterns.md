@@ -13,7 +13,29 @@ Before diving into Design Patterns, you need to understand:
 
 Quick mental model:
 
+```mermaid
+flowchart TD
+    Patterns["Design patterns are REUSABLE SOLUTIONS<br/>to COMMON PROBLEMS"]
+    
+    Not["They are NOT:<br/>- Libraries or frameworks you import<br/>- Algorithms with specific implementations<br/>- Rules you must always follow"]
+    
+    Are["They ARE:<br/>- Templates for solving recurring design problems<br/>- A shared vocabulary for developers<br/>- Proven approaches refined over decades"]
+    
+    subgraph Categories["Categories"]
+        Creational["CREATIONAL<br/>How objects<br/>are created"]
+        Structural["STRUCTURAL<br/>How objects<br/>are composed"]
+        Behavioral["BEHAVIORAL<br/>How objects<br/>communicate"]
+    end
+    
+    Patterns --> Not
+    Patterns --> Are
+    Patterns --> Categories
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHAT ARE DESIGN PATTERNS?                             │
 │                                                                          │
@@ -38,6 +60,8 @@ Quick mental model:
 │   └─────────────┘  └─────────────┘  └─────────────┘                    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -111,7 +135,36 @@ public class NotificationService {
 
 **Problem**: You need to create objects, but the exact type depends on runtime conditions.
 
+```mermaid
+classDiagram
+    class ProductFactory {
+        <<abstract>>
+        +createProduct() Product
+    }
+    
+    class EmailFactory {
+        +createProduct() Email
+    }
+    
+    class SMSFactory {
+        +createProduct() SMS
+    }
+    
+    class PushFactory {
+        +createProduct() Push
+    }
+    
+    ProductFactory <|-- EmailFactory
+    ProductFactory <|-- SMSFactory
+    ProductFactory <|-- PushFactory
+    
+    note for ProductFactory "Instead of: new ConcreteProduct()<br/>Use: factory.createProduct()<br/>Subclasses decide what to create"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACTORY METHOD                                        │
 │                                                                          │
@@ -134,6 +187,8 @@ public class NotificationService {
 │ └──────────────┘ └──────────────┘ └──────────────┘                     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ```java
@@ -1518,7 +1573,30 @@ public class ProductService {
 
 ## 6️⃣ When to Use Which Pattern
 
+```mermaid
+flowchart TD
+    P1["Need to create objects<br/>without specifying class"] --> FM["Factory Method"]
+    P2["Need families of related<br/>objects"] --> AF["Abstract Factory"]
+    P3["Complex object with many<br/>optional parameters"] --> B["Builder"]
+    P4["Only one instance needed"] --> S["Singleton (or DI)"]
+    P5["Need to copy complex objects"] --> PR["Prototype"]
+    P6["Incompatible interfaces"] --> A["Adapter"]
+    P7["Add behavior dynamically"] --> D["Decorator"]
+    P8["Simplify complex subsystem"] --> F["Facade"]
+    P9["Control access to object"] --> PX["Proxy"]
+    P10["Tree structures"] --> C["Composite"]
+    P11["Interchangeable algorithms"] --> ST["Strategy"]
+    P12["Notify multiple objects<br/>of changes"] --> O["Observer"]
+    P13["Algorithm skeleton with<br/>customizable steps"] --> TM["Template Method"]
+    P14["Object behavior depends<br/>on state"] --> ST2["State"]
+    P15["Encapsulate requests,<br/>support undo"] --> CM["Command"]
+    P16["Pass request through<br/>handlers"] --> COR["Chain of Responsibility"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PATTERN SELECTION GUIDE                               │
 │                                                                          │
@@ -1565,6 +1643,8 @@ public class ProductService {
 │   handlers                                                              │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

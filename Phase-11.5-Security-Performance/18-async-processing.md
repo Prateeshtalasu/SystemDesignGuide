@@ -1076,7 +1076,27 @@ public class AsyncServiceTest {
    - Manual intervention capabilities
 
 **Architecture**:
+```mermaid
+flowchart TD
+    TaskSub["Task Submission"] --> Queue["Priority Queue"]
+    Queue --> Dispatcher["Task Dispatcher<br/>(prioritizes)"]
+    
+    Dispatcher --> HighPool["High Priority<br/>Worker Pool"]
+    Dispatcher --> MediumPool["Medium Priority<br/>Worker Pool"]
+    Dispatcher --> LowPool["Low Priority<br/>Worker Pool"]
+    
+    HighPool --> Executor["Task Executor"]
+    MediumPool --> Executor
+    LowPool --> Executor
+    
+    Executor --> Retry["Retry Logic"]
+    Retry --> DLQ["Dead Letter Queue"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Task Submission → Priority Queue
                       ↓
               Task Dispatcher (prioritizes)
@@ -1088,6 +1108,7 @@ Task Submission → Priority Queue
          ↓            ↓            ↓
     Task Executor → Retry Logic → Dead Letter Queue
 ```
+</details>
 
 **Implementation considerations**:
 - Task metadata (priority, retry count, created time)

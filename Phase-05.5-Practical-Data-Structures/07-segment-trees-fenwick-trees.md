@@ -182,7 +182,17 @@ Manager 8: responsible for employees 1-8
 
 Only 2 managers consulted, not 6 employees!
 
-```
+**Key Insight**
+
+Both structures achieve O(log n) by:
+
+- **Segment Tree**: Dividing the array into hierarchical segments (like a binary tree over ranges)
+- **Fenwick Tree**: Using binary representation to determine which prefix sums each index is responsible for
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      KEY INSIGHT                                 │
 ├─────────────────────────────────────────────────────────────────┤
@@ -197,6 +207,7 @@ Only 2 managers consulted, not 6 employees!
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

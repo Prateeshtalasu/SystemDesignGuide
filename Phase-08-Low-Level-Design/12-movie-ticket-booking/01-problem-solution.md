@@ -73,7 +73,89 @@ assertThrows(IllegalStateException.class, () ->
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class BookingService {
+        - Map~String,Theater~ theaters
+        - Map~String,Booking~ bookings
+        - Map~String,SeatLock~ seatLocks
+        + searchShows(movie, city, date) List~Show~
+        + getAvailableSeats(showId) List~Seat~
+        + lockSeats(showId, seats, userId) SeatLock
+        + confirmBooking(lockId, payment) Booking
+        + cancelBooking(bookingId) Refund
+    }
+    
+    class Theater {
+        - String name
+        - String city
+        - List~Screen~ screens
+    }
+    
+    class Screen {
+        - int number
+        - Seat[][] seats
+        - List~Show~ shows
+    }
+    
+    class Seat {
+        - String row
+        - int number
+        - SeatType type
+    }
+    
+    class Movie {
+        - String title
+        - int duration
+        - String genre
+        - String rating
+    }
+    
+    class Show {
+        - Movie movie
+        - Screen screen
+        - LocalDateTime startTime
+        - Pricing pricing
+    }
+    
+    class ShowSeat {
+        - Seat seat
+        - SeatStatus status
+        - BigDecimal price
+    }
+    
+    class SeatLock {
+        - List~Seat~ seats
+        - LocalDateTime expiresAt
+        - String userId
+    }
+    
+    class Booking {
+        - String id
+        - Show show
+        - List~Seat~ seats
+        - BigDecimal amount
+        - BookingStatus status
+    }
+    
+    BookingService --> Theater
+    BookingService --> Booking
+    BookingService --> SeatLock
+    Theater --> Screen
+    Screen --> Seat
+    Screen --> Show
+    Show --> Movie
+    Show --> ShowSeat
+    ShowSeat --> Seat
+    SeatLock --> Seat
+    Booking --> Show
+    Booking --> Seat
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        MOVIE TICKET BOOKING SYSTEM                               │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -124,6 +206,8 @@ assertThrows(IllegalStateException.class, () ->
 │                          └─────────────┘                                       │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Seat Layout Visualization
 

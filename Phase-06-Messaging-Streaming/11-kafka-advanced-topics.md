@@ -20,41 +20,15 @@ Before diving into Kafka advanced topics, you should understand:
 
 Once you have Kafka running in production, new challenges emerge:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              PRODUCTION KAFKA CHALLENGES                     │
-│                                                              │
-│   CHALLENGE 1: Consumer Lag                                  │
-│   "Consumers are falling behind. How far? Is it critical?"  │
-│   - 10 million messages in backlog                          │
-│   - Are we processing fast enough to catch up?              │
-│   - Will we run out of disk before catching up?             │
-│                                                              │
-│   CHALLENGE 2: Rebalancing Storms                           │
-│   "Every time we deploy, processing stops for minutes!"     │
-│   - 50 consumers, 200 partitions                            │
-│   - Rebalance takes 2+ minutes                              │
-│   - All consumers stop during rebalance                     │
-│                                                              │
-│   CHALLENGE 3: Message Ordering                             │
-│   "Messages for same user arriving out of order!"           │
-│   - User creates account, then updates profile              │
-│   - Update arrives before create (different partitions)     │
-│   - System tries to update non-existent user                │
-│                                                              │
-│   CHALLENGE 4: Storage Costs                                │
-│   "Kafka cluster using 50TB, growing 1TB/day!"              │
-│   - Messages not compressed                                 │
-│   - Retention too long for some topics                      │
-│   - Inefficient batching                                    │
-│                                                              │
-│   CHALLENGE 5: Data Integration                             │
-│   "Need to sync Kafka with 10 different databases"          │
-│   - Custom connectors for each                              │
-│   - Schema mismatches                                       │
-│   - Exactly-once guarantees                                 │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Challenges["PRODUCTION KAFKA CHALLENGES"]
+    C1["CHALLENGE 1: Consumer Lag\n'Consumers are falling behind. How far? Is it critical?'\n- 10 million messages in backlog\n- Are we processing fast enough to catch up?\n- Will we run out of disk before catching up?"]
+    C2["CHALLENGE 2: Rebalancing Storms\n'Every time we deploy, processing stops for minutes!'\n- 50 consumers, 200 partitions\n- Rebalance takes 2+ minutes\n- All consumers stop during rebalance"]
+    C3["CHALLENGE 3: Message Ordering\n'Messages for same user arriving out of order!'\n- User creates account, then updates profile\n- Update arrives before create (different partitions)\n- System tries to update non-existent user"]
+    C4["CHALLENGE 4: Storage Costs\n'Kafka cluster using 50TB, growing 1TB/day!'\n- Messages not compressed\n- Retention too long for some topics\n- Inefficient batching"]
+    C5["CHALLENGE 5: Data Integration\n'Need to sync Kafka with 10 different databases'\n- Custom connectors for each\n- Schema mismatches\n- Exactly-once guarantees"]
+  end
 ```
 
 ### Real Examples of the Problems
@@ -73,35 +47,15 @@ Once you have Kafka running in production, new challenges emerge:
 
 Think of Kafka operations like managing a massive factory:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              FACTORY ANALOGY                                 │
-│                                                              │
-│   CONSUMER LAG = Conveyor Belt Backup                       │
-│   Items piling up on the belt                               │
-│   Workers can't keep up with incoming items                 │
-│   Need to monitor: How many items waiting? Growing?         │
-│                                                              │
-│   REBALANCING = Shift Change                                │
-│   Workers changing stations                                 │
-│   During change, production stops                           │
-│   Goal: Minimize changeover time                            │
-│                                                              │
-│   PARTITION ASSIGNMENT = Work Station Assignment            │
-│   Which worker handles which station?                       │
-│   Range: Worker 1 gets stations 1-5                         │
-│   Round-robin: Worker 1 gets 1,4,7,10                       │
-│   Sticky: Keep same assignment when possible                │
-│                                                              │
-│   COMPRESSION = Packaging                                   │
-│   Pack items tightly to save shipping space                 │
-│   Trade-off: Packing time vs shipping cost                  │
-│                                                              │
-│   KAFKA CONNECT = Automated Loading Docks                   │
-│   Standard interface for trucks (databases)                 │
-│   No custom loading for each truck type                     │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Factory["FACTORY ANALOGY"]
+    Lag["CONSUMER LAG = Conveyor Belt Backup\nItems piling up on the belt\nWorkers can't keep up with incoming items\nNeed to monitor: How many items waiting? Growing?"]
+    Rebalance["REBALANCING = Shift Change\nWorkers changing stations\nDuring change, production stops\nGoal: Minimize changeover time"]
+    Assign["PARTITION ASSIGNMENT = Work Station Assignment\nWhich worker handles which station?\nRange: Worker 1 gets stations 1-5\nRound-robin: Worker 1 gets 1,4,7,10\nSticky: Keep same assignment when possible"]
+    Compression["COMPRESSION = Packaging\nPack items tightly to save shipping space\nTrade-off: Packing time vs shipping cost"]
+    Connect["KAFKA CONNECT = Automated Loading Docks\nStandard interface for trucks (databases)\nNo custom loading for each truck type"]
+  end
 ```
 
 ---

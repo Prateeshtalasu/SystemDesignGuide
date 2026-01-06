@@ -21,7 +21,32 @@ Before diving into other messaging systems, you should understand:
 
 Kafka is excellent, but it's not always the right choice:
 
+```mermaid
+flowchart TD
+  subgraph Fit["WHEN KAFKA ISN'T THE BEST FIT"]
+    S1["Scenario 1: Complex Routing
+Route messages to different queues based on content
+Kafka: Limited (partition by key only)
+RabbitMQ: Excellent (exchanges, routing keys)"]
+    S2["Scenario 2: Low Volume, Simple Needs
+10,000 messages/day, just need reliable delivery
+Kafka: Overkill (operational overhead)
+SQS: Perfect (fully managed, pay per message)"]
+    S3["Scenario 3: Existing Redis Infrastructure
+Already using Redis, need simple streaming
+Kafka: New infrastructure to manage
+Redis Streams: Use existing Redis cluster"]
+    S4["Scenario 4: Multi-Tenancy
+Different teams need isolated message streams
+Kafka: Complex multi-tenancy
+Pulsar: Native multi-tenancy support"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WHEN KAFKA ISN'T THE BEST FIT                   │
 │                                                              │
@@ -47,6 +72,8 @@ Kafka is excellent, but it's not always the right choice:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Why Multiple Systems Exist
 
@@ -79,7 +106,41 @@ Each messaging system was designed for specific use cases:
 
 Think of messaging systems like different transportation options:
 
+```mermaid
+flowchart TD
+  subgraph Transport["TRANSPORTATION ANALOGY"]
+    Kafka["KAFKA = Freight Train
+- Massive throughput
+- Fixed routes (partitions)
+- Efficient for bulk transport
+- Requires infrastructure (tracks)"]
+    Rabbit["RABBITMQ = Postal Service
+- Flexible routing (any address)
+- Different delivery options (priority, express)
+- Good for varied package sizes
+- Complex routing rules"]
+    SQS["SQS = Delivery Locker
+- Simple: put in, take out
+- No infrastructure to manage
+- Pay per package
+- Limited features"]
+    Redis["REDIS STREAMS = Express Courier
+- Fast, lightweight
+- Good for small packages
+- Uses existing infrastructure
+- Not for heavy loads"]
+    Pulsar["PULSAR = Modern Logistics Hub
+- Separates storage from routing
+- Multi-tenant by design
+- Geo-replication built-in
+- More complex setup"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              TRANSPORTATION ANALOGY                          │
 │                                                              │
@@ -115,6 +176,8 @@ Think of messaging systems like different transportation options:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

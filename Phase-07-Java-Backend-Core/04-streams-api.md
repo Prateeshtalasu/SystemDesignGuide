@@ -112,7 +112,36 @@ for (User user : adults) {
 
 Think of Streams like a factory assembly line:
 
+```mermaid
+flowchart LR
+    Source["Raw Materials (Source)<br/>[1][2][3][4][5][6][7][8]<br/>List of numbers"]
+    
+    Station1["Station 1: FILTER<br/>(x -> x % 2 == 0)<br/>Keep only even numbers"]
+    
+    Filtered["Filtered items<br/>[2][4][6][8]"]
+    
+    Station2["Station 2: MAP<br/>(x -> x * x)<br/>Square each number"]
+    
+    Transformed["Transformed items<br/>[4][16][36][64]"]
+    
+    Station3["Station 3: REDUCE<br/>(sum)<br/>Sum all numbers"]
+    
+    Final["Final product<br/>120"]
+    
+    Source --> Station1
+    Station1 --> Filtered
+    Filtered --> Station2
+    Station2 --> Transformed
+    Transformed --> Station3
+    Station3 --> Final
+    
+    Note["KEY INSIGHT: Items flow through stations one at a time<br/>The assembly line doesn't store intermediate results<br/>Each station does ONE thing"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STREAM AS ASSEMBLY LINE                               │
 │                                                                          │
@@ -160,6 +189,8 @@ Think of Streams like a factory assembly line:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 
@@ -175,7 +206,25 @@ Think of Streams like a factory assembly line:
 
 ### Stream Pipeline Architecture
 
+```mermaid
+flowchart TD
+    Source["SOURCE<br/>Collection, Array, Generator, I/O"]
+    
+    Intermediate["INTERMEDIATE OPERATIONS (Lazy)<br/>filter(), map(), flatMap(), sorted(),<br/>distinct(), limit(), skip(), peek()<br/>Can chain multiple intermediate operations"]
+    
+    Terminal["TERMINAL OPERATION (Eager)<br/>collect(), reduce(), forEach(), count(),<br/>findFirst(), anyMatch(), toArray()"]
+    
+    Result["RESULT<br/>Collection, Value, Side Effect"]
+    
+    Source --> Intermediate
+    Intermediate --> Terminal
+    Terminal --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STREAM PIPELINE STRUCTURE                             │
 │                                                                          │
@@ -203,6 +252,8 @@ Think of Streams like a factory assembly line:
 │   └──────────────┘                                                      │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Lazy Evaluation Explained
@@ -290,7 +341,51 @@ double total = orders.stream()
 
 ### Step-by-Step Execution
 
+```mermaid
+sequenceDiagram
+    participant Source as Source: [O1, O2, O3, O4, O5]
+    participant O1 as O1 (Alice, 150, ELECTRONICS)
+    participant O2 as O2 (Bob, 50, BOOKS)
+    participant O3 as O3 (Alice, 200, ELECTRONICS)
+    participant O4 as O4 (Charlie, 75, CLOTHING)
+    participant O5 as O5 (Alice, 300, ELECTRONICS)
+    participant Result as Final Result
+    
+    Source->>O1: Process O1
+    O1->>O1: filter(customer=Alice) → PASS
+    O1->>O1: filter(category=ELECTRONICS) → PASS
+    O1->>O1: mapToDouble → 150.0
+    O1->>Result: Add to sum: 0 + 150 = 150
+    
+    Source->>O2: Process O2
+    O2->>O2: filter(customer=Alice) → FAIL
+    Note over O2: ❌ Skipped! Doesn't reach map or sum.
+    
+    Source->>O3: Process O3
+    O3->>O3: filter(customer=Alice) → PASS
+    O3->>O3: filter(category=ELECTRONICS) → PASS
+    O3->>O3: mapToDouble → 200.0
+    O3->>Result: Add to sum: 150 + 200 = 350
+    
+    Source->>O4: Process O4
+    O4->>O4: filter(customer=Alice) → FAIL
+    Note over O4: ❌ Skipped!
+    
+    Source->>O5: Process O5
+    O5->>O5: filter(customer=Alice) → PASS
+    O5->>O5: filter(category=ELECTRONICS) → PASS
+    O5->>O5: mapToDouble → 300.0
+    O5->>Result: Add to sum: 350 + 300 = 650
+    
+    Result->>Result: Final Result: 650.0
+    
+    Note over Source,Result: KEY INSIGHT: Each element flows through ALL operations<br/>before the next element starts. This is "loop fusion"<br/>- one pass through the data, not multiple passes.
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STREAM EXECUTION TRACE                                │
 │                                                                          │
@@ -335,6 +430,8 @@ double total = orders.stream()
 │   the data, not multiple passes.                                        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -1121,7 +1218,30 @@ for (int n : numbers) {
 
 ### Streams vs Traditional Loops
 
+```mermaid
+graph LR
+    subgraph Traditional["Traditional Loop"]
+        TCode["List&lt;String&gt; result = new ArrayList&lt;&gt;();<br/>for (Person p : people) {<br/>    if (p.getAge() &gt;= 18) {<br/>        result.add(p.getName());<br/>    }<br/>}"]
+        TPros["Pros:<br/>- Familiar<br/>- No overhead<br/>- Easy debugging<br/>- Full control"]
+        TCons["Cons:<br/>- Verbose<br/>- Mutable state<br/>- Not composable"]
+    end
+    
+    subgraph Stream["Stream"]
+        SCode["List&lt;String&gt; result =<br/>    people.stream()<br/>        .filter(p -> p.getAge() &gt;= 18)<br/>        .map(Person::getName)<br/>        .collect(toList());"]
+        SPros["Pros:<br/>- Declarative<br/>- Composable<br/>- Parallelizable<br/>- Concise"]
+        SCons["Cons:<br/>- Learning curve<br/>- Debugging harder<br/>- Overhead for small data"]
+    end
+    
+    TCode --> TPros
+    TCode --> TCons
+    SCode --> SPros
+    SCode --> SCons
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STREAMS vs TRADITIONAL LOOPS                          │
 │                                                                          │
@@ -1146,6 +1266,8 @@ for (int n : numbers) {
 │   - Not composable                     - Overhead for small data        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Streams vs RxJava/Reactor

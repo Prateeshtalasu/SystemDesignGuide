@@ -102,7 +102,89 @@ machine.refund();
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class VendingMachine {
+        - Inventory inventory
+        - VendingState currentState
+        - int currentBalance
+        - Product selectedProduct
+        + insertCoin(coin) void
+        + selectProduct(code) void
+        + dispense() Product
+        + refund() List~Coin~
+    }
+    
+    class Inventory {
+        - Map~String,Slot~ slots
+        + addProduct(product, quantity) void
+        + getProduct(code) Product
+    }
+    
+    class Product {
+        - String name
+        - int price
+        - String code
+    }
+    
+    class Coin {
+        <<enumeration>>
+        PENNY
+        NICKEL
+        DIME
+        QUARTER
+        DOLLAR
+    }
+    
+    class VendingState {
+        <<interface>>
+        + insertCoin() void
+        + select() void
+        + dispense() void
+        + refund() void
+    }
+    
+    class IdleState {
+        + insertCoin() void
+        + select() void
+        + dispense() void
+        + refund() void
+    }
+    
+    class HasMoneyState {
+        + insertCoin() void
+        + select() void
+        + dispense() void
+        + refund() void
+    }
+    
+    class DispensingState {
+        + insertCoin() void
+        + select() void
+        + dispense() void
+        + refund() void
+    }
+    
+    class SoldOutState {
+        + insertCoin() void
+        + select() void
+        + dispense() void
+        + refund() void
+    }
+    
+    VendingMachine --> Inventory
+    VendingMachine --> Product
+    VendingMachine --> VendingState
+    VendingState <|.. IdleState
+    VendingState <|.. HasMoneyState
+    VendingState <|.. DispensingState
+    VendingState <|.. SoldOutState
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                            VENDING MACHINE                                       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -143,9 +225,31 @@ machine.refund();
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### State Machine Diagram
 
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    
+    IDLE --> HAS_MONEY: insertCoin()
+    IDLE --> IDLE: refund() (no money)
+    
+    HAS_MONEY --> HAS_MONEY: insertCoin()
+    HAS_MONEY --> DISPENSING: selectProduct()
+    HAS_MONEY --> IDLE: refund()
+    
+    DISPENSING --> IDLE: dispense() (success)
+    DISPENSING --> SOLD_OUT: dispense() (out of stock)
+    
+    SOLD_OUT --> IDLE: restock()
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────────────────────────────┐
                     │           VENDING MACHINE STATES         │
                     └─────────────────────────────────────────┘
@@ -180,6 +284,8 @@ machine.refund();
                                     ▼
                               (back to IDLE)
 ```
+
+</details>
 
 ---
 

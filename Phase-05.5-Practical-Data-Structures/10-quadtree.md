@@ -40,11 +40,23 @@ void process(Node node) {
 ### Tree Data Structures
 A **tree** is a hierarchical structure with nodes. Each node can have children.
 
+```mermaid
+flowchart TD
+    Root[Root] --> NW[NW]
+    Root --> NE[NE]
+    Root --> SW[SW]
+    Root --> SE[SE]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
         Root
        / | \ \
       NW NE SW SE
 ```
+</details>
 
 ---
 
@@ -111,7 +123,18 @@ Imagine you're organizing a city map to find locations quickly.
 
 **Quadtree approach**: Divide the map into 4 quadrants. If a quadrant has too many locations, divide it again.
 
-```
+**Initial map (too many points):**
+- Multiple points scattered across the map
+
+**After quadtree division:**
+- Map divided into 4 quadrants (NW, NE, SW, SE)
+- Each quadrant contains a subset of points
+- Dense quadrants can be further subdivided
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Initial map (too many points):
 ┌─────────────────────────────┐
 │  •    •  •    •    •   •   │
@@ -129,6 +152,8 @@ After quadtree division:
 │  •   •  •    │   •    •  •  │
 │      •    •  │ •    •       │
 │  •      •    │    •    •   •│
+```
+</details>
 └──────────────┴──────────────┘
   Northwest      Northeast
   Southwest      Southeast
@@ -136,7 +161,10 @@ After quadtree division:
 
 ### The Key Insight
 
-```
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    QUADTREE KEY INSIGHT                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -153,6 +181,7 @@ After quadtree division:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Quadtree Structure
 
@@ -217,7 +246,30 @@ Insert point P into node N:
 
 ### Subdivision
 
+**Before subdivision:**
+- boundary: (0,0,100,100)
+- capacity: 4
+- points: [P1,P2,P3,P4]
+- divided: false
+
+**After inserting 5th point:**
+```mermaid
+flowchart TB
+    subgraph Before["Before: Single Node"]
+        Node1["boundary: 0,0,100,100<br/>capacity: 4<br/>points: P1,P2,P3,P4<br/>divided: false"]
+    end
+    subgraph After["After: Subdivided"]
+        NW[NW<br/>0,50,50,50<br/>P1]
+        NE[NE<br/>50,50,50,50<br/>P2,P5]
+        SW[SW<br/>0,0,50,50<br/>P3]
+        SE[SE<br/>50,0,50,50<br/>P4]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Before subdivision:
 ┌─────────────────────────────┐
 │      boundary: (0,0,100,100)│
@@ -237,6 +289,7 @@ After inserting 5th point:
 │  [P3]        │  [P4]        │
 └──────────────┴──────────────┘
 ```
+</details>
 
 ### Query Algorithm (Range Search)
 
@@ -409,7 +462,16 @@ Result: B is nearest to Q
 
 ### Uber: Finding Nearby Drivers
 
+```mermaid
+flowchart TD
+    A["Rider requests ride at location R"] --> B["Quadtree of Active Drivers<br/><br/>Query: 2km radius around rider R<br/><br/>NW: Drivers | NE: Drivers<br/>SW: Rider + Drivers | SE: Drivers"]
+    B --> C["Return 5 nearest drivers:<br/>[D1, D2, D3, D4, D5]<br/><br/>Complexity: O(log n) instead of O(n)<br/>With 100K drivers: ~17 comparisons instead of 100,000"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    UBER DRIVER MATCHING                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -436,6 +498,7 @@ Result: B is nearest to Q
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Game Development: Collision Detection
 

@@ -20,32 +20,15 @@ Before diving into schema evolution, you should understand:
 
 Imagine you have a message schema for orders:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              THE SCHEMA CHANGE NIGHTMARE                     │
-│                                                              │
-│   Version 1 (Day 1):                                        │
-│   {                                                          │
-│     "orderId": "O123",                                      │
-│     "amount": 100                                           │
-│   }                                                          │
-│                                                              │
-│   Version 2 (Day 30 - New requirement):                     │
-│   {                                                          │
-│     "orderId": "O123",                                      │
-│     "amount": 100,                                          │
-│     "currency": "USD"    ← NEW FIELD                        │
-│   }                                                          │
-│                                                              │
-│   PROBLEM:                                                   │
-│   - Old producers still sending V1 messages                 │
-│   - New consumers expecting V2 messages                     │
-│   - New consumers crash: "currency field missing!"          │
-│   - Old consumers crash: "unknown field currency!"          │
-│                                                              │
-│   You can't update all producers and consumers at once!     │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Nightmare["THE SCHEMA CHANGE NIGHTMARE"]
+    V1["Version 1 (Day 1):\n{\n  'orderId': 'O123',\n  'amount': 100\n}"]
+    V2["Version 2 (Day 30 - New requirement):\n{\n  'orderId': 'O123',\n  'amount': 100,\n  'currency': 'USD'  (NEW FIELD)\n}"]
+    Problem["PROBLEM:\n- Old producers still sending V1 messages\n- New consumers expecting V2 messages\n- New consumers crash: 'currency field missing!'\n- Old consumers crash: 'unknown field currency!'\nYou can't update all producers and consumers at once!"]
+    V1 --> Problem
+    V2 --> Problem
+  end
 ```
 
 ### What Systems Looked Like Before Schema Evolution
@@ -109,30 +92,14 @@ Problems:
 
 Think of schemas like legal contracts between producers and consumers:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CONTRACT ANALOGY                                │
-│                                                              │
-│   PRODUCER (Seller)          CONSUMER (Buyer)               │
-│   "I promise to send         "I expect to receive           │
-│    these fields"              these fields"                 │
-│                                                              │
-│   BACKWARD COMPATIBLE CHANGE:                               │
-│   Like adding optional clauses to a contract.               │
-│   Old buyers can ignore new clauses.                        │
-│   "I'll also include gift wrapping" (optional)              │
-│                                                              │
-│   FORWARD COMPATIBLE CHANGE:                                │
-│   Like accepting contracts with extra clauses.              │
-│   New buyers can handle old contracts.                      │
-│   "I can work with or without gift wrapping"                │
-│                                                              │
-│   BREAKING CHANGE:                                           │
-│   Like changing fundamental terms.                          │
-│   Old contracts no longer valid.                            │
-│   "Payment is now in Bitcoin only" (breaks old buyers)      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Contract["CONTRACT ANALOGY"]
+    Parties["PRODUCER (Seller) ↔ CONSUMER (Buyer)\n'I promise to send these fields' ↔ 'I expect to receive these fields'"]
+    Backward["BACKWARD COMPATIBLE CHANGE:\nLike adding optional clauses to a contract.\nOld buyers can ignore new clauses.\n'I'll also include gift wrapping' (optional)"]
+    Forward["FORWARD COMPATIBLE CHANGE:\nLike accepting contracts with extra clauses.\nNew buyers can handle old contracts.\n'I can work with or without gift wrapping'"]
+    Breaking["BREAKING CHANGE:\nLike changing fundamental terms.\nOld contracts no longer valid.\n'Payment is now in Bitcoin only' (breaks old buyers)"]
+  end
 ```
 
 ### Compatibility Types

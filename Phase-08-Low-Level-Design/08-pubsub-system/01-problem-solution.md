@@ -96,7 +96,80 @@ service.publish(Message.builder()
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class PubSubService {
+        - Map~String,Topic~ topics
+        - ExecutorService executor
+        + createTopic(name) Topic
+        + deleteTopic(name) boolean
+        + publish(topicName, message) void
+        + subscribe(topicName, subscriber) Subscription
+        + unsubscribe(subscription) boolean
+    }
+    
+    class Topic {
+        - String name
+        - Set~Subscription~ subscribers
+        - Deque~Message~ messageHistory
+        + addSubscriber(subscription) void
+        + removeSubscriber(subscription) void
+        + publish(message) void
+    }
+    
+    class Message {
+        - String id
+        - String topic
+        - Object payload
+        - Instant timestamp
+        - Map~String,String~ headers
+    }
+    
+    class Subscription {
+        - String id
+        - Topic topic
+        - Subscriber subscriber
+        - Predicate~Message~ filter
+        - boolean active
+    }
+    
+    class Subscriber {
+        <<interface>>
+        + onMessage(message) void
+        + getId() String
+    }
+    
+    class PrintSubscriber {
+        + onMessage(message) void
+        + getId() String
+    }
+    
+    class QueueSubscriber {
+        - Queue~Message~ queue
+        + onMessage(message) void
+        + getId() String
+    }
+    
+    class CallbackSubscriber {
+        - Consumer~Message~ callback
+        + onMessage(message) void
+        + getId() String
+    }
+    
+    PubSubService --> Topic
+    Topic --> Subscription
+    Topic --> Message
+    Subscription --> Subscriber
+    Subscription --> Topic
+    Subscriber <|.. PrintSubscriber
+    Subscriber <|.. QueueSubscriber
+    Subscriber <|.. CallbackSubscriber
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              PUB/SUB SYSTEM                                      │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -156,9 +229,35 @@ service.publish(Message.builder()
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Message Flow Visualization
 
+```mermaid
+sequenceDiagram
+    participant P as Publisher
+    participant PS as PubSubService
+    participant T as Topic
+    participant S1 as Sub1
+    participant S2 as Sub2
+    participant S3 as Sub3
+    
+    P->>PS: publish("orders", msg)
+    PS->>T: Find topic "orders"
+    T-->>PS: Topic found
+    
+    PS->>T: For each subscriber
+    T->>T: Apply filter
+    
+    T->>S1: onMessage(msg)
+    T->>S2: onMessage(msg)
+    Note over T,S3: (filtered out)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Publisher                    PubSubService                    Subscribers
     │                             │                               │
     │  publish("orders", msg)     │                               │
@@ -185,6 +284,8 @@ Publisher                    PubSubService                    Subscribers
     │                             │  (filtered out)               │
     │                             │              ╳                │ Sub3
 ```
+
+</details>
 
 ---
 

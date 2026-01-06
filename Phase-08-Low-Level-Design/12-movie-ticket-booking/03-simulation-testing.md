@@ -233,12 +233,13 @@ public synchronized void checkAndReleaseLock() {
 
 **Lock lifecycle:**
 
-```
-AVAILABLE ──lock()──► LOCKED ──book()──► BOOKED
-    ▲                    │
-    │                    │ expire or unlock
-    │                    │
-    └────────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE
+    AVAILABLE --> LOCKED: lock()
+    LOCKED --> BOOKED: book()
+    LOCKED --> AVAILABLE: expire or unlock
+    BOOKED --> [*]
 ```
 
 ---
@@ -295,7 +296,19 @@ public synchronized SeatLock lockSeats(String showId, List<String> seatIds,
 
 **Booking flow:**
 
+```mermaid
+flowchart TD
+    A["User selects seats"]
+    A --> B["lockSeats()<br/>Returns SeatLock (expires in 10 min)"]
+    B --> C["User fills payment info"]
+    C --> D["confirmBooking()<br/>Converts LOCKED → BOOKED"]
+    D --> E["Booking + Ticket"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 User selects seats
         │
         ▼
@@ -312,6 +325,8 @@ User selects seats
         ▼
     Booking + Ticket
 ```
+
+</details>
 
 ---
 

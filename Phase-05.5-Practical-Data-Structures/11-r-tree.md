@@ -49,6 +49,21 @@ Quadtrees work well for **points**, but what about objects with **size**?
 ```
 A large object (like a lake) might span multiple quadrants:
 
+```mermaid
+flowchart TB
+    subgraph Grid[" "]
+        Q1[" "]
+        Q2[" "]
+        Q3[" "]
+        Q4[" "]
+        Lake[LAKE<br/>spans quadrants]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────┬──────────────┐
 │              │              │
 │    ┌─────────┼───────┐      │
@@ -59,6 +74,8 @@ A large object (like a lake) might span multiple quadrants:
 │    └─────────┼───────┘      │
 │              │              │
 └──────────────┴──────────────┘
+```
+</details>
 
 Where do we store the lake? 
 - In all 4 quadrants? (duplication)
@@ -69,7 +86,26 @@ Where do we store the lake?
 
 R-Trees group objects by their bounding boxes, not by fixed spatial divisions:
 
+```mermaid
+flowchart TB
+    subgraph Space[" "]
+        subgraph Group1["Group 1"]
+            A[Building A]
+            B[Building B]
+            C[Building C]
+        end
+        subgraph Group2["Group 2"]
+            D[Building D]
+            E[Building E]
+            C2[Building C]
+        end
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Instead of dividing space, group nearby objects:
 
 ┌─────────────────────────────────────────┐
@@ -82,6 +118,8 @@ Instead of dividing space, group nearby objects:
 │                     └─────────────────┘ │
 │                           Group 2       │
 └─────────────────────────────────────────┘
+```
+</details>
 
 Each group's bounding box contains its members.
 ```
@@ -148,7 +186,20 @@ Filing Cabinet:
 
 ### The Key Insight
 
-```
+**Key Insight**: "Group objects by proximity, not by fixed spatial divisions"
+
+- Each internal node contains a bounding box that encloses all objects in its subtree.
+- If query doesn't intersect a node's bounding box, skip the entire subtree.
+
+**Unlike Quadtrees:**
+- No fixed grid
+- Objects stored once (no duplication)
+- Handles objects of any size
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      R-TREE KEY INSIGHT                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -168,6 +219,7 @@ Filing Cabinet:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -199,7 +251,23 @@ class RTreeNode {
 
 ### Tree Structure Example
 
+```mermaid
+flowchart TD
+    Root["Root<br/>MBR: 0,0 to 100,100"] --> MBR1["MBR: 0,0 to 40,50"]
+    Root --> MBR2["MBR: 30,30 to 70,80"]
+    Root --> MBR3["MBR: 60,0 to 100,60"]
+    MBR1 --> ObjA[Obj A]
+    MBR1 --> ObjB[Obj B]
+    MBR2 --> ObjC[Obj C]
+    MBR2 --> ObjD[Obj D]
+    MBR3 --> ObjE[Obj E]
+    MBR3 --> ObjF[Obj F]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     Root
             ┌────────┴────────┐
             │    MBR: (0,0)   │
@@ -220,6 +288,7 @@ class RTreeNode {
     │Obj B│      │Obj D│      │Obj F│
     └─────┘      └─────┘      └─────┘
 ```
+</details>
 
 ### Search Algorithm
 

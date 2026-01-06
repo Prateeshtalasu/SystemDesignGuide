@@ -345,7 +345,32 @@ flowchart TB
 
 **Active-Passive Configuration:**
 
+```mermaid
+flowchart LR
+    subgraph Active["us-east-1 (Active)"]
+        ALBActive["ALB"]
+        URLActive["URL Service x10"]
+        RedisActive["Redis Cluster"]
+        PGActive["PostgreSQL"]
+        KafkaActive["Kafka"]
+    end
+    
+    subgraph Passive["us-west-2 (Passive)"]
+        ALBPassive["ALB (standby)"]
+        URLPassive["URL Service x2"]
+        RedisPassive["Redis (replica)"]
+        PGPassive["PostgreSQL (DR)"]
+        KafkaPassive["Kafka (mirror)"]
+    end
+    
+    RedisActive -->|async| RedisPassive
+    PGActive -->|async| PGPassive
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 us-east-1 (Active)          us-west-2 (Passive)
 ┌─────────────────┐         ┌─────────────────┐
 │ ALB             │         │ ALB (standby)   │
@@ -354,6 +379,9 @@ us-east-1 (Active)          us-west-2 (Passive)
 │ PostgreSQL      │  async  │ PostgreSQL (DR) │
 │ Kafka           │         │ Kafka (mirror)  │
 └─────────────────┘         └─────────────────┘
+```
+
+</details>
 ```
 
 **RTO/RPO Targets:**
@@ -1133,6 +1161,8 @@ flowchart TD
     Step3["Step 3: Database Validation (Double-Check)<br/>- SELECT * FROM urls WHERE short_code='xyz789'<br/>- Database confirms: expired_at < NOW()<br/>- Record marked as expired"]
     Step3 --> Step4
     Step4["Step 4: Response Handling<br/><br/>Option A: Soft Delete (Recommended)<br/>- Return 301 to landing page: '/expired?url=xyz789'<br/>- Shows 'This link has expired' message<br/>- User experience: Graceful degradation<br/><br/>Option B: Hard Delete<br/>- Return 404 Not Found<br/>- Cache entry deleted from Redis<br/>- User experience: Broken link"]
+    Step4 --> Step5
+    Step5["Step 5: Cache Cleanup<br/>- Async job: DELETE url:xyz789 from Redis<br/>- Prevents stale cache hits<br/>- Expiration job runs every 5 minutes"]
 ```
 
 <details>
@@ -1186,18 +1216,18 @@ Edge Case: URL expires between cache check and redirect
 │ - Cache entry deleted from Redis                           │
 │ - User experience: Broken link                             │
 └─────────────────────────────────────────────────────────────┘
-```
-
-</details>
-```
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Cache Cleanup:                                              │
+│ Step 5: Cache Cleanup                                       │
 │ - Async job: DELETE url:xyz789 from Redis                  │
 │ - Prevents stale cache hits                                │
 │ - Expiration job runs every 5 minutes                     │
 └─────────────────────────────────────────────────────────────┘
+```
+
+</details>
+```
 
 **Race Condition Handling:**
 - Database is source of truth for expiration

@@ -187,7 +187,26 @@ Restaurant (Provider):
 
 ### Contract Testing Architecture
 
+```mermaid
+flowchart TD
+    subgraph Consumer["1. CONSUMER SIDE (Order Service)"]
+        OrderTest["Order Service<br/>Test Suite<br/><br/>- Define what<br/>  Payment API<br/>  should return<br/>- Generate<br/>  contract"]
+    end
+    
+    Broker["Contract Broker<br/>(Shared registry, e.g., Pact Broker)<br/><br/>- Stores contracts<br/>- Tracks versions<br/>- Notifies providers"]
+    
+    subgraph Provider["2. PROVIDER SIDE (Payment Service)"]
+        PaymentTest["Payment Service<br/>Test Suite<br/><br/>- Load contracts<br/>- Start service<br/>- Verify API<br/>  matches<br/>  contracts"]
+    end
+    
+    OrderTest -->|Publish contract| Broker
+    Broker -->|Verify contract| PaymentTest
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    CONTRACT TESTING FLOW                     │
 └─────────────────────────────────────────────────────────────┘
@@ -230,6 +249,7 @@ Restaurant (Provider):
    │    contracts     │
    └──────────────────┘
 ```
+</details>
 
 ### Contract Testing Types
 

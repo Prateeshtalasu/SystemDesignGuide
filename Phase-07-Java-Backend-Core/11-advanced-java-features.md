@@ -105,7 +105,30 @@ public class Processor<T extends Comparable<T> & Serializable> {
 
 ### Wildcards
 
+```mermaid
+flowchart TD
+    subgraph Upper["? extends T (Upper Bounded)"]
+        U1["Something that IS-A T or subtype of T<br/>Can READ as T, cannot WRITE (except null)"]
+        U2["List&lt;? extends Number&gt;<br/>- Can hold List&lt;Integer&gt;, List&lt;Double&gt;, List&lt;Number&gt;<br/>- Can read as Number<br/>- Cannot add (don't know exact type)"]
+        U1 --> U2
+    end
+    
+    subgraph Lower["? super T (Lower Bounded)"]
+        L1["Something that IS-A T or supertype of T<br/>Can WRITE T, cannot READ (except as Object)"]
+        L2["List&lt;? super Integer&gt;<br/>- Can hold List&lt;Integer&gt;, List&lt;Number&gt;, List&lt;Object&gt;<br/>- Can add Integer<br/>- Can only read as Object"]
+        L1 --> L2
+    end
+    
+    PECS["PECS: Producer Extends, Consumer Super<br/>- If you READ from a structure, use extends (it produces values)<br/>- If you WRITE to a structure, use super (it consumes values)"]
+    
+    Upper --> PECS
+    Lower --> PECS
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WILDCARD TYPES                                        │
 │                                                                          │
@@ -135,6 +158,8 @@ public class Processor<T extends Comparable<T> & Serializable> {
 │   - If you WRITE to a structure, use super (it consumes values)        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ```java
@@ -223,7 +248,23 @@ Supplier<Double> random = () -> Math.random();
 
 ### Method References
 
+```mermaid
+flowchart LR
+    T1["Type"] --> S1["Syntax"] --> L1["Lambda Equivalent"]
+    
+    SM["Static method"] --> SS["Class::method"] --> LS["x -> Class.method(x)"]
+    
+    IM1["Instance method"] --> IS1["obj::method"] --> IL1["x -> obj.method(x)"]
+    
+    IM2["Instance method"] --> IS2["Class::method"] --> IL2["(obj, x) -> obj.method(x)"]
+    
+    C["Constructor"] --> CS["Class::new"] --> CL["x -> new Class(x)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    METHOD REFERENCE TYPES                                │
 │                                                                          │
@@ -235,6 +276,8 @@ Supplier<Double> random = () -> Math.random();
 │   Constructor             Class::new          x -> new Class(x)         │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ```java

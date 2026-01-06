@@ -80,7 +80,102 @@ System.out.println("Refund amount: $" + refund);
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class BookingService {
+        - Hotel hotel
+        - Map~String,Booking~ bookings
+        - PricingStrategy pricingStrategy
+        - CancellationPolicy cancellationPolicy
+        + searchRooms(criteria) List~Room~
+        + makeBooking(request) Booking
+        + cancelBooking(id) Refund
+        + modifyBooking(id, request) Booking
+        + checkIn(bookingId) void
+        + checkOut(bookingId) Invoice
+    }
+    
+    class Hotel {
+        - String name
+        - List~Room~ rooms
+        - List~Amenity~ amenities
+        - Address address
+    }
+    
+    class Room {
+        - String roomNumber
+        - RoomType type
+        - RoomStatus status
+        - int floor
+        - BigDecimal basePrice
+        - List~Amenity~ amenities
+    }
+    
+    class Booking {
+        - String id
+        - Guest guest
+        - Room room
+        - DateRange dates
+        - BookingStatus status
+    }
+    
+    class Guest {
+        - String name
+        - String email
+        - String phone
+        - String idDocument
+    }
+    
+    class Invoice {
+        - BigDecimal charges
+        - BigDecimal taxes
+        - BigDecimal total
+    }
+    
+    class PricingStrategy {
+        <<interface>>
+        + calculatePrice(room, dates) BigDecimal
+    }
+    
+    class StandardPricing {
+        + calculatePrice(room, dates) BigDecimal
+    }
+    
+    class SeasonalPricing {
+        + calculatePrice(room, dates) BigDecimal
+    }
+    
+    class CancellationPolicy {
+        <<interface>>
+        + calculateRefund(booking, cancelDate) BigDecimal
+    }
+    
+    class FlexiblePolicy {
+        + calculateRefund(booking, cancelDate) BigDecimal
+    }
+    
+    class StrictPolicy {
+        + calculateRefund(booking, cancelDate) BigDecimal
+    }
+    
+    BookingService --> Hotel
+    BookingService --> Booking
+    BookingService --> PricingStrategy
+    BookingService --> CancellationPolicy
+    Hotel --> Room
+    Booking --> Guest
+    Booking --> Room
+    Booking --> Invoice
+    PricingStrategy <|.. StandardPricing
+    PricingStrategy <|.. SeasonalPricing
+    CancellationPolicy <|.. FlexiblePolicy
+    CancellationPolicy <|.. StrictPolicy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                          HOTEL BOOKING SYSTEM                                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -147,9 +242,32 @@ System.out.println("Refund amount: $" + refund);
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Booking Flow Visualization
 
+```mermaid
+flowchart LR
+    A["Search"]
+    B["Book"]
+    C["Check-In"]
+    D["Check-Out"]
+    
+    A --> B
+    B --> C
+    C --> D
+    
+    A --> A1["Available Rooms"]
+    B --> B1["Reserved Room"]
+    C --> C1["Rented Room"]
+    D --> D1["Available Room"]
+    D --> D2["Invoice Generated"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           BOOKING LIFECYCLE                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -160,6 +278,12 @@ System.out.println("Refund amount: $" + refund);
 │       │                │                │                │                  │
 │       ▼                ▼                ▼                ▼                  │
 │  ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐           │
+│  │Available │     │Reserved  │     │ Rented   │     │Available │           │
+│  │ Rooms    │     │ Room     │     │ Room     │     │ Room     │           │
+│  └──────────┘     └──────────┘     └──────────┘     └──────────┘           │
+```
+
+</details>
 ### Responsibilities Table
 
 | Class | Owns | Why |

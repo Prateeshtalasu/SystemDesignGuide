@@ -142,7 +142,28 @@ Fetch Users + Orders together (1 query with JOIN)
 
 ### Problem Flow
 
+```mermaid
+flowchart TD
+    Start["Start"] --> Step1["Step 1: Fetch Parent Entities<br/>SELECT * FROM users<br/>Result: 100 users"]
+    
+    Step1 --> Step2["Step 2: For Each User, Fetch Related Data"]
+    
+    Step2 --> Query1["User 1:<br/>SELECT * FROM orders<br/>WHERE user_id = 1"]
+    Step2 --> Query2["User 2:<br/>SELECT * FROM orders<br/>WHERE user_id = 2"]
+    Step2 --> Query3["User 3:<br/>SELECT * FROM orders<br/>WHERE user_id = 3"]
+    Step2 --> Dots["..."]
+    Step2 --> Query100["User 100:<br/>SELECT * FROM orders<br/>WHERE user_id = 100"]
+    
+    Query1 --> Total["Total: 1 + 100 = 101 queries"]
+    Query2 --> Total
+    Query3 --> Total
+    Query100 --> Total
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    N+1 QUERY PROBLEM                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -162,6 +183,7 @@ Fetch Users + Orders together (1 query with JOIN)
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Why It Happens
 

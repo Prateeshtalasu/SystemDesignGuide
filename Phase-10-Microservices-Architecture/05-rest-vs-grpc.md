@@ -122,7 +122,32 @@ service UserService {
 
 ### REST Request Flow
 
+```mermaid
+flowchart TD
+    Client["Client"]
+    Serialize["Serialize object to JSON<br/>{'id': 123, 'name': 'John'}"]
+    HTTPReq["HTTP Request<br/>GET /api/users/123<br/>Content-Type: application/json"]
+    Network["Network<br/>(HTTP/1.1 or HTTP/2)"]
+    Server["Server"]
+    Parse["Parse JSON"]
+    Process["Process request"]
+    SerializeResp["Serialize response to JSON"]
+    HTTPResp["HTTP Response"]
+    
+    Client --> Serialize
+    Serialize --> HTTPReq
+    HTTPReq --> Network
+    Network --> Server
+    Server --> Parse
+    Parse --> Process
+    Process --> SerializeResp
+    SerializeResp --> HTTPResp
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client
   │
   ├─> Serialize object to JSON
@@ -140,6 +165,7 @@ Client
       ├─> Serialize response to JSON
       └─> HTTP Response
 ```
+</details>
 
 **Overhead:**
 - JSON serialization/deserialization
@@ -149,7 +175,32 @@ Client
 
 ### gRPC Request Flow
 
+```mermaid
+flowchart TD
+    Client["Client (Generated Stub)"]
+    Serialize["Serialize object to Protocol Buffer (binary)<br/>[binary data]"]
+    HTTP2Req["HTTP/2 Request<br/>POST /UserService/GetUser<br/>Content-Type: application/grpc"]
+    Network["Network (HTTP/2 only)<br/>Multiplexed, compressed headers"]
+    Server["Server (Generated Implementation)"]
+    Deserialize["Deserialize Protocol Buffer"]
+    Process["Process request"]
+    SerializeResp["Serialize response (binary)"]
+    HTTP2Resp["HTTP/2 Response"]
+    
+    Client --> Serialize
+    Serialize --> HTTP2Req
+    HTTP2Req --> Network
+    Network --> Server
+    Server --> Deserialize
+    Deserialize --> Process
+    Process --> SerializeResp
+    SerializeResp --> HTTP2Resp
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client (Generated Stub)
   │
   ├─> Serialize object to Protocol Buffer (binary)
@@ -168,6 +219,7 @@ Client (Generated Stub)
       ├─> Serialize response (binary)
       └─> HTTP/2 Response
 ```
+</details>
 
 **Overhead:**
 - Binary serialization (faster)
@@ -694,6 +746,7 @@ Phase 4: (Optional) Gateway translates REST → gRPC
 ## 1️⃣1️⃣ One Clean Mental Summary
 
 REST and gRPC are both used for microservices communication, but serve different purposes. REST uses HTTP with JSON (human-readable, browser-friendly, simple). gRPC uses HTTP/2 with Protocol Buffers (binary, fast, strongly-typed, streaming). Choose REST for public APIs, simple CRUD, and when you need human-readable debugging. Choose gRPC for internal microservices, high performance requirements, streaming, and when strong typing matters. Common pattern: Use REST for external APIs (browser clients), gRPC for internal services (performance). Performance: gRPC is ~5x faster and ~2.5x smaller payloads than REST for the same data. The choice depends on your requirements: browser compatibility → REST, performance → gRPC, or use both (hybrid approach with API Gateway).
+
 
 
 

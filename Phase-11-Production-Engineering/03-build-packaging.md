@@ -197,12 +197,31 @@ Together, these form a unique identifier in the Maven ecosystem.
 
 #### 3. Repository System
 
+```mermaid
+flowchart LR
+    PROJECT["Your Project"]
+    LOCAL["Local Repo<br/>(~/.m2/repo)"]
+    REMOTE["Remote Repo<br/>(Maven Central)"]
+    
+    PROJECT --> LOCAL
+    LOCAL --> REMOTE
+    
+    style PROJECT fill:#e3f2fd
+    style LOCAL fill:#fff9c4
+    style REMOTE fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │  Your Project   │ ──▶ │  Local Repo     │ ──▶ │  Remote Repo    │
 │                 │     │  (~/.m2/repo)   │     │  (Maven Central)│
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
+
+</details>
 
 When you request a dependency:
 1. Maven checks your local repository (`~/.m2/repository`)
@@ -214,7 +233,37 @@ When you request a dependency:
 Maven has three built-in lifecycles:
 
 **1. Default Lifecycle** (building and deploying):
+
+```mermaid
+flowchart LR
+    V["validate<br/>Validate project structure"]
+    C["compile<br/>Compile source code"]
+    T["test<br/>Run unit tests"]
+    P["package<br/>Create JAR/WAR"]
+    VE["verify<br/>Run integration tests"]
+    I["install<br/>Install to local repo"]
+    D["deploy<br/>Upload to remote repo"]
+    
+    V --> C
+    C --> T
+    T --> P
+    P --> VE
+    VE --> I
+    I --> D
+    
+    style V fill:#e1f5ff
+    style C fill:#fff4e1
+    style T fill:#fff4e1
+    style P fill:#fff4e1
+    style VE fill:#fff4e1
+    style I fill:#fff4e1
+    style D fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 validate → compile → test → package → verify → install → deploy
     │         │        │        │         │         │        │
     │         │        │        │         │         │        └─ Upload to remote repo
@@ -225,6 +274,8 @@ validate → compile → test → package → verify → install → deploy
     │         └─ Compile source code
     └─ Validate project structure
 ```
+
+</details>
 
 **2. Clean Lifecycle**:
 ```
@@ -251,7 +302,42 @@ mvn install    # Runs: validate → compile → test → package → verify → 
 
 Maven resolves dependencies transitively:
 
+```mermaid
+flowchart TD
+    PROJ["Your Project"]
+    WEB["spring-boot-starter-web<br/>(you declared this)"]
+    STARTER["spring-boot-starter<br/>(transitive)"]
+    BOOT["spring-boot"]
+    AUTO["spring-boot-autoconfigure"]
+    CORE["spring-core"]
+    TOMCAT["spring-boot-starter-tomcat<br/>(transitive)"]
+    TCORE["tomcat-embed-core"]
+    TWS["tomcat-embed-websocket"]
+    SWEB["spring-web<br/>(transitive)"]
+    BEANS["spring-beans"]
+    
+    PROJ --> WEB
+    WEB --> STARTER
+    WEB --> TOMCAT
+    WEB --> SWEB
+    STARTER --> BOOT
+    STARTER --> AUTO
+    STARTER --> CORE
+    TOMCAT --> TCORE
+    TOMCAT --> TWS
+    SWEB --> BEANS
+    
+    style PROJ fill:#e3f2fd
+    style WEB fill:#fff9c4
+    style STARTER fill:#e8f5e9
+    style TOMCAT fill:#e8f5e9
+    style SWEB fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Your Project
     └── spring-boot-starter-web (you declared this)
             ├── spring-boot-starter (transitive)
@@ -264,6 +350,8 @@ Your Project
             └── spring-web (transitive)
                     └── spring-beans
 ```
+
+</details>
 
 You declare one dependency, Maven downloads 20+.
 
@@ -862,7 +950,35 @@ Artifact repositories store built artifacts (JARs, WARs, etc.) for:
 
 ### Repository Types
 
+```mermaid
+flowchart TD
+    PUBLIC["Public Repositories<br/>Maven Central | JCenter (deprecated) | Google"]
+    RM["Repository Manager<br/>(Nexus, Artifactory, GitHub Packages)"]
+    PROXY["Proxy<br/>(cache of Central)"]
+    HOSTED["Hosted<br/>(your own artifacts)"]
+    GROUP["Group<br/>(combines multiple)"]
+    DEV["Developer Machines<br/>Local Repository (~/.m2)"]
+    
+    PUBLIC --> RM
+    RM --> PROXY
+    RM --> HOSTED
+    RM --> GROUP
+    PROXY --> DEV
+    HOSTED --> DEV
+    GROUP --> DEV
+    
+    style PUBLIC fill:#e3f2fd
+    style RM fill:#fff9c4
+    style PROXY fill:#e8f5e9
+    style HOSTED fill:#e8f5e9
+    style GROUP fill:#e8f5e9
+    style DEV fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Public Repositories                       │
 │  Maven Central    │    JCenter (deprecated)    │    Google       │
@@ -885,6 +1001,8 @@ Artifact repositories store built artifacts (JARs, WARs, etc.) for:
 │                    Local Repository (~/.m2)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Configuring Private Repositories
 

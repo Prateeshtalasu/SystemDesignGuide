@@ -127,7 +127,58 @@ This allows stateless HTTP to become stateful for a specific user.
 
 ### Session Lifecycle
 
+```mermaid
+flowchart TD
+    subgraph Login["1. USER LOGS IN"]
+        Browser1["Browser"]
+        Post["POST /login<br/>(username, password)"]
+        Server1["Server<br/>Validates credentials"]
+        Create["Creates session"]
+        Store1["Session Store<br/>Session ID: abc<br/>User ID: 123<br/>Cart: [items]<br/>Expires: 30min"]
+        Cookie["Set-Cookie: sessionId=abc<br/>(Browser stores cookie)"]
+        Browser1 --> Post
+        Post --> Server1
+        Server1 --> Create
+        Create --> Store1
+        Store1 --> Cookie
+        Cookie --> Browser1
+    end
+    
+    subgraph Request["2. SUBSEQUENT REQUESTS"]
+        Browser2["Browser"]
+        Get["GET /cart<br/>Cookie: sessionId=abc"]
+        Server2["Server<br/>Extracts sessionId=abc"]
+        Lookup["Looks up session"]
+        Store2["Session Store<br/>Session ID: abc ← Found!<br/>User ID: 123<br/>Cart: [items]"]
+        Return["Returns cart data"]
+        Browser2 --> Get
+        Get --> Server2
+        Server2 --> Lookup
+        Lookup --> Store2
+        Store2 --> Return
+        Return --> Browser2
+    end
+    
+    subgraph Expire["3. SESSION EXPIRES"]
+        Browser3["Browser"]
+        Get2["GET /cart<br/>Cookie: sessionId=abc"]
+        Server3["Server<br/>Looks up sessionId=abc"]
+        Expired["Session expired<br/>(30 min passed)"]
+        Store3["Session Store<br/>Session ID: abc ← Expired, deleted"]
+        Unauthorized["Returns 401 Unauthorized<br/>Please log in again"]
+        Browser3 --> Get2
+        Get2 --> Server3
+        Server3 --> Expired
+        Expired --> Store3
+        Store3 --> Unauthorized
+        Unauthorized --> Browser3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 1. USER LOGS IN
    ┌─────────┐
    │ Browser │ → POST /login (username, password)
@@ -201,6 +252,7 @@ This allows stateless HTTP to become stateful for a specific user.
    │ Browser │ ← Please log in again
    └─────────┘
 ```
+</details>
 
 ### Internal Data Structures
 
@@ -409,7 +461,33 @@ T=3600004ms Browser → Receives 401, redirects to login page
 
 ### Visual Flow
 
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant LB as Load Balancer
+    participant ServerA as Server A
+    participant ServerB as Server B
+    participant Redis
+    
+    Browser->>LB: 1. POST /login
+    LB->>ServerA: 2. Route to Server A
+    ServerA->>ServerA: 3. Validate credentials<br/>Create session<br/>Store in Redis
+    ServerA->>Redis: Store session: abc → {data}
+    ServerA->>LB: 4. Set-Cookie: sessionId=abc
+    LB->>Browser: 4. Set-Cookie: sessionId=abc
+    
+    Browser->>LB: 5. GET /cart<br/>Cookie: sessionId=abc
+    LB->>ServerB: 6. Route to Server B
+    ServerB->>Redis: 7. Lookup session in Redis
+    Redis->>ServerB: session: abc → {data}
+    ServerB->>LB: 8. Cart data
+    LB->>Browser: 8. Cart data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┐                    ┌──────────────┐                    ┌─────────┐
 │ Browser │                    │ Load Balancer│                    │ Servers │
 └────┬────┘                    └──────┬───────┘                    └────┬────┘
@@ -445,6 +523,7 @@ T=3600004ms Browser → Receives 401, redirects to login page
      │ 8. Cart data                     │                                 │
      │◀─────────────────────────────────│                                 │
 ```
+</details>
 
 ---
 

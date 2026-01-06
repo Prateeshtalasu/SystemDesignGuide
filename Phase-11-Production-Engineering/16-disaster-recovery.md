@@ -135,7 +135,29 @@ Think of disaster recovery as **insurance for your systems**.
 - "We can't lose more than 5 minutes of data"
 - Lower RPO = more expensive
 
+```mermaid
+flowchart LR
+    BACKUP["Last Backup"]
+    DISASTER["Disaster"]
+    RECOVERY["Recovery"]
+    RPO["RPO<br/>(Data at risk)"]
+    RTO["RTO<br/>(Downtime)"]
+    EXAMPLE["Example:<br/>RPO: 1 hour (max 1 hour data loss)<br/>RTO: 4 hours (max 4 hours downtime)"]
+    
+    BACKUP -->|RPO| DISASTER
+    DISASTER -->|RTO| RECOVERY
+    
+    style BACKUP fill:#e3f2fd
+    style DISASTER fill:#ffcdd2
+    style RECOVERY fill:#c8e6c9
+    style RPO fill:#fff9c4
+    style RTO fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RTO AND RPO VISUALIZATION                     │
 │                                                                  │
@@ -154,9 +176,37 @@ Think of disaster recovery as **insurance for your systems**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### DR Strategies
 
+```mermaid
+flowchart TD
+    BACKUP["Backup & Restore<br/>Backups only, restore when needed<br/>RTO: Days, RPO: Hours"]
+    PILOT["Pilot Light<br/>Minimal infrastructure in DR site<br/>RTO: Hours, RPO: Minutes"]
+    WARM["Warm Standby<br/>Scaled-down copy in DR site<br/>RTO: Minutes-Hours, RPO: Minutes"]
+    HOT["Hot Standby<br/>Full copy, ready to take traffic<br/>RTO: Minutes, RPO: Seconds"]
+    ACTIVE["Active-Active<br/>Both sites active, traffic split<br/>RTO: Seconds, RPO: Zero"]
+    SPECTRUM["Cost: Low → High<br/>RTO: Days → Minutes<br/>RPO: Hours → Seconds"]
+    
+    BACKUP --> PILOT
+    PILOT --> WARM
+    WARM --> HOT
+    HOT --> ACTIVE
+    SPECTRUM
+    
+    style BACKUP fill:#fff9c4
+    style PILOT fill:#fff9c4
+    style WARM fill:#c8e6c9
+    style HOT fill:#c8e6c9
+    style ACTIVE fill:#c8e6c9
+    style SPECTRUM fill:#e3f2fd
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DR STRATEGY SPECTRUM                          │
 │                                                                  │
@@ -195,6 +245,8 @@ Think of disaster recovery as **insurance for your systems**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
@@ -202,7 +254,28 @@ Think of disaster recovery as **insurance for your systems**.
 ### Backup Strategies
 
 **1. Full Backup**
+```mermaid
+flowchart LR
+    D1["Day 1: Full backup<br/>(100 GB)"]
+    D2["Day 2: Full backup<br/>(102 GB)"]
+    D3["Day 3: Full backup<br/>(105 GB)"]
+    PROS["Pros: Simple restore<br/>(single backup)"]
+    CONS["Cons: Slow, storage intensive"]
+    
+    D1 --> D2
+    D2 --> D3
+    
+    style D1 fill:#e3f2fd
+    style D2 fill:#e3f2fd
+    style D3 fill:#e3f2fd
+    style PROS fill:#c8e6c9
+    style CONS fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Full Backup                                                     │
 │                                                                  │
@@ -215,8 +288,37 @@ Think of disaster recovery as **insurance for your systems**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **2. Incremental Backup**
+```mermaid
+flowchart TD
+    D1FULL["Day 1: Full backup<br/>(100 GB)"]
+    D2INC["Day 2: Changes since Day 1<br/>(2 GB)"]
+    D3INC["Day 3: Changes since Day 2<br/>(3 GB)"]
+    D4INC["Day 4: Changes since Day 3<br/>(2 GB)"]
+    RESTORE["Restore: Need all increments<br/>since last full"]
+    PROS2["Pros: Fast, storage efficient"]
+    CONS2["Cons: Complex restore<br/>(multiple files)"]
+    
+    D1FULL --> D2INC
+    D2INC --> D3INC
+    D3INC --> D4INC
+    D4INC --> RESTORE
+    
+    style D1FULL fill:#e3f2fd
+    style D2INC fill:#fff9c4
+    style D3INC fill:#fff9c4
+    style D4INC fill:#fff9c4
+    style RESTORE fill:#fce4ec
+    style PROS2 fill:#c8e6c9
+    style CONS2 fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Incremental Backup                                              │
 │                                                                  │
@@ -232,8 +334,37 @@ Think of disaster recovery as **insurance for your systems**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **3. Differential Backup**
+```mermaid
+flowchart TD
+    D1FULL2["Day 1: Full backup<br/>(100 GB)"]
+    D2DIFF["Day 2: Changes since Day 1<br/>(2 GB)"]
+    D3DIFF["Day 3: Changes since Day 1<br/>(5 GB)"]
+    D4DIFF["Day 4: Changes since Day 1<br/>(7 GB)"]
+    RESTORE2["Restore: Full + latest<br/>differential"]
+    PROS3["Pros: Simpler restore<br/>than incremental"]
+    CONS3["Cons: Differential grows<br/>over time"]
+    
+    D1FULL2 --> D2DIFF
+    D1FULL2 --> D3DIFF
+    D1FULL2 --> D4DIFF
+    D4DIFF --> RESTORE2
+    
+    style D1FULL2 fill:#e3f2fd
+    style D2DIFF fill:#fff9c4
+    style D3DIFF fill:#fff9c4
+    style D4DIFF fill:#fff9c4
+    style RESTORE2 fill:#fce4ec
+    style PROS3 fill:#c8e6c9
+    style CONS3 fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Differential Backup                                             │
 │                                                                  │
@@ -249,9 +380,47 @@ Think of disaster recovery as **insurance for your systems**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Database Replication
 
+```mermaid
+flowchart TD
+    subgraph SYNC["Synchronous Replication"]
+        P1["Primary"]
+        R1["Replica"]
+        COMMIT1["Commit"]
+        
+        P1 -->|Write| R1
+        R1 -->|Acknowledge| P1
+        P1 --> COMMIT1
+        
+        SYNC_DESC["RPO: 0 (no data loss)<br/>Latency: Higher (waits for replica)"]
+    end
+    
+    subgraph ASYNC["Asynchronous Replication"]
+        P2["Primary"]
+        R2["Replica"]
+        COMMIT2["Commit (immediately)"]
+        
+        P2 -->|Write| R2
+        P2 --> COMMIT2
+        
+        ASYNC_DESC["RPO: Seconds-minutes<br/>(some data loss possible)<br/>Latency: Lower (doesn't wait)"]
+    end
+    
+    style SYNC fill:#e3f2fd
+    style ASYNC fill:#fff9c4
+    style P1 fill:#c8e6c9
+    style R1 fill:#c8e6c9
+    style P2 fill:#c8e6c9
+    style R2 fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DATABASE REPLICATION                          │
 │                                                                  │
@@ -282,6 +451,8 @@ Think of disaster recovery as **insurance for your systems**.
 │  Latency: Lower (doesn't wait)                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

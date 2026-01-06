@@ -21,7 +21,21 @@ If you've implemented caching before and want to avoid common pitfalls, you're r
 
 Caching seems simple: store data, retrieve it faster. But incorrect caching can cause:
 
+```mermaid
+flowchart TD
+    Title["CACHING GONE WRONG"]
+    
+    Problems["❌ Stale data shown to users (lost sales, wrong prices)<br/>❌ Cache stampedes crashing your database<br/>❌ Memory exhaustion from unbounded caches<br/>❌ Security breaches from cached private data<br/>❌ Debugging nightmares from inconsistent state<br/>❌ Performance worse than no caching at all"]
+    
+    Quote["There are only two hard things in Computer Science:<br/>cache invalidation and naming things.<br/>- Phil Karlton"]
+    
+    Note["This topic covers the common mistakes and how to avoid them."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHING GONE WRONG                                    │
 │                                                                          │
@@ -39,6 +53,7 @@ Caching seems simple: store data, retrieve it faster. But incorrect caching can 
 │   This topic covers the common mistakes and how to avoid them.          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -46,7 +61,27 @@ Caching seems simple: store data, retrieve it faster. But incorrect caching can 
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["STALE DATA DISASTER - Timeline"]
+    
+    T0["T=0: Product price = $100<br/>Cache: product:123 → {price: $100}<br/>TTL: 1 hour"]
+    
+    T5["T=5min: Admin updates price to $80 (20% off sale!)<br/>Database: price = $80<br/>Cache: Still {price: $100} ← NOT INVALIDATED"]
+    
+    T6["T=6min: Customer sees $100, goes to competitor"]
+    T10["T=10min: Another customer sees $100, complains"]
+    T55["T=55min: Cache finally expires, shows $80"]
+    
+    Result["Result: 55 minutes of lost sales and angry customers"]
+    
+    T0 --> T5 --> T6 --> T10 --> T55 --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STALE DATA DISASTER                                   │
 │                                                                          │
@@ -67,6 +102,7 @@ Caching seems simple: store data, retrieve it faster. But incorrect caching can 
 │   Result: 55 minutes of lost sales and angry customers                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -164,7 +200,25 @@ public class CacheInvalidationListener {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["OVER-CACHING<br/>Let's cache EVERYTHING for performance!"]
+    
+    subgraph Problems["Problems"]
+        P1["1. Memory Exhaustion<br/>- 10 million users × 1KB profile = 10GB cache<br/>- Redis runs out of memory<br/>- Eviction starts, cache becomes useless"]
+        
+        P2["2. Stale Data Everywhere<br/>- More cached data = more to invalidate<br/>- Miss one invalidation = stale data<br/>- Debugging becomes impossible"]
+        
+        P3["3. Cold Start Nightmare<br/>- Server restart = empty cache<br/>- Database hammered while cache warms up<br/>- Takes hours to reach steady state"]
+        
+        P4["4. Diminishing Returns<br/>- Caching data accessed once/day: wasted memory<br/>- 80/20 rule: 20% of data serves 80% of requests"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OVER-CACHING                                          │
 │                                                                          │
@@ -192,6 +246,7 @@ public class CacheInvalidationListener {
 │      - 80/20 rule: 20% of data serves 80% of requests                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -264,7 +319,29 @@ public class CacheConfig {
 
 ### Decision Framework
 
+```mermaid
+flowchart TD
+    Title["SHOULD I CACHE THIS?<br/>Ask these questions:"]
+    
+    Q1["1. How often is it accessed?<br/>- Multiple times per second → YES, cache<br/>- Once per day → Probably NO"]
+    
+    Q2["2. How expensive is it to compute/fetch?<br/>- Complex query, external API → YES, cache<br/>- Simple primary key lookup → Maybe not worth it"]
+    
+    Q3["3. How often does it change?<br/>- Rarely changes → YES, cache with long TTL<br/>- Changes every second → Probably NO"]
+    
+    Q4["4. Is stale data acceptable?<br/>- Yes (news, recommendations) → YES, cache<br/>- No (inventory, prices) → Cache carefully with invalidation"]
+    
+    Q5["5. How big is the data?<br/>- Small (< 1KB) → YES, cache<br/>- Large (> 100KB) → Consider if worth the memory"]
+    
+    Rule["Rule of thumb: Start without cache, add when you have evidence<br/>of performance problems."]
+    
+    Title --> Q1 --> Q2 --> Q3 --> Q4 --> Q5 --> Rule
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SHOULD I CACHE THIS?                                  │
 │                                                                          │
@@ -294,6 +371,7 @@ public class CacheConfig {
 │   of performance problems.                                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -301,7 +379,23 @@ public class CacheConfig {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["UNDER-CACHING<br/>We'll add caching later when we need it"]
+    
+    Reality["Reality:<br/>- Database gets hammered with same queries<br/>- External APIs rate-limit you<br/>- Response times increase under load<br/>- You scramble to add caching during an outage<br/>- Hastily added cache causes more problems"]
+    
+    Example["Example:<br/>Homepage loads user profile, preferences, notifications,<br/>recommendations - 5 DB queries per page load.<br/>1000 users = 5000 queries/second to database<br/>Database maxes out at 10,000 queries/second<br/>At 2000 users, site goes down"]
+    
+    WithCache["With caching:<br/>95% cache hit rate = 250 queries/second<br/>Can handle 40,000 users before database limit"]
+    
+    Title --> Reality --> Example --> WithCache
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    UNDER-CACHING                                         │
 │                                                                          │
@@ -327,6 +421,7 @@ public class CacheConfig {
 │   Can handle 40,000 users before database limit                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -393,7 +488,34 @@ public class RecommendationService {
 
 ### The Problem
 
+```mermaid
+sequenceDiagram
+    participant UserA
+    participant Server
+    participant Cache
+    participant UserB
+    
+    Note over UserA,Cache: User A requests: /api/user/profile
+    UserA->>Server: GET /api/user/profile
+    Server->>Cache: Cache key: profile
+    Cache-->>Server: MISS
+    Server->>Server: Fetch User A's profile
+    Server->>Cache: Store: User A's profile
+    Server-->>UserA: User A's profile
+    
+    Note over UserB,Cache: User B requests: /api/user/profile
+    UserB->>Server: GET /api/user/profile
+    Server->>Cache: Cache key: profile (same!)
+    Cache-->>Server: HIT - Returns User A's profile! 😱
+    Server-->>UserB: User A's profile
+    
+    Note over UserB,Cache: User B now sees User A's private data!<br/>This is a SECURITY VULNERABILITY.
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE KEY COLLISION                                   │
 │                                                                          │
@@ -409,6 +531,7 @@ public class RecommendationService {
 │   This is a SECURITY VULNERABILITY.                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -506,7 +629,36 @@ public UserProfile getProfile(Long userId, String region) {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["CACHE STAMPEDE<br/>Popular item cached with 1-hour TTL<br/>1000 requests/second for this item"]
+    
+    T1["T=59:59 - Cache valid, all requests served from cache"]
+    T2["T=60:00 - Cache expires"]
+    T3["T=60:01 - 1000 requests all see cache miss<br/>1000 requests ALL hit database simultaneously!"]
+    
+    subgraph Stampede[""]
+        R1["Request 1"]
+        R2["Request 2"]
+        R3["Request 3"]
+        R1000["Request 1000"]
+        
+        CacheMiss["Cache Miss"]
+        Database["Database"]
+        Crash["CRASH!"]
+        
+        R1 & R2 & R3 & R1000 --> CacheMiss --> Database --> Crash
+    end
+    
+    Note["All 1000 requests execute the same expensive query!<br/>This is covered in detail in Topic 5, but here's the summary:"]
+    
+    Title --> T1 --> T2 --> T3 --> Stampede --> Note
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE STAMPEDE                                        │
 │                                                                          │
@@ -533,6 +685,7 @@ public UserProfile getProfile(Long userId, String region) {
 │   This is covered in detail in Topic 5, but here's the summary:        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -612,7 +765,21 @@ public class ProductService {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["BLIND CACHING<br/>We added caching, it must be working!"]
+    
+    Reality["Reality without monitoring:<br/>- Cache hit rate might be 5% (useless)<br/>- Memory might be 99% full (about to evict everything)<br/>- Latency might be worse (serialization overhead)<br/>- You have no idea if caching is helping or hurting"]
+    
+    Metrics["Key metrics to monitor:<br/>- Hit rate (should be > 80% for most caches)<br/>- Memory usage (should have headroom)<br/>- Eviction rate (high = cache too small)<br/>- Latency (cache should be faster than source)<br/>- Error rate (connection failures, timeouts)"]
+    
+    Title --> Reality --> Metrics
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BLIND CACHING                                         │
 │                                                                          │
@@ -633,6 +800,7 @@ public class ProductService {
 │   - Error rate (connection failures, timeouts)                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Good Code
 
@@ -697,7 +865,24 @@ public class RedisCacheMetrics {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["CACHING ERRORS"]
+    
+    Scenario1["Database temporarily down<br/>Query returns error/null<br/>Error gets cached!"]
+    
+    Problem1["Database comes back up<br/>Cache still serving error for 1 hour<br/>Users see errors even though system is healthy"]
+    
+    Scenario2["Or worse: caching null as valid data<br/>User doesn't exist → cache null<br/>User created → cache still returns null<br/>User can't log in!"]
+    
+    Title --> Scenario1 --> Problem1
+    Title --> Scenario2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHING ERRORS                                        │
 │                                                                          │
@@ -715,6 +900,7 @@ public class RedisCacheMetrics {
 │   User can't log in!                                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Bad Code
 
@@ -798,7 +984,30 @@ public class UserService {
 
 ### The Problem
 
+```mermaid
+flowchart TD
+    Title["WRONG CACHE LEVEL<br/>Scenario: 10 app servers, each with local cache"]
+    
+    Problem1["User updates profile on Server 1<br/>Server 1 invalidates its local cache<br/>Servers 2-10 still have stale data!"]
+    
+    Result1["User's next request goes to Server 5<br/>User sees old profile data<br/>User updates again, goes to Server 3<br/>User sees old data AGAIN"]
+    
+    Note1["This is the cache coherency problem with local caches."]
+    
+    Divider["─────────────────────────────────"]
+    
+    Problem2["Opposite problem: Using distributed cache for everything"]
+    
+    Result2["Network latency: 1-5ms per Redis call<br/>10 cache lookups per request = 10-50ms added latency<br/>For read-heavy, rarely-changing data, local cache is faster"]
+    
+    Title --> Problem1 --> Result1 --> Note1
+    Title --> Divider --> Problem2 --> Result2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WRONG CACHE LEVEL                                     │
 │                                                                          │
@@ -824,6 +1033,7 @@ public class UserService {
 │   For read-heavy, rarely-changing data, local cache is faster          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Good Code
 
@@ -899,7 +1109,21 @@ public class CacheInvalidationListener {
 
 ## 🔟 Summary: Caching Anti-Patterns Checklist
 
+```mermaid
+flowchart TD
+    Title["CACHING ANTI-PATTERNS CHECKLIST<br/>Before deploying caching, verify:"]
+    
+    Checklist["□ Invalidation strategy defined for all mutable data<br/>□ Cache size is bounded (won't exhaust memory)<br/>□ Cache keys are unique and namespaced<br/>□ Stampede protection in place for hot keys<br/>□ Monitoring for hit rate, memory, latency<br/>□ Errors and nulls handled appropriately<br/>□ Right cache level (local vs distributed) for each use case<br/>□ TTLs appropriate for data freshness requirements<br/>□ Private data not cached publicly (security)<br/>□ Cache warming strategy for cold starts"]
+    
+    Remember["Remember:<br/>- Caching is an optimization, not a requirement<br/>- Start without cache, add when you have evidence of need<br/>- Monitor everything - cache without metrics is blind<br/>- Test cache invalidation as thoroughly as cache population"]
+    
+    Title --> Checklist --> Remember
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHING ANTI-PATTERNS CHECKLIST                       │
 │                                                                          │
@@ -923,6 +1147,7 @@ public class CacheInvalidationListener {
 │   - Test cache invalidation as thoroughly as cache population           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

@@ -20,41 +20,15 @@ Before diving into stream processing frameworks, you should understand:
 
 Building stream processing from scratch is complex:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              DIY STREAM PROCESSING CHALLENGES                │
-│                                                              │
-│   CHALLENGE 1: State Management                             │
-│   "Track running totals per user across millions of users"  │
-│   - Where to store state?                                   │
-│   - How to handle failures?                                 │
-│   - How to scale state across machines?                     │
-│                                                              │
-│   CHALLENGE 2: Exactly-Once Processing                      │
-│   "Don't double-count payments!"                            │
-│   - Kafka gives at-least-once                               │
-│   - Need to dedupe or use transactions                      │
-│   - Complex coordination                                    │
-│                                                              │
-│   CHALLENGE 3: Windowing                                    │
-│   "Count events per 5-minute window"                        │
-│   - Handle late-arriving data                               │
-│   - Manage window state                                     │
-│   - Trigger window computations                             │
-│                                                              │
-│   CHALLENGE 4: Fault Tolerance                              │
-│   "Don't lose progress on failure"                          │
-│   - Checkpoint state periodically                           │
-│   - Recover from checkpoints                                │
-│   - Exactly-once during recovery                            │
-│                                                              │
-│   CHALLENGE 5: Scalability                                  │
-│   "Process 1 million events/second"                         │
-│   - Partition processing                                    │
-│   - Distribute state                                        │
-│   - Handle rebalancing                                      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph DIY["DIY STREAM PROCESSING CHALLENGES"]
+    S1["CHALLENGE 1: State Management\n'Track running totals per user across millions of users'\n- Where to store state?\n- How to handle failures?\n- How to scale state across machines?"]
+    S2["CHALLENGE 2: Exactly-Once Processing\n'Don't double-count payments!'\n- Kafka gives at-least-once\n- Need to dedupe or use transactions\n- Complex coordination"]
+    S3["CHALLENGE 3: Windowing\n'Count events per 5-minute window'\n- Handle late-arriving data\n- Manage window state\n- Trigger window computations"]
+    S4["CHALLENGE 4: Fault Tolerance\n'Don't lose progress on failure'\n- Checkpoint state periodically\n- Recover from checkpoints\n- Exactly-once during recovery"]
+    S5["CHALLENGE 5: Scalability\n'Process 1 million events/second'\n- Partition processing\n- Distribute state\n- Handle rebalancing"]
+  end
 ```
 
 ### Why Use a Framework?
@@ -85,29 +59,13 @@ Stream processing frameworks solve these challenges:
 
 ### The Factory Production Line Analogy
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              FRAMEWORK COMPARISON ANALOGY                    │
-│                                                              │
-│   KAFKA STREAMS = In-House Production Line                  │
-│   - Built into your existing factory (application)          │
-│   - No separate facility needed                             │
-│   - Workers (threads) in your building                      │
-│   - Good for: Medium scale, Java apps, simple processing    │
-│                                                              │
-│   APACHE FLINK = Dedicated Processing Plant                 │
-│   - Separate facility with specialized equipment            │
-│   - Professional operators (cluster management)             │
-│   - Advanced machinery (complex event processing)           │
-│   - Good for: Large scale, complex processing, low latency  │
-│                                                              │
-│   SPARK STREAMING = Batch Processing Plant with Fast Cycles │
-│   - Same facility as batch processing                       │
-│   - Processes in small batches (micro-batches)              │
-│   - Shares resources with batch jobs                        │
-│   - Good for: Unified batch/stream, ML integration          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Analogy["FRAMEWORK COMPARISON ANALOGY"]
+    KS["KAFKA STREAMS = In-House Production Line\n- Built into your existing factory (application)\n- No separate facility needed\n- Workers (threads) in your building\n- Good for: Medium scale, Java apps, simple processing"]
+    FL["APACHE FLINK = Dedicated Processing Plant\n- Separate facility with specialized equipment\n- Professional operators (cluster management)\n- Advanced machinery (complex event processing)\n- Good for: Large scale, complex processing, low latency"]
+    SP["SPARK STREAMING = Batch Processing Plant with Fast Cycles\n- Same facility as batch processing\n- Processes in small batches (micro-batches)\n- Shares resources with batch jobs\n- Good for: Unified batch/stream, ML integration"]
+  end
 ```
 
 ---
@@ -118,7 +76,41 @@ Stream processing frameworks solve these challenges:
 
 Kafka Streams is a client library that runs inside your application.
 
+```mermaid
+flowchart TD
+  subgraph App["Your Application"]
+    subgraph KafkaStreamsLib["Kafka Streams Library"]
+      Thread1["Stream Thread 1"]
+      Thread2["Stream Thread 2"]
+      Thread3["Stream Thread 3"]
+      T1["Task 1"]
+      T2["Task 2"]
+      T3["Task 3"]
+      T4["Task 4"]
+      T5["Task 5"]
+      T6["Task 6"]
+      Thread1 --> T1
+      Thread1 --> T2
+      Thread2 --> T3
+      Thread2 --> T4
+      Thread3 --> T5
+      Thread3 --> T6
+      subgraph StateStores["State Stores (RocksDB)"]
+        Store1["Store 1"]
+        Store2["Store 2"]
+      end
+    end
+  end
+  KafkaCluster["Kafka Cluster (input/output)"]
+  Changelog["Changelog Topics (state backup)"]
+  KafkaStreamsLib --> KafkaCluster
+  KafkaStreamsLib --> Changelog
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              KAFKA STREAMS ARCHITECTURE                      │
 │                                                              │
@@ -161,12 +153,53 @@ Kafka Streams is a client library that runs inside your application.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Apache Flink Architecture
 
 Flink is a distributed processing engine with its own cluster.
 
+```mermaid
+flowchart TD
+  JM["Job Manager"]
+  subgraph TaskManagers["Task Managers"]
+    TM1["Task Manager (Worker 1)"]
+    TM2["Task Manager (Worker 2)"]
+    TM3["Task Manager (Worker 3)"]
+    TM1S1["Slot 1"]
+    TM1S2["Slot 2"]
+    TM1S3["Slot 3"]
+    TM2S1["Slot 1"]
+    TM2S2["Slot 2"]
+    TM2S3["Slot 3"]
+    TM3S1["Slot 1"]
+    TM3S2["Slot 2"]
+    TM3S3["Slot 3"]
+    TM1 --> TM1S1
+    TM1 --> TM1S2
+    TM1 --> TM1S3
+    TM2 --> TM2S1
+    TM2 --> TM2S2
+    TM2 --> TM2S3
+    TM3 --> TM3S1
+    TM3 --> TM3S2
+    TM3 --> TM3S3
+  end
+  JM --> TM1
+  JM --> TM2
+  JM --> TM3
+  HDFS["HDFS"]
+  S3["S3"]
+  GCS["GCS"]
+  TM1 -. "Checkpoints" .-> HDFS
+  TM2 -. "Checkpoints" .-> S3
+  TM3 -. "Checkpoints" .-> GCS
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              APACHE FLINK ARCHITECTURE                       │
 │                                                              │
@@ -203,12 +236,33 @@ Flink is a distributed processing engine with its own cluster.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Spark Streaming Architecture
 
 Spark Streaming processes data in micro-batches.
 
+```mermaid
+flowchart TD
+  Driver["Spark Driver"]
+  MicroBatch["Micro-batch Processing"]
+  Driver --> MicroBatch
+  subgraph Pipeline["Per-batch pipeline"]
+    Stage1["Stage 1 (map)"] --> Stage2["Stage 2 (shuffle)"] --> Stage3["Stage 3 (reduce)"]
+  end
+  MicroBatch --> Stage1
+  Exec1["Executor (Worker 1)"]
+  Exec2["Executor (Worker 2)"]
+  Exec3["Executor (Worker 3)"]
+  Stage3 --> Exec1
+  Stage3 --> Exec2
+  Stage3 --> Exec3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SPARK STREAMING ARCHITECTURE                    │
 │                                                              │
@@ -251,10 +305,27 @@ Spark Streaming processes data in micro-batches.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Processing Model Comparison
 
+```mermaid
+flowchart LR
+  subgraph KafkaStreams["Kafka Streams (Record-at-a-time)"]
+    KS_E1["E1"] --> KS_E2["E2"] --> KS_E3["E3"] --> KS_E4["E4"] --> KS_E5["E5"]
+  end
+  subgraph Flink["Apache Flink (Record-at-a-time)"]
+    FL_E1["E1"] --> FL_E2["E2"] --> FL_E3["E3"] --> FL_E4["E4"] --> FL_E5["E5"]
+  end
+  subgraph Spark["Spark Streaming (Micro-batch)"]
+    SP_B1["E1,E2,E3"] --> SP_B2["E4,E5,E6"] --> SP_B3["E7,E8,E9"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              PROCESSING MODEL COMPARISON                     │
 │                                                              │
@@ -283,6 +354,7 @@ Spark Streaming processes data in micro-batches.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

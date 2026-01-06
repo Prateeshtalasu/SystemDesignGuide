@@ -176,7 +176,47 @@ Service discovery in microservices follows these patterns (see Phase 2, Topic 13
 
 ### Pattern 1: Client-Side Discovery (Eureka, Consul)
 
+```mermaid
+flowchart TD
+    subgraph Reg["1. Service Registration"]
+        PaymentStart["Payment Service Instance starts"]
+        Register["Registers with Eureka:<br/>'I'm payment-service, at 192.168.1.10:8080'"]
+        Heartbeat["Sends heartbeat every 30 seconds"]
+        PaymentStart --> Register
+        Register --> Heartbeat
+    end
+    
+    subgraph Disc["2. Service Discovery"]
+        OrderNeeds["Order Service needs Payment Service"]
+        Query["Queries Eureka:<br/>'Give me payment-service instances'"]
+        EurekaResp["Eureka returns:<br/>[192.168.1.10:8080, 192.168.1.11:8080, 192.168.1.12:8080]"]
+        Cache["Order Service caches list"]
+        Pick["Order Service picks instance<br/>(round-robin, random, etc.)"]
+        Call["Order Service calls instance directly"]
+        OrderNeeds --> Query
+        Query --> EurekaResp
+        EurekaResp --> Cache
+        Cache --> Pick
+        Pick --> Call
+    end
+    
+    subgraph Health["3. Health Monitoring"]
+        Dies["Payment Service instance dies"]
+        StopHeartbeat["Stops sending heartbeat"]
+        Remove["After 90 seconds, Eureka removes from registry"]
+        Refresh["Order Service refreshes cache"]
+        NoRoute["No longer routes to dead instance"]
+        Dies --> StopHeartbeat
+        StopHeartbeat --> Remove
+        Remove --> Refresh
+        Refresh --> NoRoute
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              CLIENT-SIDE DISCOVERY                       │
 └─────────────────────────────────────────────────────────┘
@@ -201,6 +241,7 @@ Service discovery in microservices follows these patterns (see Phase 2, Topic 13
    → Order Service refreshes cache
    → No longer routes to dead instance
 ```
+</details>
 
 **Key Characteristics:**
 - Client queries registry and caches results
@@ -210,7 +251,45 @@ Service discovery in microservices follows these patterns (see Phase 2, Topic 13
 
 ### Pattern 2: Server-Side Discovery (Kubernetes Services)
 
+```mermaid
+flowchart TD
+    subgraph Reg["1. Service Registration"]
+        PodStart["Payment Service Pod starts"]
+        Track["Kubernetes tracks pod IP automatically"]
+        Select["Kubernetes Service (payment-service)<br/>selects pods by labels"]
+        DNS["Service has stable DNS name:<br/>payment-service.namespace.svc.cluster.local"]
+        PodStart --> Track
+        Track --> Select
+        Select --> DNS
+    end
+    
+    subgraph Disc["2. Service Discovery"]
+        OrderNeeds["Order Service needs Payment Service"]
+        Call["Calls: http://payment-service/api/payments"]
+        Resolve["DNS resolves to Service IP (virtual IP)"]
+        Route["Kubernetes kube-proxy routes to healthy pod"]
+        NoAware["Order Service doesn't know about individual pods"]
+        OrderNeeds --> Call
+        Call --> Resolve
+        Resolve --> Route
+        Route --> NoAware
+    end
+    
+    subgraph Health["3. Health Monitoring"]
+        PodDies["Payment Service Pod dies"]
+        Remove["Kubernetes removes from Service endpoint list"]
+        StopRoute["kube-proxy stops routing to dead pod"]
+        NoChange["Order Service sees no change<br/>(still calls payment-service DNS)"]
+        PodDies --> Remove
+        Remove --> StopRoute
+        StopRoute --> NoChange
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              SERVER-SIDE DISCOVERY                       │
 └─────────────────────────────────────────────────────────┘
@@ -234,6 +313,7 @@ Service discovery in microservices follows these patterns (see Phase 2, Topic 13
    → kube-proxy stops routing to dead pod
    → Order Service sees no change (still calls payment-service DNS)
 ```
+</details>
 
 **Key Characteristics:**
 - Client calls stable DNS name
@@ -243,7 +323,49 @@ Service discovery in microservices follows these patterns (see Phase 2, Topic 13
 
 ### Pattern 3: Service Mesh Discovery (Istio, Linkerd)
 
+```mermaid
+flowchart TD
+    subgraph OrderPod["Order Service Pod"]
+        OrderSvc["Order Service"]
+        Sidecar["Sidecar Proxy (Envoy)"]
+        Registry["Service Registry (Pilot/Control Plane)<br/>Tracks all service instances"]
+        OrderSvc --> Sidecar
+        Sidecar --> Registry
+    end
+    
+    subgraph Reg["1. Service Registration"]
+        PaymentStart["Payment Service Pod starts"]
+        RegSidecar["Sidecar proxy registers with control plane"]
+        Update["Control plane updates service registry"]
+        PaymentStart --> RegSidecar
+        RegSidecar --> Update
+    end
+    
+    subgraph Disc["2. Service Discovery"]
+        Call["Order Service calls Payment Service"]
+        Intercept["Request intercepted by sidecar proxy"]
+        Query["Sidecar queries control plane<br/>for Payment Service instances"]
+        Route["Sidecar routes to healthy instance"]
+        NoAware["Order Service code doesn't know about discovery"]
+        Call --> Intercept
+        Intercept --> Query
+        Query --> Route
+        Route --> NoAware
+    end
+    
+    subgraph Health["3. Health Monitoring"]
+        Track["Control plane tracks health<br/>via sidecar health reports"]
+        Remove["Dead instances removed from routing"]
+        Update2["Sidecar proxies updated automatically"]
+        Track --> Remove
+        Remove --> Update2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              SERVICE MESH DISCOVERY                      │
 └─────────────────────────────────────────────────────────┘
@@ -270,6 +392,7 @@ Order Service Pod
    → Dead instances removed from routing
    → Sidecar proxies updated automatically
 ```
+</details>
 
 **Key Characteristics:**
 - Discovery handled by sidecar proxy
@@ -1064,6 +1187,7 @@ Migration path allows incremental adoption, reduces risk.
 ## 1️⃣1️⃣ One Clean Mental Summary
 
 Service discovery in microservices is like a dynamic phone book that updates in real-time. Services register themselves with a registry (like restaurants registering locations), the registry tracks all instances and their health (like tracking which locations are open), and clients query the registry to find services (like calling a reservation system). Two main patterns: client-side discovery (client queries registry and calls directly, like Eureka) and server-side discovery (client calls stable endpoint, platform routes, like Kubernetes Services). Service discovery is essential because microservice instances are created/destroyed frequently, IP addresses change, and services need to scale dynamically. Without it, you'd need to hardcode hundreds of URLs and update them constantly. With it, services automatically find each other, dead instances are removed, and new instances are discovered automatically. Choose based on your infrastructure (Kubernetes → DNS, Spring Cloud → Eureka, multi-language → Consul) and requirements (simple → DNS, advanced → Service Mesh).
+
 
 
 

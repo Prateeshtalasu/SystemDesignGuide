@@ -195,7 +195,29 @@ API Gateway follows these patterns:
 
 ### Pattern 1: Request Routing
 
+```mermaid
+flowchart TD
+    Client["Client"]
+    Gateway["API Gateway"]
+    Receive["Receives: POST /api/orders"]
+    Auth["Authenticates request"]
+    Route["Routes to: Order Service"]
+    Return["Returns response"]
+    OrderSvc["Order Service"]
+    
+    Client --> Gateway
+    Gateway --> Receive
+    Receive --> Auth
+    Auth --> Route
+    Route --> OrderSvc
+    OrderSvc --> Return
+    Return --> Client
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              REQUEST ROUTING                            │
 └─────────────────────────────────────────────────────────┘
@@ -210,6 +232,7 @@ API Gateway
   ↓
 Order Service
 ```
+</details>
 
 **Flow:**
 1. Client sends request to gateway: `POST https://api.example.com/orders`
@@ -219,7 +242,39 @@ Order Service
 
 ### Pattern 2: Request Aggregation
 
+```mermaid
+flowchart TD
+    Client["Client"]
+    Gateway["API Gateway"]
+    Receive["Receives: GET /api/order-details/{orderId}"]
+    CallOrder["Calls Order Service:<br/>GET /orders/{orderId}"]
+    CallPayment["Calls Payment Service:<br/>GET /payments/order/{orderId}"]
+    CallShipping["Calls Shipping Service:<br/>GET /shipping/order/{orderId}"]
+    Aggregate["Aggregates responses"]
+    Return["Returns combined response"]
+    OrderSvc["Order Service"]
+    PaymentSvc["Payment Service"]
+    ShippingSvc["Shipping Service"]
+    
+    Client --> Gateway
+    Gateway --> Receive
+    Receive --> CallOrder
+    Receive --> CallPayment
+    Receive --> CallShipping
+    CallOrder --> OrderSvc
+    CallPayment --> PaymentSvc
+    CallShipping --> ShippingSvc
+    OrderSvc --> Aggregate
+    PaymentSvc --> Aggregate
+    ShippingSvc --> Aggregate
+    Aggregate --> Return
+    Return --> Client
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              REQUEST AGGREGATION                        │
 └─────────────────────────────────────────────────────────┘
@@ -236,6 +291,7 @@ API Gateway
   ↓
 Order Service, Payment Service, Shipping Service
 ```
+</details>
 
 **Flow:**
 1. Client requests order details: `GET /api/order-details/123`
@@ -247,7 +303,31 @@ Order Service, Payment Service, Shipping Service
 
 ### Pattern 3: Protocol Translation
 
+```mermaid
+flowchart TD
+    Client["Client (REST)"]
+    Gateway["API Gateway"]
+    Receive["Receives: REST request"]
+    Trans1["Translates to: gRPC"]
+    Call["Calls: gRPC service"]
+    Trans2["Translates response: gRPC → REST"]
+    Return["Returns: REST response"]
+    Microservice["Microservice (gRPC)"]
+    
+    Client --> Gateway
+    Gateway --> Receive
+    Receive --> Trans1
+    Trans1 --> Call
+    Call --> Microservice
+    Microservice --> Trans2
+    Trans2 --> Return
+    Return --> Client
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              PROTOCOL TRANSLATION                       │
 └─────────────────────────────────────────────────────────┘
@@ -263,6 +343,7 @@ API Gateway
   ↓
 Microservice (gRPC)
 ```
+</details>
 
 **Flow:**
 1. Client sends REST request
@@ -273,7 +354,43 @@ Microservice (gRPC)
 
 ### Pattern 4: Backend for Frontend (BFF)
 
+```mermaid
+flowchart TD
+    MobileApp["Mobile App"]
+    MobileBFF["Mobile BFF (API Gateway)"]
+    Opt1["Optimized for mobile"]
+    Agg1["Aggregates responses"]
+    Return1["Returns mobile-optimized format"]
+    Services1["Services"]
+    
+    WebApp["Web App"]
+    WebBFF["Web BFF (API Gateway)"]
+    Opt2["Optimized for web"]
+    Agg2["Different aggregation"]
+    Return2["Returns web-optimized format"]
+    Services2["Services"]
+    
+    MobileApp --> MobileBFF
+    MobileBFF --> Opt1
+    MobileBFF --> Agg1
+    MobileBFF --> Return1
+    Opt1 --> Services1
+    Agg1 --> Services1
+    Return1 --> Services1
+    
+    WebApp --> WebBFF
+    WebBFF --> Opt2
+    WebBFF --> Agg2
+    WebBFF --> Return2
+    Opt2 --> Services2
+    Agg2 --> Services2
+    Return2 --> Services2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │              BACKEND FOR FRONTEND                       │
 └─────────────────────────────────────────────────────────┘
@@ -296,6 +413,7 @@ Web BFF (API Gateway)
   ↓
 Services
 ```
+</details>
 
 **Flow:**
 1. Mobile app calls Mobile BFF

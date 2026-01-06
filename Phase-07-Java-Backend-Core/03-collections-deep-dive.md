@@ -99,7 +99,46 @@ Every team built their own data structures, leading to:
 
 Think of collections like different ways to organize books in a library:
 
+```mermaid
+flowchart TD
+    subgraph AL["ArrayList = Numbered Shelves"]
+        AL1["0|1|2|3|4|5|6|7<br/>Books in order, find by position<br/>Fast: get book #5<br/>Slow: find book by title"]
+    end
+    
+    subgraph LL["LinkedList = Chain of Boxes"]
+        LL1["A"] --> LL2["B"] --> LL3["C"] --> LL4["D"]
+        LLNote["Each box points to next<br/>Fast: insert in middle<br/>Slow: find book #5"]
+    end
+    
+    subgraph HM["HashMap = Card Catalog"]
+        HM1["'Moby Dick' → Shelf 3, Slot 7<br/>'1984' → Shelf 1, Slot 2<br/>'Dune' → Shelf 5, Slot 1<br/>Look up by title instantly"]
+    end
+    
+    subgraph TM["TreeMap = Alphabetically Sorted Catalog"]
+        TM1["'1984' → Shelf 1, Slot 2<br/>'Dune' → Shelf 5, Slot 1<br/>'Moby Dick' → Shelf 3, Slot 7<br/>Sorted by title, slightly slower"]
+    end
+    
+    subgraph HS["HashSet = 'Do We Have This Book?' List"]
+        HS1["'Moby Dick'<br/>'1984'<br/>'Dune'<br/>Just titles, no duplicates<br/>Fast: Yes/No lookup"]
+    end
+    
+    subgraph Q["Queue = Line at Checkout"]
+        Q1["1"] --> Q2["2"] --> Q3["3"] --> Q4["4"]
+        QNote["First in, first out (FIFO)<br/>Add at back, remove from front"]
+    end
+    
+    style AL fill:#e1f5ff
+    style LL fill:#ffe1f5
+    style HM fill:#f5ffe1
+    style TM fill:#fff5e1
+    style HS fill:#e1fff5
+    style Q fill:#f5e1ff
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LIBRARY ORGANIZATION ANALOGY                          │
 │                                                                          │
@@ -143,6 +182,7 @@ Think of collections like different ways to organize books in a library:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: Choose the right data structure for your access pattern. Using ArrayList when you need HashMap is like searching every shelf for a book instead of using the card catalog.
 
@@ -152,7 +192,42 @@ Think of collections like different ways to organize books in a library:
 
 ### The Java Collections Hierarchy
 
+```mermaid
+flowchart TD
+    Iterable["Iterable&lt;E&gt;"]
+    Collection["Collection&lt;E&gt;"]
+    
+    Iterable --> Collection
+    
+    Collection --> List["List&lt;E&gt;"]
+    Collection --> Set["Set&lt;E&gt;"]
+    Collection --> Queue["Queue&lt;E&gt;"]
+    
+    List --> ArrayList["ArrayList"]
+    List --> LinkedList["LinkedList"]
+    
+    Set --> HashSet["HashSet"]
+    Set --> TreeSet["TreeSet"]
+    Set --> LinkedHashSet["LinkedHashSet"]
+    Set --> SortedSet["SortedSet"]
+    
+    Queue --> PriorityQueue["PriorityQueue"]
+    
+    Map["Map&lt;K,V&gt;<br/>(separate hierarchy)"]
+    Map --> HashMap["HashMap"]
+    Map --> TreeMap["TreeMap"]
+    Map --> LinkedHashMap["LinkedHashMap"]
+    HashMap --> ConcurrentHashMap["ConcurrentHashMap"]
+    
+    style Iterable fill:#e1f5ff
+    style Collection fill:#ffe1f5
+    style Map fill:#f5ffe1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    COLLECTIONS FRAMEWORK HIERARCHY                       │
 │                                                                          │
@@ -178,6 +253,7 @@ Think of collections like different ways to organize books in a library:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Interface vs Implementation
 
@@ -214,7 +290,34 @@ public class ArrayList<E> {
 
 ### How It Works
 
+```mermaid
+flowchart TD
+    subgraph Initial["Initial state (capacity=10, size=0)"]
+        I1["elementData:<br/>[null][null][null][null][null][null][null][null][null][null]<br/>size: 0"]
+    end
+    
+    subgraph After3["After adding 'A', 'B', 'C' (capacity=10, size=3)"]
+        A1["elementData:<br/>['A']['B']['C'][null][null][null][null][null][null][null]<br/>size: 3<br/>indices: 0, 1, 2"]
+    end
+    
+    subgraph Resize["After adding 8 more elements (capacity=10, size=11)"]
+        R1["RESIZE TRIGGERED!<br/>New capacity = 10 + 5 = 15"]
+        R2["elementData:<br/>['A']['B']['C']['D']['E']['F']['G']['H']['I']['J']['K'][null][null][null][null]<br/>size: 11"]
+        R1 --> R2
+    end
+    
+    Initial --> After3
+    After3 --> Resize
+    
+    style Initial fill:#e1f5ff
+    style After3 fill:#f5ffe1
+    style Resize fill:#ffe1f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ARRAYLIST INTERNAL STRUCTURE                          │
 │                                                                          │
@@ -236,6 +339,7 @@ public class ArrayList<E> {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Time Complexity
 
@@ -355,7 +459,45 @@ public class LinkedList<E> {
 
 ### How It Works
 
+```mermaid
+flowchart LR
+    subgraph Initial["After adding 'A', 'B', 'C'"]
+        First["first"]
+        A["Node A<br/>prev: null<br/>item: 'A'<br/>next: →"]
+        B["Node B<br/>prev: ←<br/>item: 'B'<br/>next: →"]
+        C["Node C<br/>prev: ←<br/>item: 'C'<br/>next: null"]
+        Last["last"]
+        
+        First --> A
+        A <--> B
+        B <--> C
+        C --> Last
+    end
+    
+    subgraph Insert["Inserting 'X' between 'A' and 'B'"]
+        A2["Node A"]
+        X["Node X<br/>(new)"]
+        B2["Node B"]
+        C2["Node C"]
+        
+        A2 <--> X
+        X <--> B2
+        B2 <--> C2
+        
+        Note["1. Create new node with item='X'<br/>2. Set X.prev = A, X.next = B<br/>3. Set A.next = X, B.prev = X<br/>No shifting required! Just update 4 references."]
+    end
+    
+    Initial --> Insert
+    
+    style Initial fill:#e1f5ff
+    style Insert fill:#f5ffe1
+    style X fill:#ffffcc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LINKEDLIST INTERNAL STRUCTURE                         │
 │                                                                          │
@@ -382,6 +524,7 @@ public class LinkedList<E> {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Time Complexity
 
@@ -503,7 +646,38 @@ public class HashMap<K,V> {
 
 ### How Hashing Works
 
+```mermaid
+flowchart TD
+    Step1["Step 1: Compute hash code<br/>key.hashCode() → integer<br/>e.g., 'Alice'.hashCode() = 92750483"]
+    Step2["Step 2: Compute bucket index<br/>index = hash & (capacity - 1)<br/>92750483 & 15 = 3"]
+    Step3["Step 3: Store in bucket"]
+    
+    Step1 --> Step2 --> Step3
+    
+    subgraph Table["table (capacity=16)"]
+        T["[0][1][2][3][4][5][6][7][8][9][10][11][12][13][14][15]"]
+        Bucket3["Bucket 3"]
+        Entry1["Entry: 'Alice': 25<br/>next: null"]
+        T --> Bucket3
+        Bucket3 --> Entry1
+    end
+    
+    Step3 --> Table
+    
+    subgraph Collision["COLLISION: Another key hashes to same bucket<br/>'Bob'.hashCode() & 15 = 3 (same bucket!)"]
+        Entry2["Entry: 'Alice': 25"]
+        Entry3["Entry: 'Bob': 30<br/>next: null"]
+        Entry2 -->|"next"| Entry3
+        Note["Java 8+: If chain length > 8,<br/>convert to Red-Black Tree<br/>(O(n) → O(log n))"]
+    end
+    
+    Table -.->|"if collision"| Collision
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HASHMAP INTERNAL STRUCTURE                            │
 │                                                                          │
@@ -541,10 +715,45 @@ public class HashMap<K,V> {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Load Factor and Resizing
 
+```mermaid
+flowchart TD
+    Formula["Load Factor = size / capacity<br/>Default threshold = 0.75"]
+    
+    Initial["Initial: capacity=16, threshold=12 (16 * 0.75)"]
+    
+    subgraph Resize["When size > threshold:"]
+        Step1["1. Create new array with 2x capacity (32)"]
+        Step2["2. Rehash ALL entries to new positions"]
+        Step3["3. New threshold = 24 (32 * 0.75)"]
+        Step1 --> Step2 --> Step3
+    end
+    
+    subgraph Why["Why 0.75?"]
+        Low["Too low (0.5): Wastes memory, frequent resizing"]
+        High["Too high (0.9): More collisions, slower lookups"]
+        Balance["0.75 is a good balance"]
+    end
+    
+    subgraph Capacity["Capacity always power of 2:"]
+        Fast["Enables fast modulo: hash & (capacity-1)"]
+        Powers["16, 32, 64, 128, 256..."]
+    end
+    
+    Formula --> Initial
+    Initial --> Resize
+    Resize --> Why
+    Why --> Capacity
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOAD FACTOR AND RESIZING                              │
 │                                                                          │
@@ -568,6 +777,8 @@ public class HashMap<K,V> {
 │   - 16, 32, 64, 128, 256...                                            │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Time Complexity
@@ -833,7 +1044,42 @@ ConcurrentHashMap is a **thread-safe HashMap** that allows concurrent reads and 
 
 ### How It Achieves Thread Safety (Java 8+)
 
+```mermaid
+flowchart TD
+    subgraph Java7["Java 7 and earlier: Segment-based locking"]
+        Seg0["Segment 0<br/>[lock]<br/>bucket<br/>bucket"]
+        Seg1["Segment 1<br/>[lock]<br/>bucket<br/>bucket"]
+        Seg2["Segment 2<br/>[lock]<br/>bucket<br/>bucket"]
+        Seg3["Segment 3<br/>[lock]<br/>bucket<br/>bucket"]
+        Note7["Each segment has its lock<br/>Concurrent access to different segments"]
+    end
+    
+    subgraph Java8["Java 8+: Node-level locking with CAS"]
+        Table["[0][1][2][3][4][5][6][7]"]
+        Node1["[Node]"]
+        Node2["[Node]"]
+        Node3["[Node]"]
+        Node4["[Node]"]
+        Table -->|"index 0"| Node1
+        Table -->|"index 2"| Node2
+        Node1 --> Node3
+        Node2 --> Node4
+        Note8["Lock only the bucket being modified,<br/>not entire segment<br/>synchronized on individual nodes"]
+    end
+    
+    subgraph Ops["Operations"]
+        Read["Read operations:<br/>No locking (volatile reads)"]
+        Write["Write operations:<br/>CAS for empty buckets,<br/>synchronized for collisions"]
+    end
+    
+    Java7 --> Java8
+    Java8 --> Ops
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CONCURRENTHASHMAP INTERNALS                           │
 │                                                                          │
@@ -859,6 +1105,8 @@ ConcurrentHashMap is a **thread-safe HashMap** that allows concurrent reads and 
 │   Write operations: CAS for empty buckets, synchronized for collisions │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Code Example
@@ -941,7 +1189,36 @@ for (String word : words) {
 
 ### Step-by-Step Execution
 
+```mermaid
+sequenceDiagram
+    participant Init as Initial State
+    participant The as Processing "the"
+    participant Cat as Processing "cat"
+    participant Sat as Processing "sat"
+    participant On as Processing "on"
+    participant TheDup as Processing "the" (DUPLICATE)
+    participant Mat as Processing "mat"
+    participant Final as Final State
+    
+    Init->>The: Initial: capacity=16, size=0, threshold=12<br/>table: [null]×16
+    The->>The: 1. hash("the") = 114801<br/>2. index = 114801 & 15 = 1<br/>3. table[1] is null, create Node("the", 1)<br/>4. size = 1
+    The->>Cat: table: [null][the:1][null]...
+    Cat->>Cat: 1. hash("cat") = 98262<br/>2. index = 98262 & 15 = 6<br/>3. table[6] is null, create Node("cat", 1)<br/>4. size = 2
+    Cat->>Sat: table: [null][the:1][null][null][null][null][cat:1][null]...
+    Sat->>Sat: 1. hash("sat") = 113652<br/>2. index = 113652 & 15 = 4<br/>3. table[4] is null, create Node("sat", 1)<br/>4. size = 3
+    Sat->>On: size = 3
+    On->>On: 1. hash("on") = 3551<br/>2. index = 3551 & 15 = 15<br/>3. table[15] is null, create Node("on", 1)<br/>4. size = 4
+    On->>TheDup: size = 4
+    TheDup->>TheDup: 1. hash("the") = 114801<br/>2. index = 114801 & 15 = 1<br/>3. table[1] is NOT null, check equals<br/>4. "the".equals("the") = true<br/>5. merge: oldValue(1) + newValue(1) = 2<br/>6. Update: Node("the", 2)<br/>7. size stays 4
+    TheDup->>Mat: table: [null][the:2][null][null][sat:1][null][cat:1]...[on:1]
+    Mat->>Mat: 1. hash("mat") = 107881<br/>2. index = 107881 & 15 = 9<br/>3. table[9] is null, create Node("mat", 1)<br/>4. size = 5
+    Mat->>Final: Final: {the=2, cat=1, sat=1, on=1, mat=1}<br/>size=5, capacity=16 (no resize, 5 < 12)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HASHMAP WORD COUNTER SIMULATION                       │
 │                                                                          │
@@ -1010,6 +1287,8 @@ for (String word : words) {
 │   size=5, capacity=16 (no resize needed, 5 < 12)                        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -1500,7 +1779,39 @@ Map<Integer, Integer> map = new HashMap<>();  // Boxing every int!
 
 ### Quick Reference Chart
 
+```mermaid
+flowchart TD
+    Start["Need Key-Value Pairs?"]
+    
+    Start -->|YES| SortedKeys["Need sorted keys?"]
+    Start -->|NO| AllowDupes["Allow duplicates?"]
+    
+    SortedKeys -->|YES| TreeMap["TreeMap"]
+    SortedKeys -->|NO| ThreadSafe["Thread safe?"]
+    
+    ThreadSafe -->|YES| ConcurrentHashMap["ConcurrentHashMap"]
+    ThreadSafe -->|NO| InsertOrder["Insert order?"]
+    
+    InsertOrder -->|YES| LinkedHashMap["LinkedHashMap"]
+    InsertOrder -->|NO| HashMap["HashMap"]
+    
+    AllowDupes -->|YES| SortedSet["Sorted?"]
+    AllowDupes -->|NO| RandomAccess["Random access?"]
+    
+    SortedSet -->|YES| TreeSet["TreeSet"]
+    SortedSet -->|NO| HashSet["HashSet"]
+    
+    RandomAccess -->|YES| ArrayList["ArrayList"]
+    RandomAccess -->|NO| QueueStack["Queue/Stack?"]
+    
+    QueueStack -->|YES| ArrayDeque["ArrayDeque"]
+    QueueStack -->|NO| LinkedList["LinkedList"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    COLLECTION SELECTION GUIDE                            │
 │                                                                          │
@@ -1547,6 +1858,8 @@ Map<Integer, Integer> map = new HashMap<>();  // Boxing every int!
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Time Complexity Summary

@@ -33,7 +33,33 @@ This is the **mutual exclusion problem** in distributed systems: how do you ensu
 
 ### Why Distributed Locks Are Hard
 
-```
+**Why Distributed Locks Are Hard**
+
+**PROBLEM 1: Process crashes while holding lock**
+- Lock is never released
+- Other processes wait forever (deadlock)
+
+**PROBLEM 2: Network partition**
+- Process thinks it has lock
+- Lock service thinks lock is released
+- Another process acquires "same" lock
+
+**PROBLEM 3: Clock skew**
+- Lock has TTL based on time
+- Process A's clock is slow
+- Lock expires on server before A thinks it does
+- Process B acquires lock while A still using it
+
+**PROBLEM 4: GC pauses**
+- Process holds lock
+- Long GC pause (e.g., 30 seconds)
+- Lock expires during pause
+- Process resumes, thinks it still has lock
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           WHY DISTRIBUTED LOCKS ARE HARD                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -61,6 +87,7 @@ This is the **mutual exclusion problem** in distributed systems: how do you ensu
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What Breaks Without Proper Distributed Locks
 

@@ -263,7 +263,44 @@ Each object has metadata:
 
 ## Entity Relationship Diagram
 
+```mermaid
+erDiagram
+    users {
+        int id PK
+        string username
+        string email
+        string tier
+    }
+    api_keys {
+        int id PK
+        int user_id FK
+        string key_hash
+        int requests_per_hour
+    }
+    pastes {
+        string id PK
+        string storage_key
+        string content_hash
+        int user_id FK
+        string visibility
+        string syntax
+        timestamp expires_at
+    }
+    object_storage {
+        string path
+        string content
+    }
+    
+    users ||--o{ api_keys : "has"
+    users ||--o{ pastes : "creates"
+    api_keys ||--o{ pastes : "used_for"
+    pastes ||--|| object_storage : "stored_in"
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐       ┌─────────────────┐
 │     users       │       │    api_keys     │
 ├─────────────────┤       ├─────────────────┤
@@ -296,6 +333,9 @@ Each object has metadata:
                                           │ pastes/2024/01/...  │
                                           │ deduplicated/...    │
                                           └─────────────────────┘
+```
+
+</details>
 ```
 
 ---

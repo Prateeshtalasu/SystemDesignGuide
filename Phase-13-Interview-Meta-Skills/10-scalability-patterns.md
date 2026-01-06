@@ -190,10 +190,23 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
            Writes                        Reads
               │                             │
               ▼                             ▼
+```mermaid
+flowchart LR
+    Writes["Writes"] --> Primary["Primary DB"]
+    Reads["Reads"] --> Replicas["Replicas<br/>(1, 2, 3)"]
+    Primary -->|Replication| Replicas
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
         ┌──────────┐               ┌───────────────┐
         │  Primary │──Replication─▶│   Replicas    │
         │    DB    │               │   (1, 2, 3)   │
         └──────────┘               └───────────────┘
+```
+</details>
 
   USE CASE: Read-heavy workloads (10:1 read/write ratio or higher)
   
@@ -202,7 +215,18 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
 
 #### Database Sharding
 
+```mermaid
+flowchart TD
+    App["Application"] --> Router["Shard Router"]
+    Router --> S1["Shard 1<br/>Users A-H"]
+    Router --> S2["Shard 2<br/>Users I-P"]
+    Router --> S3["Shard 3<br/>Users Q-Z"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    DATABASE SHARDING                                 │
 └─────────────────────────────────────────────────────────────────────┘
@@ -237,10 +261,23 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
      Pros: Flexible
      Cons: Lookup table is bottleneck
 ```
+</details>
 
 #### CQRS (Command Query Responsibility Segregation)
 
+```mermaid
+flowchart TD
+    API["API Layer"] --> Commands["Commands<br/>(Writes)"]
+    API --> Queries["Queries<br/>(Reads)"]
+    Commands --> WriteDB["Write DB<br/>(PostgreSQL)<br/>Normalized"]
+    Queries --> ReadDB["Read DB<br/>(Elasticsearch)<br/>Denormalized"]
+    WriteDB -->|"Event Sync (Kafka)"| ReadDB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    CQRS FOR SCALING                                  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -269,12 +306,25 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
   
   TRADE-OFF: Eventual consistency between read and write DBs
 ```
+</details>
 
 ### Pattern 3: Caching Patterns for Scale
 
 #### Multi-Tier Caching
 
+```mermaid
+flowchart TD
+    Request["Request"] --> L1["L1: Browser/App Cache<br/>(Client-side cache)<br/>LocalStorage, memory"]
+    L1 -->|Miss| L2["L2: CDN<br/>(Edge cache)<br/>CloudFront, Fastly"]
+    L2 -->|Miss| L3["L3: Application Cache<br/>(Application cache)<br/>Local memory, Guava"]
+    L3 -->|Miss| L4["L4: Distributed Cache<br/>(Distributed cache)<br/>Redis, Memcached"]
+    L4 -->|Miss| L5["L5: Database<br/>(Source of truth)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MULTI-TIER CACHING                                │
 └─────────────────────────────────────────────────────────────────────┘
@@ -317,10 +367,47 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
   - L4 (Redis): 90% of remaining
   - L5 (DB): Only 1-2% of original requests
 ```
+</details>
 
 #### Cache-Aside vs Read-Through
 
+**Cache-Aside Pattern:**
+
+```mermaid
+flowchart LR
+    App1["Application"] --> Cache1["Cache"]
+    App1 --> DB1["DB"]
 ```
+
+Application manages cache explicitly:
+1. Check cache
+2. If miss, query DB
+3. Store in cache
+4. Return data
+
+Pros: Application has full control  
+Cons: Application must handle cache logic
+
+**Read-Through Pattern:**
+
+```mermaid
+flowchart TD
+    App2["Application"] --> Cache2["Cache"]
+    Cache2 --> DB2["DB"]
+```
+
+Cache handles DB queries:
+1. Application queries cache
+2. Cache queries DB on miss
+3. Cache stores and returns
+
+Pros: Simpler application code  
+Cons: Cache must understand data model
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    CACHE-ASIDE PATTERN                               │
 └─────────────────────────────────────────────────────────────────────┘
@@ -374,6 +461,7 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
   Pros: Simpler application code
   Cons: Cache must understand data model
 ```
+</details>
 
 ### Pattern 4: Message Queue Scaling
 
@@ -385,22 +473,52 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
   PROBLEM: Synchronous processing can't handle spikes
 
   SYNCHRONOUS:
-  ┌──────┐    ┌──────┐    ┌──────┐
-  │Client│───▶│Server│───▶│  DB  │
-  └──────┘    └──────┘    └──────┘
+  ```mermaid
+  flowchart LR
+      Client["Client"] --> Server["Server"]
+      Server --> DB["DB"]
+  ```
   
   If DB is slow, client waits. If spike occurs, system overloads.
 
   ASYNCHRONOUS WITH QUEUE:
+  ```mermaid
+  flowchart LR
+      Client["Client"] --> Server["Server"]
+      Server --> Queue["Queue"]
+      Queue --> Workers["Workers"]
+      Workers --> DB["DB"]
+  ```
+  
+  Client gets immediate response. Queue absorbs spikes.
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
   ┌──────┐    ┌──────┐    ┌───────┐    ┌────────┐    ┌──────┐
   │Client│───▶│Server│───▶│ Queue │───▶│Workers │───▶│  DB  │
   └──────┘    └──────┘    └───────┘    └────────┘    └──────┘
-  
-  Client gets immediate response. Queue absorbs spikes.
+```
+</details>
   Workers process at sustainable rate.
 
   SCALING WORKERS:
   
+```mermaid
+flowchart TD
+    Queue["Queue<br/>(Kafka)"] --> W1["Worker 1"]
+    Queue --> W2["Worker 2"]
+    Queue --> W3["Worker 3"]
+```
+
+Add workers to increase throughput.  
+Queue provides backpressure if workers can't keep up.
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌───────────┐
                     │   Queue   │
                     │  (Kafka)  │
@@ -412,14 +530,43 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
     ┌─────────┐      ┌─────────┐      ┌─────────┐
     │Worker 1 │      │Worker 2 │      │Worker 3 │
     └─────────┘      └─────────┘      └─────────┘
-    
-  Add workers to increase throughput.
-  Queue provides backpressure if workers can't keep up.
 ```
+</details>
 
 ### Pattern 5: Microservices Decomposition
 
+**Monolith:**
+
+```mermaid
+flowchart TD
+    Monolith["Application<br/>User | Order | Payment | Notification<br/>(All in one service)"]
 ```
+
+Scale everything together (even if only orders are busy)
+
+**Microservices:**
+
+```mermaid
+flowchart LR
+    subgraph Microservices["Independent Services"]
+        UserSvc["User Service<br/>(2 inst)"]
+        OrderSvc["Order Service<br/>(10 inst)"]
+        PaymentSvc["Payment Service<br/>(3 inst)"]
+        NotifSvc["Notif Service<br/>(5 inst)"]
+    end
+```
+
+Scale each service independently based on load.
+
+**WHEN TO DECOMPOSE:**
+- Service has different scaling needs
+- Service has different deployment frequency
+- Service has different team ownership
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MICROSERVICES FOR SCALING                         │
 └─────────────────────────────────────────────────────────────────────┘
@@ -448,6 +595,8 @@ Scaling is about identifying and removing bottlenecks. The bottleneck is always 
   - Service has different scaling needs
   - Service has different deployment frequency
   - Service has different team ownership
+```
+</details>
   - Service has different technology needs
   
   WHEN NOT TO DECOMPOSE:

@@ -527,7 +527,43 @@ flowchart TB
 
 ## Two-Stage Recommendation Pipeline
 
+```mermaid
+flowchart TD
+    Request["User Request:<br/>Get 50 recommendations for user_123"]
+    
+    subgraph Stage1["STAGE 1: CANDIDATE GENERATION<br/>Goal: Reduce 100M items → 1000 candidates"]
+        CF["Collaborative Filtering<br/>Similar users' preferences<br/>Output: 500"]
+        CBF["Content-Based Filtering<br/>Items matching user preferences<br/>Output: 300"]
+        PB["Popularity Based<br/>Most popular in category<br/>Output: 150"]
+        T["Trending<br/>Trending this week<br/>Output: 50"]
+        
+        Merge["Merge & Deduplicate<br/>~1000 candidates"]
+        
+        CF --> Merge
+        CBF --> Merge
+        PB --> Merge
+        T --> Merge
+    end
+    
+    subgraph Stage2["STAGE 2: RANKING<br/>Goal: Score 1000 candidates → Top 50"]
+        Features["FEATURE ASSEMBLY<br/>User Features | Item Features | Context Features<br/>Demographics, History, Preferences, Embedding | Category, Popularity, Freshness, Embedding | Time of day, Device, Session, Location"]
+        Model["Ranking Model<br/>(Neural Network)<br/>Input: 100 features<br/>Output: Score 0-1"]
+        PostProcess["Post-Processing<br/>- Diversity filter<br/>- Business rules<br/>- Freshness boost"]
+        Results["Top 50 Results"]
+        
+        Features --> Model
+        Model --> PostProcess
+        PostProcess --> Results
+    end
+    
+    Request --> Stage1
+    Stage1 --> Stage2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          RECOMMENDATION REQUEST FLOW                                 │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -600,13 +636,41 @@ User Request: "Get 50 recommendations for user_123"
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Candidate Generation Detail
 
 ### Collaborative Filtering (ANN Search)
 
+```mermaid
+flowchart TD
+    UserEmbedding["User Embedding<br/>user_123: [0.2, -0.1, ...]"]
+    
+    subgraph FAISS["FAISS INDEX"]
+        subgraph IVF["IVF (Inverted File) Structure"]
+            C1["Cluster 1:<br/>[item_1, item_45, item_892, ...]"]
+            C2["Cluster 2:<br/>[item_2, item_67, item_234, ...]"]
+            C3["Cluster 3:<br/>[item_5, item_23, item_567, ...]"]
+            CN["Cluster 1000:<br/>[item_99, item_456, ...]"]
+        end
+        
+        Process["1. Find nearest clusters to user embedding<br/>(probe 10 clusters)<br/>2. Search within those clusters<br/>3. Return top-k nearest items"]
+        
+        Result["Query: user_embedding<br/>Time: O(n_probe * cluster_size) ≈ 5ms<br/>Result: 500 nearest items"]
+    end
+    
+    UserEmbedding --> FAISS
+    FAISS --> Process
+    Process --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                       COLLABORATIVE FILTERING                                        │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -640,11 +704,47 @@ User Request: "Get 50 recommendations for user_123"
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Real-time Signal Processing
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant InteractionService
+    participant Kafka
+    participant FeatureUpdater
+    participant StoreWriter
+    participant SessionAggregator
+    
+    User->>Client: Click on "Inception"
+    Client->>InteractionService: POST /interactions<br/>{user_id: "user_123", item_id: "movie_456", action: "click"}
+    InteractionService->>InteractionService: 1. Validate event
+    InteractionService->>Kafka: 2. Publish to Kafka
+    InteractionService->>Client: 3. Return 202 Accepted
+    
+    par Parallel Processing
+        Kafka->>FeatureUpdater: Event stream
+        FeatureUpdater->>FeatureUpdater: Update user features in Redis
+    and
+        Kafka->>StoreWriter: Event stream
+        StoreWriter->>StoreWriter: Write to Cassandra
+    and
+        Kafka->>SessionAggregator: Event stream
+        SessionAggregator->>SessionAggregator: Update session context
+    end
+    
+    Note over User,SessionAggregator: Effect on Next Recommendation Request:<br/>1. User features updated with recent click<br/>2. Session context includes "clicked Inception"<br/>3. Ranking model sees fresh signals<br/>4. Similar items to Inception boosted
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                          REAL-TIME SIGNAL FLOW                                       │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -697,6 +797,9 @@ Effect on Next Recommendation Request:
 2. Session context includes "clicked Inception"
 3. Ranking model sees fresh signals
 4. Similar items to Inception boosted
+```
+
+</details>
 ```
 
 ---

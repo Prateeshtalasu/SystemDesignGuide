@@ -50,7 +50,26 @@ Scenario 3: Exactly-once (what we want)
 
 The fundamental problem is the **Two Generals Problem** (covered in Topic 03):
 
+**Why Exactly-Once Is Impossible**
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant C as Consumer
+    P->>C: Message
+    C->>C: Process message
+    C->>P: Acknowledgment
+    Note over P,C: What if the acknowledgment is lost?
+    Note over P: Producer doesn't know if consumer processed
+    Note over P: Producer retries - duplicate processing
+    Note over P: Producer doesn't retry - message lost
+    Note over P,C: No matter how many acks, you can't be 100% certain!
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              WHY EXACTLY-ONCE IS IMPOSSIBLE                  │
 ├─────────────────────────────────────────────────────────────┤
@@ -71,6 +90,7 @@ The fundamental problem is the **Two Generals Problem** (covered in Topic 03):
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### The Key Insight: Exactly-Once Semantics vs Delivery
 

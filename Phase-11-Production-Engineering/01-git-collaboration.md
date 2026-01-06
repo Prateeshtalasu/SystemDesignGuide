@@ -95,7 +95,25 @@ Imagine you're writing a novel:
 
 Git has three "areas" where your files can exist:
 
+```mermaid
+flowchart LR
+    WD["Working<br/>Directory<br/><br/>Your actual<br/>files on disk"]
+    SA["Staging Area<br/>(Index)<br/><br/>Ready for<br/>photo area"]
+    REPO["Repository<br/>(History)<br/><br/>Permanent<br/>snapshots"]
+    
+    WD -->|git add| SA
+    SA -->|git commit| REPO
+    REPO -.->|git checkout| WD
+    
+    style WD fill:#e1f5ff
+    style SA fill:#fff4e1
+    style REPO fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐    git add     ┌─────────────────┐    git commit    ┌─────────────────┐
 │  Working        │ ────────────▶  │  Staging Area   │ ───────────────▶ │   Repository    │
 │  Directory      │                │  (Index)        │                  │   (History)     │
@@ -106,6 +124,8 @@ Git has three "areas" where your files can exist:
         │                                                                       │
         │◀──────────────────── git checkout ────────────────────────────────────│
 ```
+
+</details>
 
 **Analogy**: Think of taking a group photo:
 1. **Working Directory**: Everyone at the party (all your files, changed or not)
@@ -169,7 +189,24 @@ commit 9f8e7d...
 
 Each commit points to its parent, forming a linked list:
 
+```mermaid
+flowchart LR
+    A["Commit A<br/>(initial)"] --> B["Commit B<br/>(add login)"]
+    B --> C["Commit C<br/>(fix bug)"]
+    C --> D["Commit D<br/>(add logout)"]
+    HEAD["HEAD<br/>main"] -.-> D
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style HEAD fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 [Commit A] ◀─── [Commit B] ◀─── [Commit C] ◀─── [Commit D]
  (initial)      (add login)     (fix bug)       (add logout)
                                                      ▲
@@ -178,6 +215,8 @@ Each commit points to its parent, forming a linked list:
                                                    main
 ```
 
+</details>
+
 - **HEAD**: A pointer to your current position in history
 - **Branch (main)**: A pointer to a specific commit (moves forward as you add commits)
 
@@ -185,7 +224,26 @@ Each commit points to its parent, forming a linked list:
 
 A branch is just a **pointer to a commit**. Creating a branch is instant because Git only creates a 41-byte file containing the commit hash.
 
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    C --> D[D]
+    C -->|main<br/>HEAD| MAIN[main]
+    D -->|feature-login| FEATURE[feature-login]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                         feature-login
                               │
                               ▼
@@ -196,9 +254,32 @@ A branch is just a **pointer to a commit**. Creating a branch is instant because
                   HEAD
 ```
 
+</details>
+
 When you commit on `feature-login`:
 
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    C --> D[D]
+    D --> E[E]
+    C -->|main| MAIN[main]
+    E -->|feature-login| FEATURE[feature-login]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                         feature-login
                               │
                               ▼
@@ -208,12 +289,32 @@ When you commit on `feature-login`:
                   main
 ```
 
+</details>
+
 ### How Merge Works
 
 **Fast-Forward Merge** (when main hasn't moved):
 
 Before:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B -->|main| MAIN[main]
+    C -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                   feature
                      │
                      ▼
@@ -223,8 +324,26 @@ Before:
         main
 ```
 
+</details>
+
 After `git merge feature`:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    C -->|main<br/>feature| MAIN[main]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style MAIN fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                   feature
                      │
                      ▼
@@ -234,12 +353,36 @@ After `git merge feature`:
                  main
 ```
 
+</details>
+
 Git just moves the `main` pointer forward. No new commit created.
 
 **Three-Way Merge** (when both branches have new commits):
 
 Before:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B --> D[D]
+    D --> E[E]
+    C -->|main| MAIN[main]
+    E -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           feature
              │
              ▼
@@ -251,8 +394,35 @@ Before:
                  main
 ```
 
+</details>
+
 After `git merge feature`:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B --> D[D]
+    D --> E[E]
+    C --> M["M<br/>(merge commit)"]
+    E --> M
+    M -->|main| MAIN[main]
+    E -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
+    style M fill:#ffeb3b
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           feature
              │
              ▼
@@ -264,6 +434,8 @@ After `git merge feature`:
                           main
 ```
 
+</details>
+
 Git creates a **merge commit** `[M]` with two parents.
 
 ### How Rebase Works
@@ -271,7 +443,29 @@ Git creates a **merge commit** `[M]` with two parents.
 Rebase **replays** your commits on top of another branch:
 
 Before:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B --> D[D]
+    D --> E[E]
+    C -->|main| MAIN[main]
+    E -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#e8f5e9
+    style E fill:#e8f5e9
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           feature
              │
              ▼
@@ -283,13 +477,39 @@ Before:
                  main
 ```
 
+</details>
+
 After `git rebase main` (while on feature):
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    C --> D2["D'"]
+    D2 --> E2["E'"]
+    C -->|main| MAIN[main]
+    E2 -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D2 fill:#ff9800
+    style E2 fill:#ff9800
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 [A] ◀─── [B] ◀─── [C] ◀─── [D'] ◀─── [E']
                    │                   │
                    ▼                   ▼
                  main              feature
 ```
+
+</details>
 
 Note: `[D']` and `[E']` are **new commits** with different hashes. The original `[D]` and `[E]` still exist but are now orphaned.
 
@@ -481,7 +701,36 @@ index abcdef1..2345678
 
 **Used by**: Teams with scheduled releases (banks, enterprises, mobile apps with app store review cycles)
 
+```mermaid
+flowchart TD
+    MAIN["main<br/>(production)"]
+    DEVELOP["develop"]
+    HOTFIX["hotfix/critical-bug"]
+    RELEASE["release/1.0"]
+    F1["feature/login"]
+    F2["feature/payment"]
+    
+    HOTFIX --> MAIN
+    MAIN --> DEVELOP
+    DEVELOP --> RELEASE
+    RELEASE --> MAIN
+    DEVELOP --> F1
+    DEVELOP --> F2
+    F1 --> DEVELOP
+    F2 --> DEVELOP
+    
+    style MAIN fill:#ffebee
+    style DEVELOP fill:#e3f2fd
+    style HOTFIX fill:#fff3e0
+    style RELEASE fill:#f3e5f5
+    style F1 fill:#e8f5e9
+    style F2 fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     hotfix/critical-bug
                            │
     ┌──────────────────────┼──────────────────────────────────────┐
@@ -499,6 +748,8 @@ index abcdef1..2345678
         └─────────┴─────────────────────────────
               feature/login    feature/payment
 ```
+
+</details>
 
 **Branch Types**:
 
@@ -535,7 +786,30 @@ index abcdef1..2345678
 
 **Used by**: Google, Facebook, Netflix, high-velocity teams with strong CI/CD
 
+```mermaid
+flowchart LR
+    MAIN["main (trunk)"]
+    F1["short-lived<br/>feature<br/>(< 1 day)"]
+    F2["short-lived<br/>feature<br/>(< 2 days)"]
+    F3["short-lived<br/>feature<br/>(< 1 day)"]
+    
+    MAIN --> F1
+    F1 --> MAIN
+    MAIN --> F2
+    F2 --> MAIN
+    MAIN --> F3
+    F3 --> MAIN
+    
+    style MAIN fill:#e3f2fd
+    style F1 fill:#e8f5e9
+    style F2 fill:#e8f5e9
+    style F3 fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──●──── main (trunk)
   │     │        │              │        │
   └──●──┘        └──●──●──●─────┘        └──●──┘
@@ -544,6 +818,8 @@ index abcdef1..2345678
   feature          feature               feature
  (< 1 day)        (< 2 days)            (< 1 day)
 ```
+
+</details>
 
 **Rules**:
 1. Everyone commits to `main` (trunk) frequently (at least daily)
@@ -590,13 +866,34 @@ git push -u origin feature/add-button
 
 **Used by**: GitHub, startups, teams wanting simplicity with PRs
 
+```mermaid
+flowchart LR
+    MAIN["main"]
+    F1["feature-1"]
+    F2["feature-2"]
+    
+    MAIN --> F1
+    F1 --> MAIN
+    MAIN --> F2
+    F2 --> MAIN
+    
+    style MAIN fill:#e3f2fd
+    style F1 fill:#e8f5e9
+    style F2 fill:#e8f5e9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ──●──────────●──────────────────●────────────────●──────────── main
   │          │                  │                │
   └──●──●────┘                  └──●──●──●───────┘
       │                              │
    feature-1                     feature-2
 ```
+
+</details>
 
 **Rules**:
 1. `main` is always deployable
@@ -656,7 +953,29 @@ git push -u origin add-user-authentication
 ### Visual Comparison
 
 **Starting point**:
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B --> E[E]
+    C --> D[D]
+    E -->|main| MAIN[main]
+    D -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style D fill:#e8f5e9
+    style E fill:#fff4e1
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           feature
              │
              ▼
@@ -668,8 +987,35 @@ git push -u origin add-user-authentication
                  main
 ```
 
+</details>
+
 **After merge** (git checkout main && git merge feature):
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> C[C]
+    B --> E[E]
+    C --> D[D]
+    E --> M["M<br/>(merge commit)"]
+    D --> M
+    M -->|main| MAIN[main]
+    D -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style D fill:#e8f5e9
+    style E fill:#fff4e1
+    style M fill:#ffeb3b
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
           feature
              │
              ▼
@@ -681,13 +1027,39 @@ git push -u origin add-user-authentication
                           main
 ```
 
+</details>
+
 **After rebase** (git checkout feature && git rebase main):
+
+```mermaid
+flowchart LR
+    A[A] --> B[B]
+    B --> E[E]
+    E --> C2["C'"]
+    C2 --> D2["D'"]
+    E -->|main| MAIN[main]
+    D2 -->|feature| FEATURE[feature]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style E fill:#fff4e1
+    style C2 fill:#ff9800
+    style D2 fill:#ff9800
+    style MAIN fill:#fce4ec
+    style FEATURE fill:#f3e5f5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 [A] ◀─── [B] ◀─── [E] ◀─── [C'] ◀─── [D']
                    │                   │
                    ▼                   ▼
                  main              feature
 ```
+
+</details>
 
 ### When to Use Merge
 

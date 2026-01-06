@@ -201,7 +201,34 @@ public void createOrder(OrderRequest request) {
 **Two Approaches:**
 
 **1. Orchestration (Centralized)**
+```mermaid
+flowchart TD
+    Orchestrator["Saga Orchestrator"]
+    Step1["Step 1: Create Order"]
+    OrderSvc["Order Service"]
+    Step2["Step 2: Reserve Stock"]
+    InventorySvc["Inventory Service"]
+    Step3["Step 3: Charge Payment"]
+    PaymentSvc["Payment Service ❌ FAILS"]
+    Comp1["Compensate: Release Stock"]
+    Comp2["Compensate: Cancel Order"]
+    
+    Orchestrator --> Step1
+    Step1 --> OrderSvc
+    Orchestrator --> Step2
+    Step2 --> InventorySvc
+    Orchestrator --> Step3
+    Step3 --> PaymentSvc
+    PaymentSvc --> Comp1
+    Comp1 --> InventorySvc
+    PaymentSvc --> Comp2
+    Comp2 --> OrderSvc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Saga Orchestrator
     │
     ├─→ Step 1: Create Order
@@ -223,9 +250,45 @@ Saga Orchestrator
             │
             └─→ Order Service
 ```
+</details>
 
 **2. Choreography (Distributed)**
+```mermaid
+flowchart TD
+    OrderSvc["Order Service"]
+    OrderEvent["Publishes: OrderCreated event"]
+    
+    InventorySvc1["Inventory Service (listens)"]
+    Reserve["Reserves stock"]
+    StockEvent["Publishes: StockReserved event"]
+    
+    PaymentSvc["Payment Service (listens)"]
+    Charge["Charges customer ❌ FAILS"]
+    PaymentFailed["Publishes: PaymentFailed event"]
+    
+    InventorySvc2["Inventory Service (listens)"]
+    Release["Compensates: Releases stock"]
+    
+    OrderSvc2["Order Service (listens)"]
+    Cancel["Compensates: Cancels order"]
+    
+    OrderSvc --> OrderEvent
+    OrderEvent --> InventorySvc1
+    InventorySvc1 --> Reserve
+    Reserve --> StockEvent
+    StockEvent --> PaymentSvc
+    PaymentSvc --> Charge
+    Charge --> PaymentFailed
+    PaymentFailed --> InventorySvc2
+    InventorySvc2 --> Release
+    PaymentFailed --> OrderSvc2
+    OrderSvc2 --> Cancel
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Service
     │
     ├─→ Publishes: OrderCreated event
@@ -250,6 +313,7 @@ Order Service (listens)
     │
     └─→ Compensates: Cancels order
 ```
+</details>
 
 ### Key Components
 
@@ -1700,7 +1764,33 @@ public void compensate(SagaContext context) {
 **Saga + Event Sourcing:**
 
 **Architecture:**
+```mermaid
+flowchart TD
+    Orchestrator["Saga Orchestrator"]
+    Step1["Step 1: Create Order"]
+    OrderEvent["Order Service: Append 'OrderCreated' event"]
+    Step2["Step 2: Reserve Stock"]
+    StockEvent["Inventory Service: Append 'StockReserved' event"]
+    Step3["Step 3: Charge Payment ❌ FAILS"]
+    PaymentEvent["Payment Service: Append 'PaymentFailed' event"]
+    
+    Comp1["Compensation:<br/>Inventory Service: Append 'StockReleased' event"]
+    Comp2["Order Service: Append 'OrderCancelled' event"]
+    
+    Orchestrator --> Step1
+    Step1 --> OrderEvent
+    Orchestrator --> Step2
+    Step2 --> StockEvent
+    Orchestrator --> Step3
+    Step3 --> PaymentEvent
+    PaymentEvent --> Comp1
+    PaymentEvent --> Comp2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Saga Orchestrator
     │
     ├─→ Step 1: Create Order
@@ -1716,6 +1806,7 @@ Compensation:
     └─→ Inventory Service: Append "StockReleased" event (compensation)
     └─→ Order Service: Append "OrderCancelled" event (compensation)
 ```
+</details>
 
 **Benefits:**
 1. **Audit Trail**: All saga steps and compensations are events

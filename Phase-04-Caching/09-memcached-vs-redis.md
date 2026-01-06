@@ -21,7 +21,33 @@ If you understand that both are in-memory caches but have different features and
 
 You need a distributed cache. You've heard of both Memcached and Redis. Which one should you choose?
 
+```mermaid
+flowchart LR
+    subgraph Memcached["MEMCACHED"]
+        M1["• Simple key-value"]
+        M2["• Multi-threaded"]
+        M3["• No persistence"]
+        M4["• No clustering"]
+        M5["• Simpler"]
+        M6["• Older, battle-tested"]
+    end
+    
+    subgraph Redis["REDIS"]
+        R1["• Rich data structures"]
+        R2["• Single-threaded"]
+        R3["• Persistence options"]
+        R4["• Built-in clustering"]
+        R5["• More features"]
+        R6["• Newer, more popular"]
+    end
+    
+    Note["Which one is better? It depends on your use case!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE CHOICE                                            │
 │                                                                          │
@@ -38,6 +64,7 @@ You need a distributed cache. You've heard of both Memcached and Redis. Which on
 │   Which one is "better"? It depends on your use case!                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Brief History
 
@@ -64,7 +91,34 @@ Both have survived because they excel at different things:
 
 ### The Tool Analogy
 
+```mermaid
+flowchart TD
+    subgraph Memcached["MEMCACHED = Screwdriver"]
+        M1["🪛 Does ONE thing extremely well"]
+        M2["• Simple to use"]
+        M3["• No learning curve"]
+        M4["• Very efficient at its job"]
+        M5["• Can't do much else"]
+    end
+    
+    subgraph Redis["REDIS = Swiss Army Knife"]
+        R1["🔧 Does MANY things well"]
+        R2["• Cache (like Memcached)"]
+        R3["• Message queue"]
+        R4["• Session store"]
+        R5["• Leaderboards"]
+        R6["• Rate limiter"]
+        R7["• Pub/Sub messaging"]
+        R8["• More complex"]
+    end
+    
+    Note["If you only need to drive screws, use a screwdriver.<br/>If you need multiple tools, use the Swiss Army Knife."]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE TOOL ANALOGY                                      │
 │                                                                          │
@@ -97,6 +151,7 @@ Both have survived because they excel at different things:
 │   If you need multiple tools, use the Swiss Army Knife.                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -104,7 +159,31 @@ Both have survived because they excel at different things:
 
 ### Architecture Comparison
 
+```mermaid
+flowchart TD
+    subgraph Server["MEMCACHED SERVER"]
+        subgraph EventLoop["MULTI-THREADED EVENT LOOP"]
+            T1["Thread 1"]
+            T2["Thread 2"]
+            T3["Thread 3"]
+            T4["Thread 4"]
+            
+            T1 --> Slab["SLAB ALLOCATOR<br/>(Memory Manager)"]
+            T2 --> Slab
+            T3 --> Slab
+            T4 --> Slab
+            
+            Slab --> Hash["HASH TABLE<br/>(Key → Value)<br/>Strings only!"]
+        end
+        
+        Limits["❌ No persistence<br/>❌ No replication<br/>❌ No clustering (client-side sharding only)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MEMCACHED ARCHITECTURE                                │
 │                                                                          │
@@ -138,7 +217,30 @@ Both have survived because they excel at different things:
 │   │                                                                  │   │
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 
+```mermaid
+flowchart TD
+    subgraph Server["REDIS SERVER"]
+        subgraph EventLoop["SINGLE-THREADED EVENT LOOP"]
+            Main["Main Thread (commands)"]
+            
+            DataStructs["DATA STRUCTURES<br/>String Hash List Set ZSet Stream"]
+            
+            Persistence["PERSISTENCE<br/>RDB Snapshots | AOF Log | Hybrid"]
+            
+            Main --> DataStructs --> Persistence
+        end
+        
+        Features["✅ Persistence options<br/>✅ Built-in replication<br/>✅ Redis Cluster (server-side sharding)<br/>✅ Lua scripting"]
+    end
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REDIS ARCHITECTURE                                    │
 │                                                                          │
@@ -173,11 +275,27 @@ Both have survived because they excel at different things:
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Threading Model
 
 **Memcached: Multi-threaded**
+```mermaid
+flowchart LR
+    C1["Client 1"] -->|"Thread 1"| Memory["Shared Memory<br/>(with locks)"]
+    C2["Client 2"] -->|"Thread 2"| Memory
+    C3["Client 3"] -->|"Thread 3"| Memory
+    C4["Client 4"] -->|"Thread 4"| Memory
+    
+    Pros["Pros: Uses all CPU cores"]
+    Cons["Cons: Lock contention, more complex"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │   Client 1 ──────▶ Thread 1 ──┐                                         │
 │   Client 2 ──────▶ Thread 2 ──┼──▶ Shared Memory (with locks)          │
@@ -188,9 +306,27 @@ Both have survived because they excel at different things:
 │   Cons: Lock contention, more complex                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Redis: Single-threaded (mostly)**
+```mermaid
+flowchart LR
+    C1["Client 1"] --> Single["Single Thread<br/>(event loop)"]
+    C2["Client 2"] --> Single
+    C3["Client 3"] --> Single
+    C4["Client 4"] --> Single
+    
+    Single --> Memory["Memory<br/>(no locks)"]
+    
+    Pros["Pros: No locks, simpler, predictable latency"]
+    Cons["Cons: Can't use multiple cores for commands"]
+    Note["Note: Redis 6+ has I/O threads for network, but commands still execute on single thread"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │   Client 1 ──┐                                                          │
 │   Client 2 ──┼──▶ Single Thread (event loop) ──▶ Memory (no locks)     │
@@ -204,11 +340,30 @@ Both have survived because they excel at different things:
 │         execute on single thread                                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Memory Management
 
 **Memcached: Slab Allocator**
+```mermaid
+flowchart TD
+    Title["Memory divided into slabs of fixed sizes"]
+    
+    SC1["Slab Class 1: 96 bytes<br/>[■][■][■][■][■][■][ ][ ]"]
+    SC2["Slab Class 2: 120 bytes<br/>[■][■][■][ ][ ][ ][ ][ ]"]
+    SC3["Slab Class 3: 152 bytes<br/>[■][■][ ][ ][ ][ ][ ][ ]"]
+    SC4["Slab Class 4: 192 bytes<br/>[■][ ][ ][ ][ ][ ][ ][ ]"]
+    
+    Example["Item of 100 bytes → Goes into 120-byte slab (wastes 20 bytes)"]
+    
+    Pros["Pros: No memory fragmentation, O(1) allocation"]
+    Cons["Cons: Some internal waste, can't resize slabs"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MEMCACHED SLAB ALLOCATOR                              │
 │                                                                          │
@@ -226,9 +381,22 @@ Both have survived because they excel at different things:
 │   Cons: Some internal waste, can't resize slabs                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Redis: jemalloc**
+```mermaid
+flowchart TD
+    Title["REDIS MEMORY (jemalloc)<br/>Uses jemalloc allocator (like Firefox, FreeBSD)"]
+    
+    Features["- Allocates exact sizes needed<br/>- Less internal waste<br/>- Better for variable-size data<br/>- Can have fragmentation over time"]
+    
+    RedisFeatures["Redis also has:<br/>- Memory defragmentation (Redis 4.0+)<br/>- Memory usage reporting per key<br/>- Maxmemory policies for eviction"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REDIS MEMORY (jemalloc)                               │
 │                                                                          │
@@ -245,6 +413,7 @@ Both have survived because they excel at different things:
 │   - Maxmemory policies for eviction                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -252,7 +421,49 @@ Both have survived because they excel at different things:
 
 ### Comprehensive Comparison Table
 
+```mermaid
+flowchart LR
+    subgraph Features["FEATURE COMPARISON"]
+        subgraph Memcached["Memcached"]
+            M1["Data Types: Strings only"]
+            M2["Max Value Size: 1MB default"]
+            M3["Threading: Multi-threaded"]
+            M4["Persistence: ❌ No"]
+            M5["Replication: ❌ No"]
+            M6["Clustering: Client-side only"]
+            M7["Transactions: ❌ No"]
+            M8["Pub/Sub: ❌ No"]
+            M9["Lua Scripting: ❌ No"]
+            M10["TTL Granularity: Seconds"]
+            M11["Memory Efficiency: Higher for simple strings"]
+            M12["Latency p99: ~200μs"]
+            M13["Throughput: Higher (multi-threaded)"]
+        end
+        
+        subgraph Redis["Redis"]
+            R1["Data Types: String, Hash, List, Set, Sorted Set, Stream, etc."]
+            R2["Max Value Size: 512MB"]
+            R3["Threading: Single-threaded*"]
+            R4["Persistence: ✅ RDB, AOF, Hybrid"]
+            R5["Replication: ✅ Master-Replica"]
+            R6["Clustering: ✅ Redis Cluster"]
+            R7["Transactions: ✅ MULTI/EXEC"]
+            R8["Pub/Sub: ✅ Yes"]
+            R9["Lua Scripting: ✅ Yes"]
+            R10["TTL Granularity: Milliseconds"]
+            R11["Memory Efficiency: Higher for complex data structures"]
+            R12["Latency p99: ~300μs"]
+            R13["Throughput: Lower per instance (single-threaded)"]
+        end
+        
+        Note["* Redis 6+ has I/O threads but command execution is single-threaded"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FEATURE COMPARISON                                    │
 │                                                                          │
@@ -290,10 +501,48 @@ Both have survived because they excel at different things:
 │   * Redis 6+ has I/O threads but command execution is single-threaded  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Performance Characteristics
 
+```mermaid
+flowchart TD
+    Title["PERFORMANCE COMPARISON<br/>Benchmark: GET/SET operations, 100-byte values"]
+    
+    subgraph Memcached["MEMCACHED (8 threads)"]
+        M1["GET: ~700,000 ops/sec"]
+        M2["SET: ~600,000 ops/sec"]
+        M3["Latency p99: ~200μs"]
+    end
+    
+    subgraph Redis["REDIS (single thread)"]
+        R1["GET: ~100,000 ops/sec"]
+        R2["SET: ~80,000 ops/sec"]
+        R3["Latency p99: ~300μs"]
+    end
+    
+    Note1["Note: Redis can scale horizontally with clustering<br/>6 Redis nodes ≈ Memcached throughput + more features"]
+    
+    Divider["─────────────────────────────────"]
+    
+    subgraph MemOverhead["MEMORY OVERHEAD (per key-value pair)"]
+        subgraph MemcachedOverhead["Memcached"]
+            MO1["~50 bytes overhead per item"]
+            MO2["Slab waste varies (up to 20%)"]
+        end
+        
+        subgraph RedisOverhead["Redis"]
+            RO1["~70-100 bytes overhead per string"]
+            RO2["Less waste for exact sizes"]
+            RO3["Much more efficient for complex types (Hash, List, etc.)"]
+        end
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PERFORMANCE COMPARISON                                │
 │                                                                          │
@@ -326,6 +575,7 @@ Both have survived because they excel at different things:
 │   - Much more efficient for complex types (Hash, List, etc.)           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -333,7 +583,42 @@ Both have survived because they excel at different things:
 
 ### Decision Matrix
 
+```mermaid
+flowchart TD
+    subgraph Memcached["WHEN TO USE MEMCACHED"]
+        Title1["✅ Use Memcached when:"]
+        M1["1. Simple caching only (no complex data structures)"]
+        M2["2. Maximum throughput on single box is critical"]
+        M3["3. You don't need persistence"]
+        M4["4. You're okay with client-side sharding"]
+        M5["5. Memory efficiency for small strings matters"]
+        M6["6. You want simpler operations"]
+        
+        Examples1["Examples:<br/>- HTML fragment caching<br/>- Session tokens (simple strings)<br/>- Database query result caching<br/>- Page caching"]
+        
+        Companies1["Companies using Memcached:<br/>- Facebook (for specific use cases)<br/>- Wikipedia<br/>- YouTube"]
+    end
+    
+    subgraph Redis["WHEN TO USE REDIS"]
+        Title2["✅ Use Redis when:"]
+        R1["1. You need data structures (Hash, List, Set, Sorted Set)"]
+        R2["2. You need persistence"]
+        R3["3. You need pub/sub messaging"]
+        R4["4. You need atomic operations on complex types"]
+        R5["5. You need built-in replication/clustering"]
+        R6["6. You need Lua scripting"]
+        R7["7. You want one tool for multiple use cases"]
+        
+        Examples2["Examples:<br/>- Leaderboards (Sorted Sets)<br/>- Session storage with fields (Hash)<br/>- Rate limiting (Sorted Set + Lua)<br/>- Message queues (List, Stream)<br/>- Real-time analytics (HyperLogLog)<br/>- Distributed locks"]
+        
+        Companies2["Companies using Redis:<br/>- Twitter<br/>- GitHub<br/>- Stack Overflow<br/>- Instagram"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHEN TO USE MEMCACHED                                 │
 │                                                                          │
@@ -386,10 +671,38 @@ Both have survived because they excel at different things:
 │   - Instagram                                                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Decision Flowchart
 
+```mermaid
+flowchart TD
+    Start["Start"]
+    
+    Q1{"Do you need data<br/>structures beyond<br/>simple strings?"}
+    
+    Q2{"Do you need<br/>persistence?"}
+    
+    Q3{"Is max throughput on<br/>single box critical?"}
+    
+    Redis1["REDIS"]
+    Redis2["REDIS"]
+    Redis3["REDIS<br/>(simpler to use)"]
+    Memcached["MEMCACHED"]
+    
+    Start --> Q1
+    Q1 -->|YES| Redis1
+    Q1 -->|NO| Q2
+    Q2 -->|YES| Redis2
+    Q2 -->|NO| Q3
+    Q3 -->|YES| Memcached
+    Q3 -->|NO| Redis3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                               Start
                                 │
                                 ▼
@@ -433,6 +746,7 @@ Both have survived because they excel at different things:
                                                                   │  to use) │
                                                                   └──────────┘
 ```
+</details>
 
 ---
 
@@ -788,7 +1102,30 @@ public class UnifiedCacheService {
 
 ### Facebook's Approach
 
+```mermaid
+flowchart TD
+    Title["FACEBOOK'S CACHING STRATEGY<br/>Facebook uses BOTH Memcached and Redis"]
+    
+    subgraph Memcached["MEMCACHED for"]
+        M1["General-purpose caching"]
+        M2["Billions of small key-value pairs"]
+        M3["Maximum throughput"]
+        M4["Custom: TAO (graph cache built on Memcached)"]
+    end
+    
+    subgraph Redis["REDIS for"]
+        R1["Specific use cases requiring data structures"]
+        R2["Rate limiting"]
+        R3["Real-time features"]
+    end
+    
+    Insight["Key insight: They use Memcached for scale, Redis for features"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK'S CACHING STRATEGY                           │
 │                                                                          │
@@ -808,10 +1145,28 @@ public class UnifiedCacheService {
 │   Key insight: They use Memcached for scale, Redis for features         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Twitter's Approach
 
+```mermaid
+flowchart TD
+    Title["TWITTER'S CACHING STRATEGY<br/>Twitter primarily uses REDIS"]
+    
+    Uses["- Timeline caching (Lists)<br/>- User sessions (Hashes)<br/>- Rate limiting (Sorted Sets)<br/>- Real-time analytics (HyperLogLog)"]
+    
+    subgraph Why["Why Redis over Memcached"]
+        W1["Need for complex data structures"]
+        W2["Timeline is a list, not a string"]
+        W3["Need atomic operations"]
+        W4["Persistence for recovery"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TWITTER'S CACHING STRATEGY                            │
 │                                                                          │
@@ -829,6 +1184,7 @@ public class UnifiedCacheService {
 │   - Persistence for recovery                                             │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

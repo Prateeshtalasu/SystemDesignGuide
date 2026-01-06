@@ -81,7 +81,99 @@ assertThrows(IllegalArgumentException.class, () ->
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class RentalService {
+        - Map~String,Vehicle~ vehicles
+        - Map~String,Reservation~ reservations
+        - Map~String,Location~ locations
+        + searchVehicles(criteria) List~Vehicle~
+        + makeReservation(request) Reservation
+        + pickupVehicle(reservationId) Rental
+        + returnVehicle(rentalId, location) Invoice
+        + cancelReservation(reservationId) boolean
+    }
+    
+    class Vehicle {
+        <<abstract>>
+        - String id
+        - VehicleType type
+        - String make
+        - String model
+        - VehicleStatus status
+        - Location location
+    }
+    
+    class Car {
+        + getDailyRate() BigDecimal
+    }
+    
+    class SUV {
+        + getDailyRate() BigDecimal
+    }
+    
+    class Truck {
+        + getDailyRate() BigDecimal
+    }
+    
+    class Reservation {
+        - String id
+        - Customer customer
+        - Vehicle vehicle
+        - DateRange dates
+        - ReservationStatus status
+    }
+    
+    class Rental {
+        - String id
+        - Vehicle vehicle
+        - LocalDateTime startTime
+        - LocalDateTime endTime
+        - int mileage
+    }
+    
+    class Invoice {
+        - BigDecimal charges
+        - BigDecimal fees
+        - BigDecimal total
+    }
+    
+    class Location {
+        - String name
+        - String address
+        - List~Vehicle~ vehicles
+    }
+    
+    class Customer {
+        - String name
+        - String license
+        - String email
+    }
+    
+    class PricingStrategy {
+        <<interface>>
+        + calculatePrice(vehicle, dates) BigDecimal
+    }
+    
+    Vehicle <|-- Car
+    Vehicle <|-- SUV
+    Vehicle <|-- Truck
+    RentalService --> Vehicle
+    RentalService --> Reservation
+    RentalService --> Rental
+    RentalService --> Location
+    Reservation --> Customer
+    Reservation --> Vehicle
+    Rental --> Vehicle
+    Rental --> Invoice
+    Location --> Vehicle
+    RentalService --> PricingStrategy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           CAR RENTAL SYSTEM                                      │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -131,9 +223,32 @@ assertThrows(IllegalArgumentException.class, () ->
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Rental Flow Visualization
 
+```mermaid
+flowchart LR
+    A["Search"]
+    B["Reserve"]
+    C["Pickup"]
+    D["Return"]
+    
+    A --> B
+    B --> C
+    C --> D
+    
+    A --> A1["Available Vehicles"]
+    B --> B1["Reserved Vehicle"]
+    C --> C1["Rented Vehicle"]
+    D --> D1["Available Vehicle"]
+    D --> D2["Invoice Generated"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           RENTAL LIFECYCLE                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -156,6 +271,8 @@ assertThrows(IllegalArgumentException.class, () ->
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

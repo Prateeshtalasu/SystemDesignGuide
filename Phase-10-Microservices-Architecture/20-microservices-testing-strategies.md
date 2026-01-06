@@ -21,7 +21,40 @@ Before diving into this topic, you need to understand:
 
 In a microservices architecture, testing becomes exponentially more complex:
 
+```mermaid
+flowchart TD
+    subgraph Monolith["Monolith Testing"]
+        SingleSvc["Single Service<br/>Single Database<br/>In-Memory Calls"]
+        Note1["Simple: Start service, test everything"]
+        SingleSvc --> Note1
+    end
+    
+    subgraph Microservices["Microservices Testing"]
+        OrderSvc["Order Service"]
+        PaymentSvc["Payment Service"]
+        InventorySvc["Inventory Service"]
+        ShippingSvc["Shipping Service"]
+        DB1["DB-1"]
+        DB2["DB-2"]
+        DB3["DB-3"]
+        DB4["DB-4"]
+        Note2["Complex: Multiple services,<br/>networks, databases, async"]
+        
+        OrderSvc --> PaymentSvc
+        PaymentSvc --> InventorySvc
+        InventorySvc --> ShippingSvc
+        OrderSvc --> DB1
+        PaymentSvc --> DB2
+        InventorySvc --> DB3
+        ShippingSvc --> DB4
+        ShippingSvc --> Note2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Monolith Testing:
   ┌──────────────────┐
   │  Single Service  │
@@ -40,6 +73,7 @@ Microservices Testing:
    DB-1        DB-2         DB-3         DB-4
   → Complex: Multiple services, networks, databases, async
 ```
+</details>
 
 **The Problems:**
 
@@ -206,7 +240,22 @@ Quality Control Strategy:
 
 **Microservices testing follows a pyramid with multiple layers:**
 
+```mermaid
+flowchart TD
+    E2E["E2E Tests<br/>Few, very slow, full system"]
+    Integration["Integration<br/>Some, slow, multiple services"]
+    Contract["Contract<br/>Many, fast, API compatibility"]
+    Unit["Unit Tests<br/>Many, very fast, single service"]
+    
+    Unit --> Contract
+    Contract --> Integration
+    Integration --> E2E
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────┐
                     │  E2E Tests  │  Few, very slow, full system
                     ├─────────────┤
@@ -217,6 +266,7 @@ Quality Control Strategy:
                     │  Unit Tests │  Many, very fast, single service
                     └─────────────┘
 ```
+</details>
 
 **Key Principles:**
 
@@ -233,7 +283,28 @@ Quality Control Strategy:
 
 ### The Test Pyramid for Microservices
 
+```mermaid
+flowchart TD
+    Level1["LEVEL 1: Unit Tests (Base - Many, Fast)<br/>Test single service/component<br/>- Mock external dependencies<br/>- Test business logic<br/>- Run in milliseconds<br/>- 70-80% of all tests"]
+    
+    Level2["LEVEL 2: Contract Tests (Many, Fast)<br/>Test API contracts between services<br/>- Consumer-driven contracts<br/>- Verify request/response format<br/>- Run in seconds<br/>- 10-15% of all tests"]
+    
+    Level3["LEVEL 3: Component Tests (Some, Medium)<br/>Test service with real dependencies<br/>- Real database (Testcontainers)<br/>- Mock external services<br/>- Test service behavior<br/>- Run in seconds to minutes<br/>- 5-10% of all tests"]
+    
+    Level4["LEVEL 4: Integration Tests (Few, Slow)<br/>Test multiple services together<br/>- Real services, databases, messaging<br/>- Test critical paths<br/>- Run in minutes<br/>- 3-5% of all tests"]
+    
+    Level5["LEVEL 5: E2E Tests (Very Few, Very Slow)<br/>Test full system<br/>- All services, infrastructure<br/>- User journeys<br/>- Run in minutes to hours<br/>- 1-2% of all tests"]
+    
+    Level1 --> Level2
+    Level2 --> Level3
+    Level3 --> Level4
+    Level4 --> Level5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 LEVEL 1: Unit Tests (Base - Many, Fast)
   ┌─────────────────────────────────────────┐
   │  Test single service/component          │
@@ -280,6 +351,7 @@ LEVEL 5: E2E Tests (Very Few, Very Slow)
   │  - 1-2% of all tests                    │
   └─────────────────────────────────────────┘
 ```
+</details>
 
 ### Testing Strategy by Service Type
 

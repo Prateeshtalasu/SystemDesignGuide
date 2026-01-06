@@ -114,7 +114,49 @@ Think of Kubernetes as a **shipping port manager**.
 
 ### The Kubernetes Mental Model
 
+```mermaid
+flowchart TD
+    subgraph CLUSTER["KUBERNETES CLUSTER"]
+        subgraph CP["CONTROL PLANE<br/>(The Brain of the cluster)"]
+            API["API Server<br/>Entry point<br/>for all operations"]
+            SCHED["Scheduler<br/>Places pods<br/>on nodes"]
+            CM["Controller Manager<br/>Maintains<br/>desired state"]
+            ETCD["etcd<br/>(Distributed key-value<br/>store for state)"]
+        end
+        
+        subgraph WORKERS["WORKER NODES<br/>(Where containers run)"]
+            subgraph N1["Node 1"]
+                POD1["Pod"]
+                C1["Container"]
+                KUBELET1["kubelet<br/>(node agent)"]
+                POD1 --> C1
+            end
+            subgraph N2["Node 2"]
+                POD2["Pod"]
+                C2["Container"]
+                KUBELET2["kubelet<br/>(node agent)"]
+                POD2 --> C2
+            end
+            subgraph N3["Node 3"]
+                POD3["Pod"]
+                C3["Container"]
+                KUBELET3["kubelet"]
+                POD3 --> C3
+            end
+        end
+        
+        CP --> WORKERS
+    end
+    
+    style CLUSTER fill:#e3f2fd
+    style CP fill:#fff9c4
+    style WORKERS fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                              KUBERNETES CLUSTER                          │
 │                                                                         │
@@ -158,6 +200,8 @@ Think of Kubernetes as a **shipping port manager**.
 │  └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Declarative vs Imperative
 
@@ -236,7 +280,34 @@ Kubernetes continuously reconciles **actual state** with **desired state**.
 
 ### The Reconciliation Loop
 
+```mermaid
+flowchart TD
+    STEP1["1. User submits desired state<br/>kubectl apply -f deployment.yaml"]
+    STEP2["2. API Server stores in etcd<br/>Desired: 3 replicas of myapp"]
+    STEP3["3. Controller observes<br/>Desired: 3 replicas<br/>Actual: 0 replicas<br/>Action: Create 3 pods"]
+    STEP4["4. Scheduler places pods<br/>Pod 1 → Node A<br/>Pod 2 → Node B<br/>Pod 3 → Node A"]
+    STEP5["5. kubelet starts containers<br/>Node A: Starts Pod 1, Pod 3<br/>Node B: Starts Pod 2"]
+    STEP6["6. Continuous monitoring<br/>If Pod 2 crashes → Controller creates Pod 4<br/>Scheduler places Pod 4 → kubelet starts it"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP3
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
+    style STEP6 fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RECONCILIATION LOOP                           │
 │                                                                  │
@@ -270,6 +341,8 @@ Kubernetes continuously reconciles **actual state** with **desired state**.
 │     Scheduler places Pod 4 → kubelet starts it                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -402,7 +475,36 @@ spec:
 | LoadBalancer | Cloud provider load balancer | Production external access |
 | ExternalName | DNS alias | Access external services |
 
+```mermaid
+flowchart TD
+    EXT["External Traffic"]
+    LB["LoadBalancer<br/>(cloud provider LB)<br/>(external)"]
+    NP["NodePort<br/>(opens port on all nodes)<br/>30080"]
+    CIP["ClusterIP<br/>(internal virtual IP)<br/>10.96.0.100"]
+    P1["Pod 1<br/>:8080"]
+    P2["Pod 2<br/>:8080"]
+    P3["Pod 3<br/>:8080"]
+    
+    EXT --> LB
+    LB --> NP
+    NP --> CIP
+    CIP -->|kube-proxy routes to pods| P1
+    CIP -->|kube-proxy routes to pods| P2
+    CIP -->|kube-proxy routes to pods| P3
+    
+    style EXT fill:#e3f2fd
+    style LB fill:#ff9800
+    style NP fill:#fff9c4
+    style CIP fill:#c8e6c9
+    style P1 fill:#fce4ec
+    style P2 fill:#fce4ec
+    style P3 fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     SERVICE NETWORKING                           │
 │                                                                  │
@@ -436,6 +538,8 @@ spec:
 │ └─────┘  └─────┘     └─────┘                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Ingress
 
@@ -475,7 +579,30 @@ spec:
                   number: 80
 ```
 
+```mermaid
+flowchart TD
+    INTERNET["Internet"]
+    INGRESS["Ingress Controller (nginx)<br/><br/>myapp.example.com/api/* → api-service<br/>myapp.example.com/* → web-service<br/>other.example.com/* → other-service"]
+    API_SVC["api-service"]
+    WEB_SVC["web-service"]
+    OTHER_SVC["other-svc"]
+    
+    INTERNET --> INGRESS
+    INGRESS --> API_SVC
+    INGRESS --> WEB_SVC
+    INGRESS --> OTHER_SVC
+    
+    style INTERNET fill:#e3f2fd
+    style INGRESS fill:#ff9800
+    style API_SVC fill:#c8e6c9
+    style WEB_SVC fill:#c8e6c9
+    style OTHER_SVC fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      INGRESS ROUTING                             │
 │                                                                  │
@@ -496,6 +623,8 @@ spec:
 │       └──────────┘        └──────────┘        └──────────┘     │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### ConfigMap and Secret
 

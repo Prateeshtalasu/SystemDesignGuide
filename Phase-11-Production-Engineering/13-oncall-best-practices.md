@@ -117,7 +117,28 @@ Think of on-call like a **fire department**.
 
 ### On-Call Mental Model
 
+```mermaid
+flowchart TD
+    PREP["PREPARATION<br/>- Runbooks<br/>- Training<br/>- Access provisioning<br/>- Tools setup"]
+    RESPONSE["RESPONSE<br/>- Alert acknowledgment<br/>- Severity assessment<br/>- Investigation<br/>- Mitigation"]
+    RECOVERY["RECOVERY<br/>- Resolution verification<br/>- Communication<br/>- Documentation<br/>- Handoff"]
+    IMPROVE["IMPROVEMENT<br/>- Postmortem<br/>- Runbook updates<br/>- Alert tuning<br/>- Process improvement"]
+    
+    PREP --> RESPONSE
+    RESPONSE --> RECOVERY
+    RECOVERY --> IMPROVE
+    IMPROVE --> PREP
+    
+    style PREP fill:#e3f2fd
+    style RESPONSE fill:#fff9c4
+    style RECOVERY fill:#c8e6c9
+    style IMPROVE fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ON-CALL ECOSYSTEM                             │
 │                                                                  │
@@ -158,13 +179,35 @@ Think of on-call like a **fire department**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
 
 ### On-Call Rotation Structure
 
+```mermaid
+flowchart TD
+    PRIMARY["Primary On-Call<br/><br/>First responder<br/>Acknowledges alerts<br/>Investigates issues"]
+    PRIMARY_ENG["Primary Engineer<br/>Week 1: Alice<br/>Week 2: Bob<br/>Week 3: Charlie"]
+    SECONDARY["Secondary Engineer<br/>Backup if primary unavailable<br/>Takes over if primary overwhelmed"]
+    MANAGER["On-Call Manager<br/>Management escalation<br/>Resource allocation<br/>External communication"]
+    
+    PRIMARY --> PRIMARY_ENG
+    PRIMARY_ENG -->|Escalates if needed| SECONDARY
+    SECONDARY -->|Escalates if needed| MANAGER
+    
+    style PRIMARY fill:#e3f2fd
+    style PRIMARY_ENG fill:#fff9c4
+    style SECONDARY fill:#c8e6c9
+    style MANAGER fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ROTATION STRUCTURE                            │
 │                                                                  │
@@ -195,9 +238,34 @@ Think of on-call like a **fire department**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Alert Flow
 
+```mermaid
+flowchart TD
+    MONITOR["Monitoring System"]
+    ALERT["Alert Manager<br/>(PagerDuty)<br/>Groups related alerts<br/>Routes to on-call<br/>Applies escalation policy"]
+    PRIMARY_ONCALL["Primary On-Call<br/>Receives page<br/>Has X minutes to acknowledge"]
+    SECONDARY_ONCALL["Secondary On-Call<br/>Auto-escalation"]
+    MGR["On-Call Manager<br/>Management escalation"]
+    
+    MONITOR -->|Threshold exceeded| ALERT
+    ALERT -->|Page| PRIMARY_ONCALL
+    PRIMARY_ONCALL -->|If no ack| SECONDARY_ONCALL
+    SECONDARY_ONCALL -->|If no ack| MGR
+    
+    style MONITOR fill:#e3f2fd
+    style ALERT fill:#fff9c4
+    style PRIMARY_ONCALL fill:#c8e6c9
+    style SECONDARY_ONCALL fill:#fce4ec
+    style MGR fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ALERT FLOW                                    │
 │                                                                  │
@@ -233,6 +301,8 @@ Think of on-call like a **fire department**.
 │  └──────────────┘                                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

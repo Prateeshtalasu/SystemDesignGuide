@@ -99,7 +99,20 @@ java -jar myapp.jar
 
 **At Scale (Multiple Instances):**
 
+```mermaid
+flowchart TD
+    Instance1["Instance 1<br/>/tmp/sessions<br/>Has session data for User A"]
+    LB["Load Balancer"]
+    Instance2["Instance 2<br/>/tmp/sessions<br/>User A's request routed here<br/>No session data, user logged out"]
+    
+    Instance1 --> LB
+    LB --> Instance2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────┐
 │  Instance 1     │  ← Has session data for User A
 │  /tmp/sessions  │
@@ -112,6 +125,7 @@ java -jar myapp.jar
 │  /tmp/sessions  │  ← No session data, user logged out
 └─────────────────┘
 ```
+</details>
 
 **In Cloud Environments:**
 
@@ -192,7 +206,22 @@ The 12-Factor App methodology consists of 12 principles. Let's understand how ea
 
 **One codebase tracked in revision control, many deploys**
 
+```mermaid
+flowchart TD
+    Git["Git Repository<br/>(Single Source of Truth)<br/><br/>myapp/<br/>├── src/<br/>├── pom.xml<br/>└── README.md"]
+    Dev["Deploy to Development"]
+    Staging["Deploy to Staging"]
+    Prod["Deploy to Production"]
+    
+    Git --> Dev
+    Git --> Staging
+    Git --> Prod
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────┐
 │      Git Repository                  │
 │  (Single Source of Truth)            │
@@ -207,6 +236,7 @@ The 12-Factor App methodology consists of 12 principles. Let's understand how ea
          ├──→ Deploy to Staging
          └──→ Deploy to Production
 ```
+</details>
 
 **How it works:**
 
@@ -284,7 +314,20 @@ Application ──→ SMTP Server (attached resource)
 
 **Strictly separate build and run stages**
 
+```mermaid
+flowchart LR
+    Build["Build Stage:<br/>Source Code + Dependencies<br/>→ Artifact (JAR file)"]
+    Release["Release Stage:<br/>Artifact + Config<br/>→ Release (immutable)"]
+    Run["Run Stage:<br/>Release<br/>→ Running Process"]
+    
+    Build --> Release
+    Release --> Run
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Build Stage:
   Source Code + Dependencies → Artifact (JAR file)
 
@@ -294,6 +337,7 @@ Release Stage:
 Run Stage:
   Release → Running Process
 ```
+</details>
 
 **How it works:**
 
@@ -345,7 +389,23 @@ public class Application {
 
 **Scale out via the process model**
 
+```mermaid
+flowchart TD
+    subgraph Single["Single Process"]
+        Instance["App Instance"]
+    end
+    
+    subgraph ScaleOut["Scale Out"]
+        Instance1["App Instance 1"]
+        Instance2["App Instance 2"]
+        Instance3["App Instance 3"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Single Process:
 ┌─────────────────┐
 │  App Instance   │
@@ -362,6 +422,7 @@ Scale Out:
 │  App Instance 3 │
 └─────────────────┘
 ```
+</details>
 
 **How it works:**
 

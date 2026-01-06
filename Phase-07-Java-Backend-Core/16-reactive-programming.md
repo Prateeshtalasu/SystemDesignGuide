@@ -67,7 +67,23 @@ public void getOrdersForUsers(List<String> userIds, Consumer<List<Order>> callba
 
 ### What Reactive Programming Provides
 
+```mermaid
+flowchart LR
+    P1["1. PUBLISHER: Produces data (0 to N elements)<br/>- Mono&lt;T&gt;: 0 or 1 element<br/>- Flux&lt;T&gt;: 0 to N elements"]
+    
+    P2["2. SUBSCRIBER: Consumes data<br/>- Requests data from publisher<br/>- Receives onNext, onError, onComplete signals"]
+    
+    P3["3. SUBSCRIPTION: Connection between publisher and subscriber<br/>- Controls flow with request(n)<br/>- Can cancel()"]
+    
+    P4["4. BACKPRESSURE: Subscriber controls flow rate<br/>- I can only handle 10 items at a time<br/>- Prevents overwhelming slow consumers"]
+    
+    Publisher["Publisher<br/>(Source)"] -->|subscribe| Subscriber["Subscriber<br/>(Consumer)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REACTIVE STREAMS                                      │
 │                                                                          │
@@ -96,6 +112,9 @@ public void getOrdersForUsers(List<String> userIds, Consumer<List<Order>> callba
 │   │ (Source) │              │ (Consumer) │                             │
 │   └────┬─────┘              └─────┬──────┘                             │
 │        │                          │                                     │
+```
+</details>
+```
 │        │◄────── request(n) ───────┤                                     │
 │        │                          │                                     │
 │        ├─────── onNext(item) ────►│                                     │
@@ -348,7 +367,17 @@ public class ExternalApiService {
 
 ### What is Backpressure?
 
+```mermaid
+flowchart LR
+    FP["Fast Producer<br/>1000/sec"] -->|Without backpressure| SC1["Slow Consumer<br/>100/sec<br/><br/>Without backpressure:<br/>- Buffer grows indefinitely<br/>- OutOfMemoryError<br/>- Or items are dropped"]
+    
+    FP2["Fast Producer<br/>1000/sec"] -->|With backpressure| SC2["Slow Consumer<br/>100/sec<br/><br/>With backpressure:<br/>- Consumer tells producer: I can handle 100 items<br/>- Producer slows down or buffers appropriately"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BACKPRESSURE PROBLEM                                  │
 │                                                                          │
@@ -367,6 +396,8 @@ public class ExternalApiService {
 │   - Producer slows down or buffers appropriately                       │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Backpressure Strategies

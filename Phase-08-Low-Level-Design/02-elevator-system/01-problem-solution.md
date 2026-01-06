@@ -118,7 +118,97 @@ elevator.setMaintenance(false);  // Return to service
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class Building {
+        <<Singleton>>
+        - List~Floor~ floors
+        - ElevatorController controller
+    }
+    
+    class ElevatorController {
+        - List~Elevator~ elevators
+        - SchedulingStrategy scheduler
+        + requestElevator(request) void
+        + requestFloor(elevatorId, floor) void
+        + setScheduler(strategy) void
+    }
+    
+    class Elevator {
+        - int id
+        - int currentFloor
+        - ElevatorState state
+        - ElevatorCar car
+        - Door door
+    }
+    
+    class Floor {
+        - int floorNumber
+        - FloorButton upButton
+        - FloorButton downButton
+    }
+    
+    class FloorButton {
+        - Direction direction
+        - boolean pressed
+    }
+    
+    class Request {
+        <<abstract>>
+        - int floor
+    }
+    
+    class ExternalRequest {
+        - Direction direction
+    }
+    
+    class InternalRequest {
+        - int elevatorId
+    }
+    
+    class ElevatorCar {
+        - int currentWeight
+    }
+    
+    class ElevatorPanel {
+        - int elevatorId
+    }
+    
+    class Door {
+        - DoorState state
+    }
+    
+    class SchedulingStrategy {
+        <<interface>>
+        + selectElevator(request, elevators) Elevator
+    }
+    
+    class SCANScheduler {
+        + selectElevator(request, elevators) Elevator
+    }
+    
+    class LOOKScheduler {
+        + selectElevator(request, elevators) Elevator
+    }
+    
+    Building --> ElevatorController
+    Building --> Floor
+    ElevatorController --> Elevator
+    ElevatorController --> SchedulingStrategy
+    Elevator --> ElevatorCar
+    Elevator --> Door
+    Elevator --> ElevatorPanel
+    Floor --> FloorButton
+    Request <|-- ExternalRequest
+    Request <|-- InternalRequest
+    SchedulingStrategy <|.. SCANScheduler
+    SchedulingStrategy <|.. LOOKScheduler
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              ELEVATOR SYSTEM                                     │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -158,6 +248,8 @@ elevator.setMaintenance(false);  // Return to service
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Relationships Summary
 

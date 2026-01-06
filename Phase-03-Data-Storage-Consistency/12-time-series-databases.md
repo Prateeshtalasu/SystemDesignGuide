@@ -165,7 +165,29 @@ flowchart TD
 
 ### Time-Series Data Model
 
+```mermaid
+flowchart TD
+    Metric["Metric: cpu_usage"]
+    Tags["Tags: {host: 'server1', region: 'us-east', env: 'prod'}"]
+    Timestamp["Timestamp: 2024-03-15T10:30:00Z"]
+    Value["Value: 75.5"]
+    
+    Series["Series = Metric + Tags<br/>(unique combination)"]
+    
+    Series1["Series 1: cpu_usage{host=server1, region=us-east}<br/>10:30:00 → 75.5<br/>10:30:01 → 76.2<br/>10:30:02 → 74.8"]
+    
+    Series2["Series 2: cpu_usage{host=server2, region=us-east}<br/>10:30:00 → 82.1<br/>10:30:01 → 81.5<br/>..."]
+    
+    Metric --> Series
+    Tags --> Series
+    Series --> Series1
+    Series --> Series2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              TIME-SERIES DATA MODEL                          │
 │                                                              │
@@ -190,6 +212,7 @@ flowchart TD
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Compression Techniques
 
@@ -245,7 +268,34 @@ flowchart TD
 
 ### Storage Architecture
 
+```mermaid
+flowchart TD
+    subgraph WritePath["Write Path"]
+        Step1["1. Data arrives"]
+        Step2["2. Buffer in memory<br/>(write-ahead log for durability)"]
+        Step3["3. When buffer full, compress<br/>and flush to disk"]
+        Step4["4. Create time-based chunks<br/>(e.g., 2-hour blocks)"]
+        
+        Step1 --> Step2 --> Step3 --> Step4
+    end
+    
+    subgraph StorageLayout["Storage Layout"]
+        Chunk1["Chunk: 10:00-12:00<br/>├── Series 1: [compressed timestamps, values]<br/>├── Series 2: [compressed timestamps, values]<br/>└── Index: series_id → offset in chunk"]
+        Chunk2["Chunk: 12:00-14:00<br/>├── ..."]
+    end
+    
+    subgraph IndexStructure["Index Structure"]
+        Index["Inverted index: tag_value → [series_ids]<br/>host=server1 → [series1, series5, series9]<br/>region=us-east → [series1, series2, series3]"]
+    end
+    
+    Step4 --> StorageLayout
+    StorageLayout --> IndexStructure
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           TIME-SERIES STORAGE ARCHITECTURE                   │
 │                                                              │
@@ -277,10 +327,29 @@ flowchart TD
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Retention Policies
 
+```mermaid
+flowchart TD
+    Raw["Raw data: Keep for 7 days<br/>├── Full resolution (1 second intervals)<br/>├── ~600 million points per metric<br/>└── Auto-delete after 7 days"]
+    
+    Downsampled5["Downsampled (5 min avg): Keep for 30 days<br/>├── 1/300th the data<br/>├── Still useful for dashboards<br/>└── Auto-delete after 30 days"]
+    
+    Downsampled1H["Downsampled (1 hour avg): Keep for 1 year<br/>├── 1/3600th the data<br/>├── Good for trend analysis<br/>└── Auto-delete after 1 year"]
+    
+    Implementation["Implementation:<br/>- Background job aggregates old data<br/>- Drops old chunks (instant, no row-by-row delete)"]
+    
+    Raw --> Downsampled5
+    Downsampled5 --> Downsampled1H
+    Downsampled1H --> Implementation
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 RETENTION POLICIES                           │
 │                                                              │
@@ -305,10 +374,26 @@ flowchart TD
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Downsampling
 
+```mermaid
+flowchart LR
+    Original["Original data (1 second):<br/>10:00:00 → 72.1<br/>10:00:01 → 72.3<br/>10:00:02 → 72.0<br/>10:00:03 → 72.5<br/>10:00:04 → 72.2<br/>...<br/>10:00:59 → 72.4"]
+    
+    Downsampled["Downsampled (1 minute):<br/>10:00:00 → {<br/>  avg: 72.3,<br/>  min: 71.8,<br/>  max: 73.1,<br/>  count: 60<br/>}"]
+    
+    Benefits["60 data points → 1 data point<br/>(with aggregates)<br/>Preserves important statistics<br/>Reduces storage by 60x"]
+    
+    Original -->|"Aggregate"| Downsampled
+    Downsampled --> Benefits
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    DOWNSAMPLING                              │
 │                                                              │
@@ -335,6 +420,7 @@ flowchart TD
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -435,7 +521,48 @@ Year 1:
 
 ### Popular Time-Series Databases
 
+```mermaid
+flowchart TD
+    subgraph InfluxDB["InfluxDB"]
+        I1["Purpose-built TSDB"]
+        I2["SQL-like query language<br/>(InfluxQL, Flux)"]
+        I3["Great compression"]
+        I4["Commercial and open-source versions"]
+    end
+    
+    subgraph TimescaleDB["TimescaleDB"]
+        T1["PostgreSQL extension"]
+        T2["Full SQL support"]
+        T3["Automatic partitioning<br/>(hypertables)"]
+        T4["Good for mixed workloads"]
+    end
+    
+    subgraph Prometheus["Prometheus"]
+        P1["Pull-based metrics collection"]
+        P2["PromQL query language"]
+        P3["Built-in alerting"]
+        P4["Standard for Kubernetes monitoring"]
+    end
+    
+    subgraph VictoriaMetrics["VictoriaMetrics"]
+        V1["Prometheus-compatible"]
+        V2["Better compression and performance"]
+        V3["Long-term storage for Prometheus"]
+        V4["Lower resource usage"]
+    end
+    
+    subgraph ClickHouse["ClickHouse"]
+        C1["Column-oriented OLAP database"]
+        C2["Not purpose-built for time-series"]
+        C3["Excellent for analytics"]
+        C4["SQL support"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           TIME-SERIES DATABASE COMPARISON                    │
 ├─────────────────────────────────────────────────────────────┤
@@ -472,6 +599,7 @@ Year 1:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -866,7 +994,28 @@ GROUP BY 1;
 
 ### Performance Gotchas
 
+```mermaid
+flowchart TD
+    Gotchas["TIME-SERIES DB GOTCHAS"]
+    
+    G1["1. Cardinality explosion<br/>   - Each unique tag combination = new series<br/>   - 1000 hosts × 100 metrics = 100,000 series (OK)<br/>   - Add user_id tag with 1M users = 100 billion series!"]
+    
+    G2["2. Out-of-order writes<br/>   - TSDBs optimize for in-order writes<br/>   - Late-arriving data may require recompression<br/>   - Some DBs reject out-of-order data"]
+    
+    G3["3. Schema changes<br/>   - Adding new tags/fields is usually fine<br/>   - Changing tag to field (or vice versa) is hard<br/>   - Plan schema carefully"]
+    
+    G4["4. Query complexity<br/>   - JOINs are often not supported or slow<br/>   - Complex analytics may need external tools"]
+    
+    Gotchas --> G1
+    Gotchas --> G2
+    Gotchas --> G3
+    Gotchas --> G4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              TIME-SERIES DB GOTCHAS                          │
 │                                                              │
@@ -891,6 +1040,7 @@ GROUP BY 1;
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

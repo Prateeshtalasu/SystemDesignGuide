@@ -71,7 +71,68 @@ try {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class StockExchange {
+        - Map~String,OrderBook~ orderBooks
+        - Map~String,Order~ orders
+        - List~Trade~ trades
+        + placeOrder(order) List~Trade~
+        + cancelOrder(orderId) boolean
+        + getOrderBook(symbol) OrderBook
+        + getBestBid(symbol) BigDecimal
+        + getBestAsk(symbol) BigDecimal
+    }
+    
+    class Order {
+        - String id
+        - String symbol
+        - OrderSide side
+        - OrderType type
+        - BigDecimal price
+        - int quantity
+        - OrderStatus status
+    }
+    
+    class OrderBook {
+        - String symbol
+        - TreeMap~BigDecimal,PriceLevel~ bids
+        - TreeMap~BigDecimal,PriceLevel~ asks
+        + match(order) List~Trade~
+        + add(order) void
+        + cancel(orderId) boolean
+    }
+    
+    class Trade {
+        - String id
+        - Order buyOrder
+        - Order sellOrder
+        - BigDecimal price
+        - int quantity
+        - long timestamp
+    }
+    
+    class PriceLevel {
+        - BigDecimal price
+        - Queue~Order~ orders
+        - int totalQty
+        + addOrder(order) void
+        + removeOrder(orderId) void
+    }
+    
+    StockExchange --> OrderBook
+    StockExchange --> Order
+    StockExchange --> Trade
+    OrderBook --> PriceLevel
+    OrderBook --> Order
+    Trade --> Order
+    PriceLevel --> Order
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                         STOCK EXCHANGE SYSTEM                                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -107,6 +168,8 @@ try {
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Order Book Structure
 

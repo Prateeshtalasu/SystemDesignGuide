@@ -420,7 +420,32 @@ CREATE TABLE blocked_queries (
 
 ### Suggestion Request Flow
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant CDN
+    participant LB as Load Balancer
+    participant Server as Suggestion Server
+    
+    Client->>CDN: GET /suggestions?q=how
+    CDN->>CDN: Cache check
+    CDN->>LB: Cache MISS
+    LB->>Server: Forward to server
+    Server->>Server: 1. Normalize query
+    Server->>Server: 2. Trie lookup<br/>node = trie.find("how")
+    Server->>Server: 3. Get pre-computed<br/>suggestions
+    Server->>Server: 4. Apply personalization<br/>(if user context)
+    Server->>LB: 200 OK (JSON)
+    LB->>CDN: 200 OK (cache it)
+    CDN->>Client: 200 OK
+    
+    Note over Client,Server: Total latency: 15-50ms<br/>- CDN: 5ms<br/>- Network: 5-20ms<br/>- Trie lookup: 1-5ms<br/>- Serialization: 1-2ms
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────┐     ┌─────┐     ┌─────────┐     ┌─────────────────┐
 │Client│     │ CDN │     │   LB    │     │Suggestion Server│
 └──┬───┘     └──┬──┘     └────┬────┘     └────────┬────────┘
@@ -468,6 +493,9 @@ Total latency: 15-50ms
 - Network: 5-20ms  
 - Trie lookup: 1-5ms
 - Serialization: 1-2ms
+```
+
+</details>
 ```
 
 ---
@@ -524,7 +552,52 @@ Time: O(8) = O(prefix length)
 
 ## Data Pipeline Architecture
 
+```mermaid
+flowchart TD
+    subgraph Stage1["STAGE 1: DATA COLLECTION"]
+        SearchService["Search Service"]
+        Kafka["Kafka Topic: search-queries<br/>Partitions: 100<br/>Retention: 7 days"]
+        EventFormat["Event Format:<br/>{query, timestamp, user_id, session_id, result_count}"]
+        
+        SearchService --> Kafka
+        Kafka --> EventFormat
+    end
+    
+    subgraph Stage2["STAGE 2: AGGREGATION (Spark Streaming)"]
+        SparkCode["searchEvents<br/>  .filter(e -> !isBlocked(e.query))<br/>  .map(e -> normalize(e.query))<br/>  .groupBy('query', window('1 hour'))<br/>  .count()<br/>  .write('hourly_query_counts')"]
+        OutputTable["Output: hourly_query_counts table<br/>query | count | hour"]
+        
+        SparkCode --> OutputTable
+    end
+    
+    subgraph Stage3["STAGE 3: SCORING & RANKING"]
+        Scoring["Score = log10(<br/>  hourly_count * 10 +<br/>  daily_count * 5 +<br/>  weekly_count * 2 +<br/>  monthly_count * 1<br/>) * trending_boost"]
+        RankedOutput["Output: Top 5 billion queries by score"]
+        
+        Scoring --> RankedOutput
+    end
+    
+    subgraph Stage4["STAGE 4: TRIE BUILDING"]
+        TrieCode["for each query in ranked_queries:<br/>  node = trie.root<br/>  for each char in query:<br/>    if char not in node.children:<br/>      node.children[char] = new TrieNode()<br/>    node = node.children[char]<br/>    updateTopSuggestions(node, query, score)<br/>  node.isEndOfQuery = true"]
+        TrieOutput["Output: Serialized Trie (~150 GB)"]
+        
+        TrieCode --> TrieOutput
+    end
+    
+    subgraph Stage5["STAGE 5: DISTRIBUTION"]
+        Steps["1. Upload to S3: s3://typeahead-index/v123/trie.bin<br/>2. Update Zookeeper: /typeahead/current_version = 'v123'<br/>3. Servers detect version change<br/>4. Servers download and load new Trie<br/>5. Atomic switch to new Trie"]
+    end
+    
+    Stage1 --> Stage2
+    Stage2 --> Stage3
+    Stage3 --> Stage4
+    Stage4 --> Stage5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              DATA PIPELINE (Hourly)                                  │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -615,6 +688,9 @@ Time: O(8) = O(prefix length)
 │  5. Atomic switch to new Trie                                                       │
 │                                                                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+</details>
 ```
 
 ---

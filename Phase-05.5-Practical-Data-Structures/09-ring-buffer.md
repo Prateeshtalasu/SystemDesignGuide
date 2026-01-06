@@ -134,7 +134,20 @@ Data available: lanes 3, 4, 5, 6 (4 items)
 
 ### The Key Insight
 
-```
+**Ring Buffer Key Insight**: "The buffer wraps around using modulo arithmetic"
+
+- Physical array: [0] [1] [2] [3] [4] [5] [6] [7] [8] [9]
+- Logical view: ... → 8 → 9 → 0 → 1 → 2 → ... (circular)
+
+- Write at index: writeIndex % capacity
+- Read at index: readIndex % capacity
+
+- No memory allocation, no element shifting, O(1) always
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RING BUFFER KEY INSIGHT                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -151,6 +164,7 @@ Data available: lanes 3, 4, 5, 6 (4 items)
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Full vs Empty Detection
 
@@ -283,7 +297,28 @@ boolean offer(T item) {
 
 **Ring buffer of size 5:**
 
-```
+**Initial:**
+| Index | 0 | 1 | 2 | 3 | 4 |
+|-------|---|---|---|---|---|
+| Value |   |   |   |   |   |
+- R,W (Read=0, Write=0, Count=0)
+
+**Write(10):**
+| Index | 0 | 1 | 2 | 3 | 4 |
+|-------|---|---|---|---|---|
+| Value | 10|   |   |   |   |
+- R (Read=0), W (Write=1), Count=1
+
+**Write(20), Write(30):**
+| Index | 0 | 1 | 2 | 3 | 4 |
+|-------|---|---|---|---|---|
+| Value | 10| 20| 30|   |   |
+- R (Read=0), W (Write=3), Count=3
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Initial:
 ┌───┬───┬───┬───┬───┐
 │   │   │   │   │   │
@@ -305,6 +340,8 @@ Write(20), Write(30):
 └───┴───┴───┴───┴───┘
   ↑           ↑
   R           W (Read=0, Write=3, Count=3)
+```
+</details>
 
 Read() → 10:
 ┌───┬───┬───┬───┬───┐
@@ -369,7 +406,37 @@ Contents in order: B, C, D (oldest to newest)
 
 The Disruptor is a high-performance ring buffer used in financial trading systems.
 
+```mermaid
+flowchart LR
+    subgraph RB["Ring Buffer (pre-allocated)"]
+        E0["E0"]
+        E1["E1"]
+        E2["E2"]
+        E3["E3"]
+        E4["E4"]
+        E5["E5"]
+        E6["E6"]
+        E7["E7"]
+    end
+    
+    CA["Consumer A<br/>(seq: 2)"] --> E2
+    CB["Consumer B<br/>(seq: 4)"] --> E4
+    P["Producer<br/>(seq: 7)"] --> E7
+    
+    style RB fill:#e1f5ff
 ```
+
+**Key features:**
+- Pre-allocated entries (no GC)
+- Sequence numbers instead of pointers
+- Memory barriers for visibility
+- Batch processing for throughput
+- Performance: 6 million messages/second per core
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LMAX DISRUPTOR ARCHITECTURE                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -392,6 +459,7 @@ The Disruptor is a high-performance ring buffer used in financial trading system
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Linux Kernel: kfifo
 
@@ -414,7 +482,24 @@ unsigned int index = in & (size - 1);
 
 Audio systems use ring buffers to handle producer-consumer timing:
 
+```mermaid
+flowchart TD
+    A["Microphone (Producer)"] --> B["Ring Buffer<br/>(e.g., 4096 samples)<br/><br/>Write ──────────▶ Read"]
+    B --> C["Speaker (Consumer)"]
+    
+    style B fill:#e1f5ff
 ```
+
+**Why ring buffer?**
+- Microphone produces at 44.1 kHz
+- Speaker consumes at 44.1 kHz
+- But timing isn't perfectly synchronized
+- Ring buffer absorbs small timing variations
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    AUDIO RING BUFFER                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -440,6 +525,7 @@ Audio systems use ring buffers to handle producer-consumer timing:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Network Packet Processing
 

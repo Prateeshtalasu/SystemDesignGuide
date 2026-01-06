@@ -119,7 +119,141 @@ atm.getController().withdraw(50000.00);  // ATM doesn't have enough
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class ATM {
+        - CardReader cardReader
+        - CashDispenser cashDispenser
+        - CashSlot cashSlot
+        - Keypad keypad
+        - Screen screen
+        - ATMController controller
+    }
+    
+    class CardReader {
+        + readCard(card) Card
+        + ejectCard() void
+    }
+    
+    class CashDispenser {
+        - Map~Integer,Integer~ cashInventory
+        + canDispense(amount) boolean
+        + dispenseCash(amount) boolean
+    }
+    
+    class CashSlot {
+        + acceptCash() double
+        + returnCash(amount) void
+    }
+    
+    class Keypad {
+        + getInput() String
+        + getPin() String
+        + getAmount() double
+    }
+    
+    class Screen {
+        + displayMessage(message) void
+        + displayError(error) void
+    }
+    
+    class Card {
+        - String cardNumber
+        - String pinHash
+        - Customer customer
+        - List~Account~ linkedAccounts
+        + validatePin(pin) boolean
+    }
+    
+    class Customer {
+        - String name
+        - String customerId
+    }
+    
+    class Account {
+        <<abstract>>
+        - String accountNumber
+        - double balance
+        - List~Transaction~ transactions
+        + withdraw(amount) boolean
+        + deposit(amount) boolean
+    }
+    
+    class CheckingAccount {
+        + withdraw(amount) boolean
+        + deposit(amount) boolean
+    }
+    
+    class SavingsAccount {
+        - double interestRate
+        + withdraw(amount) boolean
+        + deposit(amount) boolean
+    }
+    
+    class Transaction {
+        <<abstract>>
+        - String transactionId
+        - Account account
+        - double amount
+        - TransactionStatus status
+        - LocalDateTime timestamp
+        + execute() boolean
+    }
+    
+    class WithdrawalTransaction {
+        + execute() boolean
+    }
+    
+    class DepositTransaction {
+        + execute() boolean
+    }
+    
+    class ATMController {
+        - ATM atm
+        - Card currentCard
+        - Account selectedAccount
+        - ATMState state
+        + insertCard(card) void
+        + authenticate(pin) boolean
+        + withdraw(amount) boolean
+        + deposit(amount) boolean
+        + endSession() void
+    }
+    
+    class Bank {
+        <<Singleton>>
+        - Map~String,Account~ accounts
+        + findAccount(accountNumber) Account
+    }
+    
+    class TransactionLog {
+        - List~Transaction~ transactions
+        + log(transaction) void
+    }
+    
+    ATM --> CardReader
+    ATM --> CashDispenser
+    ATM --> CashSlot
+    ATM --> Keypad
+    ATM --> Screen
+    ATM --> ATMController
+    Card --> Customer
+    Card --> Account
+    Account <|-- CheckingAccount
+    Account <|-- SavingsAccount
+    Account --> Transaction
+    Transaction <|-- WithdrawalTransaction
+    Transaction <|-- DepositTransaction
+    ATMController --> Card
+    ATMController --> Account
+    Bank --> Account
+    ATMController --> TransactionLog
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                                 ATM SYSTEM                                       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -156,6 +290,8 @@ atm.getController().withdraw(50000.00);  // ATM doesn't have enough
 │                                                                               │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Relationships Summary
 

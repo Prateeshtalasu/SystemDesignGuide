@@ -133,7 +133,14 @@ If we see a hash with 20 leading zeros, we estimate we've seen about 2^20 ≈ 1 
 
 This is similar to the birthday paradox: with 23 people, there's a 50% chance two share a birthday. HyperLogLog exploits similar probabilistic patterns.
 
-```
+**HyperLogLog Core Insight**: "The maximum number of leading zeros in hash values gives us information about how many unique values we've seen."
+
+- Max leading zeros = k → Estimate ≈ 2^k unique items
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                  HYPERLOGLOG CORE INSIGHT                        │
 ├─────────────────────────────────────────────────────────────────┤
@@ -146,6 +153,7 @@ This is similar to the birthday paradox: with 23 people, there's a 50% chance tw
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -261,7 +269,21 @@ When estimate exceeds 2^32 / 30, apply correction for hash collisions.
 
 ### Memory Layout
 
-```
+**HyperLogLog Memory Structure**
+
+- Precision p = 14 (standard)
+- Number of buckets m = 2^14 = 16,384
+- Bits per bucket = 6 (max value 63, enough for 2^63 elements)
+- Total memory = 16,384 × 6 bits = 98,304 bits = 12 KB
+
+| Bucket | 0 | 1 | 2 | 3 | 4 | 5 | 6 | ... |
+|--------|---|---|---|---|---|---|---|-----|
+| Value (6 bits) | 3 | 7 | 2 | 5 | 4 | 8 | 1 | ... |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    HYPERLOGLOG MEMORY STRUCTURE                  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -279,6 +301,7 @@ When estimate exceeds 2^32 / 30, apply correction for hash collisions.
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -445,7 +468,19 @@ SELECT APPROX_COUNT_DISTINCT(user_id) FROM events;
 
 ### Architecture: Unique Visitors Dashboard
 
+```mermaid
+flowchart TD
+    A["User Visit"] --> B["Web App"]
+    B --> C["Kafka<br/>(page_views)"]
+    C --> D["Stream Processor<br/>(Flink/Spark)"]
+    D --> E["Redis Cluster<br/><br/>HLL: page:123:hourly<br/>HLL: page:123:daily<br/>HLL: page:123:weekly<br/>HLL: site:hourly<br/>HLL: site:daily"]
+    E --> F["Analytics Dashboard<br/><br/>1.2M unique visitors<br/>in the last hour"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                 REAL-TIME ANALYTICS ARCHITECTURE                 │
 ├─────────────────────────────────────────────────────────────────┤
@@ -479,6 +514,7 @@ SELECT APPROX_COUNT_DISTINCT(user_id) FROM events;
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Stream Processing Integration
 

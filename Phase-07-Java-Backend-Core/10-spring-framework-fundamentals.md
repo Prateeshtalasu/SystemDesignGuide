@@ -13,7 +13,21 @@ Before diving into Spring Framework, you need to understand:
 
 Quick mental model:
 
+```mermaid
+graph LR
+    subgraph Without["Without Spring"]
+        WS["OrderService<br/>db = new MySQLDatabase()<br/>email = new SmtpEmail()<br/>log = new FileLogger()<br/><br/>Problems:<br/>- Hard to test<br/>- Hard to change<br/>- Tight coupling"]
+    end
+    
+    subgraph With["With Spring"]
+        SS["@Service<br/>OrderService<br/>db (injected)<br/>email (injected)<br/>log (injected)<br/><br/>Benefits:<br/>- Easy to test<br/>- Easy to swap<br/>- Loose coupling"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SPRING FRAMEWORK OVERVIEW                             │
 │                                                                          │
@@ -54,6 +68,8 @@ Quick mental model:
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -109,7 +125,27 @@ public class Application {
 
 ### What Spring Provides
 
+```mermaid
+flowchart TD
+    Boot["SPRING BOOT<br/>Auto-configuration, embedded servers,<br/>production-ready"]
+    
+    Boot --> MVC["Spring MVC<br/>Web Layer"]
+    Boot --> Data["Spring Data<br/>Database Access"]
+    Boot --> Security["Spring Security<br/>Auth & AuthZ"]
+    Boot --> Cloud["Spring Cloud<br/>Microservices"]
+    Boot --> Batch["Spring Batch<br/>Batch Jobs"]
+    
+    MVC --> Core["SPRING FRAMEWORK CORE<br/>IoC Container, DI, AOP,<br/>Events, Resources, i18n"]
+    Data --> Core
+    Security --> Core
+    Cloud --> Core
+    Batch --> Core
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SPRING ECOSYSTEM                                      │
 │                                                                          │
@@ -133,6 +169,8 @@ public class Application {
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -140,7 +178,29 @@ public class Application {
 
 ### Core Concepts
 
+```mermaid
+flowchart TD
+    IoC["INVERSION OF CONTROL (IoC):<br/>- A design principle<br/>- Don't call us, we'll call you<br/>- Framework controls the flow"]
+    
+    DI["DEPENDENCY INJECTION (DI):<br/>- A pattern that implements IoC<br/>- Dependencies are injected from outside<br/>- Object doesn't create its own dependencies"]
+    
+    subgraph Traditional["Traditional"]
+        TS["OrderService<br/>db = new DB()<br/>Creates its<br/>dependencies"]
+    end
+    
+    subgraph IoCDI["IoC/DI"]
+        IS["OrderService<br/>db (injected)<br/>Receives its<br/>dependencies"]
+        Container["IoC Container<br/>(Spring)"]
+        Container -->|Injected by| IS
+    end
+    
+    IoC --> DI
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    IoC vs DI                                             │
 │                                                                          │
@@ -170,6 +230,8 @@ public class Application {
 │                                    └───────────────┘                   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Types of Dependency Injection
@@ -224,7 +286,30 @@ public class OrderService {
 
 ### Complete Lifecycle
 
+```mermaid
+flowchart TD
+    S1["1. INSTANTIATION<br/>Bean instance created"]
+    S2["2. POPULATE PROPERTIES<br/>Dependencies injected"]
+    S3["3. BeanNameAware.setBeanName()<br/>Bean receives its name"]
+    S4["4. BeanFactoryAware.setBeanFactory()<br/>Bean receives reference to factory"]
+    S5["5. ApplicationContextAware.setApplicationContext()<br/>Bean receives application context"]
+    S6["6. BeanPostProcessor.postProcessBeforeInitialization()<br/>Pre-initialization processing"]
+    S7["7. @PostConstruct<br/>Custom initialization method"]
+    S8["8. InitializingBean.afterPropertiesSet()<br/>Interface-based initialization"]
+    S9["9. Custom init-method<br/>XML/annotation configured init"]
+    S10["10. BeanPostProcessor.postProcessAfterInitialization()<br/>Post-initialization processing<br/>(AOP proxies created here)"]
+    Ready["════════════════════════════════<br/>BEAN IS READY FOR USE<br/>════════════════════════════════"]
+    S11["11. @PreDestroy<br/>Custom cleanup method"]
+    S12["12. DisposableBean.destroy()<br/>Interface-based cleanup"]
+    S13["13. Custom destroy-method<br/>XML/annotation configured cleanup"]
+    
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> Ready --> S11 --> S12 --> S13
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SPRING BEAN LIFECYCLE                                 │
 │                                                                          │
@@ -272,6 +357,8 @@ public class OrderService {
 │       └── XML/annotation configured cleanup                             │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Lifecycle Example
@@ -325,7 +412,43 @@ public class DatabaseConnection implements InitializingBean, DisposableBean {
 
 ## 4️⃣ Bean Scopes
 
+```mermaid
+flowchart TD
+    subgraph Singleton["SINGLETON (Default)"]
+        S1["One instance per Spring container"]
+        R1["Request 1"] --> SI["Same Bean Instance"]
+        R2["Request 2"] --> SI
+        R3["Request 3"] --> SI
+        SU["Use for: Stateless services, repositories"]
+    end
+    
+    subgraph Prototype["PROTOTYPE"]
+        P1["New instance every time bean is requested"]
+        PR1["Request 1"] --> I1["Instance 1"]
+        PR2["Request 2"] --> I2["Instance 2"]
+        PR3["Request 3"] --> I3["Instance 3"]
+        PU["Use for: Stateful beans, builders"]
+    end
+    
+    subgraph Request["REQUEST (Web only)"]
+        RE1["One instance per HTTP request"]
+        HR1["HTTP Request 1"] --> RI1["Instance 1"]
+        HR2["HTTP Request 2"] --> RI2["Instance 2"]
+        REU["Use for: Request-scoped data (user context)"]
+    end
+    
+    subgraph Session["SESSION (Web only)"]
+        SE1["One instance per HTTP session"]
+        SA["Session A (multiple requests)"] --> SI1["Instance 1"]
+        SB["Session B (multiple requests)"] --> SI2["Instance 2"]
+        SEU["Use for: Shopping cart, user preferences"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    BEAN SCOPES                                           │
 │                                                                          │
@@ -372,6 +495,8 @@ public class DatabaseConnection implements InitializingBean, DisposableBean {
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Scope Examples
@@ -524,7 +649,35 @@ public class OrderService {
 
 ### AOP Concepts
 
+```mermaid
+flowchart TD
+    Aspect["ASPECT: A module that encapsulates<br/>cross-cutting concerns<br/>(logging, security, transactions)"]
+    
+    JoinPoint["JOIN POINT: A point in execution<br/>(method call, exception)<br/>where aspect can be applied"]
+    
+    Advice["ADVICE: Action taken at a join point<br/>- Before: Run before method<br/>- After: Run after method<br/>- AfterReturning: Run after successful return<br/>- AfterThrowing: Run after exception<br/>- Around: Wrap method execution"]
+    
+    Pointcut["POINTCUT: Expression that selects join points<br/>Apply this advice to these methods"]
+    
+    Target["TARGET: The object being advised"]
+    
+    Proxy["PROXY: Object created by AOP<br/>to implement advice"]
+    
+    Client --> Proxy
+    Proxy --> Target
+    Proxy --> Advice
+    
+    Aspect --> JoinPoint
+    JoinPoint --> Pointcut
+    Pointcut --> Advice
+    Advice --> Proxy
+    Target --> Proxy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AOP TERMINOLOGY                                       │
 │                                                                          │
@@ -560,6 +713,8 @@ public class OrderService {
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### AOP Implementation
@@ -678,7 +833,34 @@ public class OrderService {
 
 ### How Auto-Configuration Works
 
+```mermaid
+flowchart TD
+    SBA["@SpringBootApplication"]
+    
+    SBC["@SpringBootConfiguration<br/>(same as @Configuration)"]
+    EAC["@EnableAutoConfiguration"]
+    CS["@ComponentScan"]
+    
+    SBA --> SBC
+    SBA --> EAC
+    SBA --> CS
+    
+    EAC --> SF["Loads META-INF/spring.factories<br/>(or META-INF/spring/<br/>org.springframework.boot.<br/>autoconfigure.<br/>AutoConfiguration.imports)"]
+    
+    CS --> SC["Scans for @Component,<br/>@Service, @Repository, etc."]
+    
+    Process["AUTO-CONFIGURATION PROCESS:<br/>1. Spring Boot starts<br/>2. Reads auto-configuration classes<br/>3. Checks @Conditional annotations<br/>4. If conditions met, configuration applied"]
+    
+    Example["Example: DataSourceAutoConfiguration<br/>@ConditionalOnClass(DataSource.class)<br/>@ConditionalOnMissingBean(DataSource.class)<br/>@EnableConfigurationProperties(DataSourceProperties.class)"]
+    
+    SF --> Process
+    Process --> Example
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SPRING BOOT AUTO-CONFIGURATION                        │
 │                                                                          │
@@ -717,6 +899,8 @@ public class OrderService {
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Common Conditional Annotations
@@ -796,7 +980,24 @@ public class NotificationProperties {
 
 ## 7️⃣ Spring MVC Architecture
 
+```mermaid
+flowchart TD
+    Request["HTTP Request"]
+    DS["DispatcherServlet<br/>Front Controller - receives all requests"]
+    HM["HandlerMapping<br/>Finds which controller handles the request"]
+    HA["HandlerAdapter<br/>Invokes the controller method"]
+    C["Controller<br/>Processes request, returns ModelAndView"]
+    VR["ViewResolver<br/>Resolves view name to actual view"]
+    V["View<br/>Renders response (JSON, HTML, etc.)"]
+    Response["HTTP Response"]
+    
+    Request --> DS --> HM --> HA --> C --> VR --> V --> Response
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SPRING MVC REQUEST FLOW                               │
 │                                                                          │
@@ -836,6 +1037,8 @@ public class NotificationProperties {
 │   HTTP Response                                                         │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### REST Controller Example
@@ -903,7 +1106,25 @@ public class OrderController {
 
 ## 8️⃣ @Component vs @Bean
 
+```mermaid
+flowchart LR
+    subgraph Component["@Component<br/>(and @Service, @Repository, @Controller)"]
+        C1["- Used on CLASSES you write<br/>- Detected via component scanning<br/>- Automatic bean registration"]
+        C2["@Service<br/>public class OrderService {<br/>// Spring creates and manages this bean<br/>}"]
+        C1 --> C2
+    end
+    
+    subgraph Bean["@Bean"]
+        B1["- Used on METHODS in @Configuration classes<br/>- For third-party classes you can't annotate<br/>- More control over instantiation"]
+        B2["@Configuration<br/>public class AppConfig {<br/>@Bean<br/>public RestTemplate restTemplate() {<br/>return new RestTemplate();<br/>}<br/>}"]
+        B1 --> B2
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    @Component vs @Bean                                   │
 │                                                                          │
@@ -942,6 +1163,8 @@ public class OrderController {
 │   }                                                                      │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### When to Use Which

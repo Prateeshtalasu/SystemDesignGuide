@@ -22,7 +22,22 @@ Before diving into JWT authentication, you should understand:
 
 HTTP was designed as a stateless protocol. Each request is independent with no memory of previous requests. But web applications need to remember users:
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    
+    C->>S: Request 1: POST /login
+    S->>C: "Welcome, Alice! Login successful."
+    Note over S: Server has amnesia between requests!
+    C->>S: Request 2: GET /my-account
+    S->>C: "Who are you? I have no memory of you."
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE STATELESS PROBLEM                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -37,6 +52,8 @@ HTTP was designed as a stateless protocol. Each request is independent with no m
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### What Systems Looked Like Before Modern Auth
 
@@ -75,7 +92,38 @@ Problems at scale:
 
 ### The Scale Problem with Sessions
 
+```mermaid
+flowchart TD
+    USERS["10 million users × 2 sessions each<br/>= 20 million session lookups"]
+    
+    SERVER1["Server 1"]
+    SERVER2["Server 2"]
+    SERVER3["Server 3"]
+    
+    STORE["Session Store<br/>(Redis/DB)<br/>20M entries<br/><br/>← Bottleneck!<br/>← Single point of failure!<br/>← Memory expensive!"]
+    
+    SOLUTION["JWT Solution:<br/>No central session store needed<br/>Each server can verify tokens independently"]
+    
+    SERVER1 --> STORE
+    SERVER2 --> STORE
+    SERVER3 --> STORE
+    
+    USERS --> SERVER1
+    USERS --> SERVER2
+    USERS --> SERVER3
+    
+    style USERS fill:#e3f2fd
+    style SERVER1 fill:#fff9c4
+    style SERVER2 fill:#fff9c4
+    style SERVER3 fill:#fff9c4
+    style STORE fill:#ffcdd2
+    style SOLUTION fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SESSION SCALING PROBLEM                               │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -101,6 +149,8 @@ Problems at scale:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 2️⃣ Intuition and Mental Model
@@ -121,7 +171,32 @@ Think of a JWT like a passport:
 - Any border agent can verify the stamp without calling the government
 - Your identity travels WITH you
 
+```mermaid
+flowchart TD
+    subgraph JWT["PASSPORT (JWT)"]
+        HEADER["HEADER (How to verify)<br/>Algorithm: RS256<br/>Type: JWT"]
+        PAYLOAD["PAYLOAD (Who you are)<br/>Name: Alice Smith<br/>User ID: 12345<br/>Role: Premium User<br/>Issued: 2024-01-15<br/>Expires: 2024-01-15 + 1 hour"]
+        SIGNATURE["SIGNATURE (Government Stamp)<br/>[Cryptographic proof this<br/>wasn't tampered with]<br/>[Only the issuer could<br/>have created this]"]
+        
+        HEADER --> PAYLOAD
+        PAYLOAD --> SIGNATURE
+    end
+    
+    NOTE["Any service can verify the signature<br/>without calling the issuer!"]
+    
+    JWT --> NOTE
+    
+    style JWT fill:#e3f2fd
+    style HEADER fill:#fff9c4
+    style PAYLOAD fill:#c8e6c9
+    style SIGNATURE fill:#fce4ec
+    style NOTE fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         JWT AS PASSPORT                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -152,6 +227,8 @@ Think of a JWT like a passport:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

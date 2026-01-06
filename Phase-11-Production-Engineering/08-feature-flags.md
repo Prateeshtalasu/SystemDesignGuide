@@ -124,7 +124,21 @@ Think of feature flags as **light switches for code**.
 
 ### Feature Flag Mental Model
 
+```mermaid
+flowchart TD
+    FFS["Feature Flag Service<br/>(LaunchDarkly, Unleash, etc.)<br/><br/>Feature: new-payment-processor<br/>Status: ENABLED<br/>Rollout: 25% of users<br/>Targeting:<br/>- User IDs: [1001, 1002, ...]<br/>- Countries: [US, CA]<br/>- Beta testers: true"]
+    APP["Your Application<br/><br/>if (featureFlag.isEnabled(new-payment-processor)) {<br/>    newPaymentProcessor.process();<br/>} else {<br/>    oldPaymentProcessor.process();<br/>}"]
+    
+    FFS -->|API call| APP
+    
+    style FFS fill:#e3f2fd
+    style APP fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FEATURE FLAG SYSTEM                            │
 │                                                                  │
@@ -155,6 +169,8 @@ Think of feature flags as **light switches for code**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Key insight**: The same code is deployed to everyone. Feature flags control which code path executes.
 
 ---
@@ -163,7 +179,38 @@ Think of feature flags as **light switches for code**.
 
 ### Feature Flag Evaluation Flow
 
+```mermaid
+flowchart TD
+    STEP1["1. Application requests flag value<br/>flagService.isEnabled(new-feature, userId)"]
+    STEP2["2. Flag service evaluates rules"]
+    R1["Rule 1: Is user in beta testers list?<br/>→ YES: Return ENABLED<br/>→ NO: Continue"]
+    R2["Rule 2: Is user ID in allowlist?<br/>→ YES: Return ENABLED<br/>→ NO: Continue"]
+    R3["Rule 3: Percentage rollout (25%)<br/>→ Hash(userId + flagKey) % 100 < 25<br/>→ YES: Return ENABLED<br/>→ NO: Return DISABLED"]
+    STEP3["3. Return boolean result<br/>true or false"]
+    STEP4["4. Application uses result<br/>to choose code path"]
+    
+    STEP1 --> STEP2
+    STEP2 --> R1
+    R1 -->|NO| R2
+    R2 -->|NO| R3
+    R1 -->|YES| STEP3
+    R2 -->|YES| STEP3
+    R3 --> STEP3
+    STEP3 --> STEP4
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style R1 fill:#c8e6c9
+    style R2 fill:#c8e6c9
+    style R3 fill:#c8e6c9
+    style STEP3 fill:#fce4ec
+    style STEP4 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │              FEATURE FLAG EVALUATION                             │
 │                                                                  │
@@ -199,6 +246,8 @@ Think of feature flags as **light switches for code**.
 │  4. Application uses result to choose code path                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Consistent Hashing for Percentage Rollouts
 
@@ -462,7 +511,39 @@ class UserContext {
 
 ### Lifecycle Stages
 
+```mermaid
+flowchart TD
+    DEV["1. DEVELOPMENT<br/>Flag created, default: DISABLED<br/>Code written with flag check<br/>Flag tested in development environment"]
+    TEST["2. TESTING<br/>Flag enabled for QA team<br/>Integration tests run with flag enabled"]
+    STAGING["3. STAGING<br/>Flag enabled for staging environment<br/>E2E tests validate feature"]
+    INTERNAL["4. PRODUCTION - INTERNAL<br/>Flag enabled for internal users only<br/>Dogfooding (team uses feature)"]
+    BETA["5. PRODUCTION - BETA<br/>Flag enabled for beta testers (5-10% of users)<br/>Monitor metrics, collect feedback"]
+    ROLLOUT["6. PRODUCTION - GRADUAL ROLLOUT<br/>10% → 25% → 50% → 75% → 100%<br/>Monitor at each stage"]
+    FULLY["7. PRODUCTION - FULLY ENABLED<br/>Flag enabled for 100% of users<br/>Monitor for days/weeks"]
+    CLEANUP["8. CLEANUP<br/>Remove flag check from code<br/>Delete flag from service<br/>Deploy code without flag"]
+    
+    DEV --> TEST
+    TEST --> STAGING
+    STAGING --> INTERNAL
+    INTERNAL --> BETA
+    BETA --> ROLLOUT
+    ROLLOUT --> FULLY
+    FULLY --> CLEANUP
+    
+    style DEV fill:#e3f2fd
+    style TEST fill:#fff9c4
+    style STAGING fill:#c8e6c9
+    style INTERNAL fill:#fce4ec
+    style BETA fill:#ffcdd2
+    style ROLLOUT fill:#fff9c4
+    style FULLY fill:#c8e6c9
+    style CLEANUP fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FEATURE FLAG LIFECYCLE                         │
 │                                                                  │
@@ -501,6 +582,8 @@ class UserContext {
 │     Deploy code without flag                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Gradual Rollout Example
 

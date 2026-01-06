@@ -37,7 +37,38 @@ Traditional security model: **"Trust but Verify"**
 
 **Traditional Security Model (Castle and Moat)**:
 
+```mermaid
+flowchart TD
+    INTERNET["Internet (Untrusted)"]
+    FIREWALL["Firewall<br/>(Perimeter)<br/>← Strong perimeter"]
+    
+    subgraph INTERNAL["Internal Network (Trusted)"]
+        SERVICE_A["Service A"]
+        SERVICE_B["Service B"]
+        NOTE["Once inside, all services trust<br/>each other (no verification)"]
+        
+        SERVICE_A -->|Trust| SERVICE_B
+    end
+    
+    PROBLEM["Problem: If attacker breaches perimeter,<br/>they have access to everything"]
+    
+    INTERNET --> FIREWALL
+    FIREWALL --> INTERNAL
+    INTERNAL --> PROBLEM
+    
+    style INTERNET fill:#ffcdd2
+    style FIREWALL fill:#fff9c4
+    style INTERNAL fill:#c8e6c9
+    style SERVICE_A fill:#e3f2fd
+    style SERVICE_B fill:#e3f2fd
+    style NOTE fill:#fff9c4
+    style PROBLEM fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    TRADITIONAL MODEL                   │
 ├─────────────────────────────────────────────────────────┤
@@ -68,6 +99,8 @@ Traditional security model: **"Trust but Verify"**
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Problems with this approach**:
 1. Single point of failure (perimeter)
@@ -145,7 +178,38 @@ Every step requires verification, regardless of who you are.
 
 ### The Principle: "Never Trust, Always Verify"
 
+```mermaid
+flowchart TD
+    REQUEST["Request"]
+    
+    STEP1["1. Verify Identity<br/>← Who are you? (Authentication)"]
+    STEP2["2. Verify Permission<br/>← What can you access? (Authorization)"]
+    STEP3["3. Verify Device<br/>← Is device secure? (Device Trust)"]
+    STEP4["4. Verify Network<br/>← Is network secure? (Network Trust)"]
+    STEP5["5. Continuous Monitoring<br/>← Monitor for anomalies"]
+    
+    GRANTED["Access Granted"]
+    
+    REQUEST --> STEP1
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> GRANTED
+    
+    style REQUEST fill:#e3f2fd
+    style STEP1 fill:#fff9c4
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#c8e6c9
+    style STEP5 fill:#fce4ec
+    style GRANTED fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Request
    │
    ▼
@@ -182,6 +246,8 @@ Request
 Access Granted
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How Zero Trust Architecture Works Internally
@@ -205,7 +271,41 @@ Access Granted
 
 ### Architecture Components
 
+```mermaid
+flowchart TD
+    IDENTITY["Identity Provider<br/>(Azure AD)"]
+    DEVICE["Device Management<br/>(MDM)"]
+    
+    POLICY["Policy Engine<br/>(Access Decisions)"]
+    
+    NETWORK["Network Security<br/>(Firewall)"]
+    DATA["Data Protection<br/>(DLP)"]
+    
+    RESOURCES["Resources<br/>(Services, Data)"]
+    
+    MONITORING["Continuous Monitoring & Analytics<br/>(Log all access, detect anomalies)"]
+    
+    IDENTITY --> POLICY
+    DEVICE --> POLICY
+    POLICY --> NETWORK
+    POLICY --> DATA
+    NETWORK --> RESOURCES
+    DATA --> RESOURCES
+    RESOURCES --> MONITORING
+    
+    style IDENTITY fill:#e3f2fd
+    style DEVICE fill:#e3f2fd
+    style POLICY fill:#fff9c4
+    style NETWORK fill:#c8e6c9
+    style DATA fill:#c8e6c9
+    style RESOURCES fill:#fce4ec
+    style MONITORING fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ZERO TRUST ARCHITECTURE                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -248,6 +348,8 @@ Access Granted
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Request Flow in Zero Trust
 
@@ -300,7 +402,27 @@ Continuous monitoring for anomalies
 ### Micro-Segmentation
 
 **Traditional Network**: Flat network, all services can talk to each other
+```mermaid
+flowchart LR
+    subgraph TRADITIONAL["Internal Network<br/>(All can communicate freely)"]
+        A["Service A"]
+        B["Service B"]
+        C["Service C"]
+        
+        A <--> B
+        B <--> C
+    end
+    
+    style TRADITIONAL fill:#ffcdd2
+    style A fill:#fff9c4
+    style B fill:#fff9c4
+    style C fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────┐
 │   Internal Network                  │
 │                                     │
@@ -309,8 +431,33 @@ Continuous monitoring for anomalies
 └─────────────────────────────────────┘
 ```
 
+</details>
+
 **Zero Trust Network**: Micro-segmented, each service isolated
+```mermaid
+flowchart TD
+    subgraph MICRO["Micro-Segmented Network"]
+        SA["Service A"]
+        SB["Service B"]
+        SC["Service C"]
+        
+        SA -->|mTLS + Auth| SB
+        SB -->|mTLS + Auth| SC
+        
+        NOTE["Each service isolated,<br/>communication requires<br/>authentication and authorization"]
+    end
+    
+    style MICRO fill:#c8e6c9
+    style SA fill:#e3f2fd
+    style SB fill:#e3f2fd
+    style SC fill:#e3f2fd
+    style NOTE fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────┐
 │   Micro-Segmented Network            │
 │                                     │
@@ -334,6 +481,8 @@ Continuous monitoring for anomalies
 │   authentication and authorization  │
 └─────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

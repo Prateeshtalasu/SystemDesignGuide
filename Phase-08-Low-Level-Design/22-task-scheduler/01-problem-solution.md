@@ -127,7 +127,70 @@ scheduler.submit(childTask);
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class TaskScheduler {
+        - PriorityQueue~Task~ taskQueue
+        - ExecutorService executorService
+        - SchedulingStrategy schedulingStrategy
+        + submit(task) String
+        + schedule(task, delay) String
+        + scheduleRecurring(task, interval) String
+        + cancel(taskId) boolean
+        + getStatus(taskId) TaskStatus
+    }
+    
+    class Task {
+        - String id
+        - Runnable runnable
+        - TaskPriority priority
+        - long schedTime
+        - int retries
+        - String[] deps
+    }
+    
+    class TaskResult {
+        - String taskId
+        - TaskStatus status
+        - Object result
+        - String error
+        - long duration
+    }
+    
+    class SchedulingStrategy {
+        <<interface>>
+        + select() Task
+    }
+    
+    class FIFOStrategy {
+        + select() Task
+    }
+    
+    class PriorityStrategy {
+        + select() Task
+    }
+    
+    class RoundRobinStrategy {
+        + select() Task
+    }
+    
+    class Worker {
+        + execute() void
+    }
+    
+    TaskScheduler --> Task
+    TaskScheduler --> TaskResult
+    TaskScheduler --> SchedulingStrategy
+    TaskScheduler --> Worker
+    SchedulingStrategy <|.. FIFOStrategy
+    SchedulingStrategy <|.. PriorityStrategy
+    SchedulingStrategy <|.. RoundRobinStrategy
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                            TASK SCHEDULER                                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -166,6 +229,8 @@ scheduler.submit(childTask);
 │                     └──────────┘   └──────────┘   └───────────┘               │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

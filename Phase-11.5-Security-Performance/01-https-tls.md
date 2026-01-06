@@ -99,7 +99,29 @@ This is exactly what TLS does, but with math instead of ID cards.
 
 Let's trace every step of a TLS 1.2 handshake:
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    
+    C->>S: 1. ClientHello<br/>(TLS version: 1.2, Random bytes,<br/>Cipher suites, Compression methods)
+    S->>C: 2. ServerHello<br/>(TLS version selected, Random bytes,<br/>Cipher suite selected, Session ID)
+    S->>C: 3. Certificate<br/>(Server's X.509 certificate,<br/>Certificate chain to root CA)
+    S->>C: 4. ServerKeyExchange<br/>(DH parameters if using DHE/ECDHE,<br/>Signed with server's private key)
+    S->>C: 5. ServerHelloDone<br/>("I'm done sending my stuff")
+    C->>S: 6. ClientKeyExchange<br/>(Pre-master secret encrypted with<br/>server's public key OR Client's DH public value)
+    C->>S: 7. ChangeCipherSpec<br/>("Switching to encrypted mode")
+    C->>S: 8. Finished<br/>(Hash of all handshake messages,<br/>Encrypted with new keys)
+    S->>C: 9. ChangeCipherSpec<br/>("I'm also switching to encrypted mode")
+    S->>C: 10. Finished<br/>(Hash of all handshake messages,<br/>Encrypted with new keys)
+    Note over C,S: Encrypted Application Data
+    C<->>S: Encrypted Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         TLS 1.2 HANDSHAKE                                │
 ├──────────────────────────────────────────────────────────────────────────┤
@@ -153,11 +175,29 @@ Let's trace every step of a TLS 1.2 handshake:
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### TLS 1.3 Handshake (Faster, More Secure)
 
 TLS 1.3 reduces the handshake from 2 round trips to 1:
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    
+    Note over C: ← SENT EARLY!
+    C->>S: 1. ClientHello<br/>(TLS version: 1.3, Random bytes,<br/>Cipher suites, Key share (DH public value))
+    S->>C: 2. ServerHello + Encrypted Extensions<br/>(Server's key share, Certificate (encrypted!),<br/>Certificate verify, Finished)
+    C->>S: 3. Finished
+    Note over C,S: Encrypted Application Data
+    C<->>S: Encrypted Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         TLS 1.3 HANDSHAKE                                │
 ├──────────────────────────────────────────────────────────────────────────┤
@@ -183,6 +223,8 @@ TLS 1.3 reduces the handshake from 2 round trips to 1:
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Key Differences in TLS 1.3**:
 - Client sends key share in first message (speculative)
 - Certificate is encrypted (privacy improvement)
@@ -193,7 +235,26 @@ TLS 1.3 reduces the handshake from 2 round trips to 1:
 
 When the server sends its certificate, the client must verify it:
 
+```mermaid
+flowchart TD
+    ROOT["ROOT CA CERTIFICATE<br/>Subject: DigiCert Global Root CA<br/>Issuer: DigiCert Global Root CA (self)<br/>Public Key: [ROOT_PUBLIC_KEY]<br/>Signature: Self-signed<br/><br/>← Pre-installed in browser/OS<br/>(Trust Anchor)"]
+    
+    INTERMEDIATE["INTERMEDIATE CA CERTIFICATE<br/>Subject: DigiCert TLS RSA SHA256 2020 CA1<br/>Issuer: DigiCert Global Root CA<br/>Public Key: [INTERMEDIATE_PUBLIC_KEY]<br/>Signature: Signed by ROOT_PRIVATE_KEY<br/><br/>← Sent by server"]
+    
+    LEAF["SERVER (LEAF) CERTIFICATE<br/>Subject: www.example.com<br/>Issuer: DigiCert TLS RSA SHA256 2020 CA1<br/>Public Key: [SERVER_PUBLIC_KEY]<br/>Signature: Signed by INTERMEDIATE_PRIVATE<br/>Valid: 2024-01-01 to 2025-01-01<br/>SANs: example.com, www.example.com<br/><br/>← Sent by server"]
+    
+    ROOT -->|Signs| INTERMEDIATE
+    INTERMEDIATE -->|Signs| LEAF
+    
+    style ROOT fill:#ffcdd2
+    style INTERMEDIATE fill:#fff9c4
+    style LEAF fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     CERTIFICATE CHAIN                                    │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -230,6 +291,8 @@ When the server sends its certificate, the client must verify it:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Verification Steps**:
 1. Check leaf certificate's domain matches requested domain

@@ -121,7 +121,24 @@ Think of observability as **three ways to understand your system**:
 - "Request went: API → Auth → Payment → Database"
 - Like a map of the request path
 
+```mermaid
+flowchart TD
+    subgraph PILLARS["THREE PILLARS OF OBSERVABILITY"]
+        LOGS["LOGS<br/>What happened?<br/><br/>2024-01-15 10:30:15 INFO User alice logged in<br/>2024-01-15 10:30:20 ERROR Payment failed: timeout<br/>2024-01-15 10:30:25 INFO Order created: order-123"]
+        METRICS["METRICS<br/>How much? How often?<br/><br/>Requests/sec: 1,250<br/>Error rate: 0.5%<br/>CPU usage: 65%<br/>Response time p95: 250ms"]
+        TRACES["TRACES<br/>How did this flow?<br/><br/>Request ID: abc123<br/>├─ API Gateway (10ms)<br/>├─ Auth Service (50ms)<br/>├─ Payment Service (200ms)<br/>│   └─ Database (180ms)<br/>└─ Notification Service (30ms)<br/>Total: 290ms"]
+    end
+    
+    style PILLARS fill:#e3f2fd
+    style LOGS fill:#fff9c4
+    style METRICS fill:#c8e6c9
+    style TRACES fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                  THREE PILLARS OF OBSERVABILITY                  │
 │                                                                  │
@@ -158,6 +175,8 @@ Think of observability as **three ways to understand your system**:
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -819,6 +838,7 @@ Observability provides visibility into system behavior through three pillars: lo
 Key tools: ELK stack for log aggregation, Prometheus + Grafana for metrics, Jaeger/Zipkin for tracing. Alerting notifies when thresholds are exceeded.
 
 The key insight: Observability lets you understand system behavior, not just detect problems. With good observability, you can answer "why" questions, not just "what" questions.
+
 
 
 

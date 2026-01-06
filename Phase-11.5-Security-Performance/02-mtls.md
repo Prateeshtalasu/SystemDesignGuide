@@ -20,12 +20,30 @@ Before diving into mTLS, you should understand:
 ### The Core Problem: Server Doesn't Know Who's Calling
 
 In regular TLS:
+
 - Server proves identity to client ✓
 - Client identity is unknown to server ✗
 
 This creates several security gaps:
 
+```mermaid
+flowchart LR
+    CLIENT["Unknown<br/>Client"]
+    SERVER["Payment<br/>Service"]
+    RISK["Could be:<br/>• Legitimate Order Service<br/>• Compromised service<br/>• Attacker on the network<br/>• Malicious insider<br/><br/>Server has NO cryptographic<br/>proof of client identity"]
+
+    CLIENT -->|"I'm the Payment Service"| SERVER
+    CLIENT -.-> RISK
+
+    style CLIENT fill:#ffcdd2
+    style SERVER fill:#c8e6c9
+    style RISK fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    REGULAR TLS (ONE-WAY)                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -46,20 +64,25 @@ This creates several security gaps:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What Systems Looked Like Before mTLS
 
 Before mTLS, services authenticated each other using:
 
 1. **API Keys**: Shared secrets in headers
+
    - Problem: Keys can be stolen, leaked, or guessed
    - Problem: No way to know which specific instance made the call
 
 2. **IP Whitelisting**: Trust based on source IP
+
    - Problem: IPs change in cloud environments
    - Problem: Containers share IPs
    - Problem: Attackers can spoof IPs
 
 3. **Network Segmentation**: Trust based on network location
+
    - Problem: Once inside the network, full access
    - Problem: Lateral movement after breach
 
@@ -69,13 +92,13 @@ Before mTLS, services authenticated each other using:
 
 ### What Breaks Without mTLS
 
-| Scenario | Risk | Impact |
-|----------|------|--------|
-| Compromised service | Can call any other service | Data exfiltration, lateral movement |
-| Malicious insider | Can impersonate services | Unauthorized access to sensitive data |
-| Container escape | Attacker on internal network | Full access to all services |
-| Supply chain attack | Malicious dependency | Undetected service impersonation |
-| Network breach | Attacker bypasses perimeter | Complete system compromise |
+| Scenario            | Risk                         | Impact                                |
+| ------------------- | ---------------------------- | ------------------------------------- |
+| Compromised service | Can call any other service   | Data exfiltration, lateral movement   |
+| Malicious insider   | Can impersonate services     | Unauthorized access to sensitive data |
+| Container escape    | Attacker on internal network | Full access to all services           |
+| Supply chain attack | Malicious dependency         | Undetected service impersonation      |
+| Network breach      | Attacker bypasses perimeter  | Complete system compromise            |
 
 ### Real-World Incidents
 
@@ -92,17 +115,39 @@ Before mTLS, services authenticated each other using:
 Imagine you're a diplomat entering a foreign embassy:
 
 **Regular TLS (One-Way)**:
+
 - You check the embassy's credentials (is this really the French embassy?)
 - The embassy lets anyone in who knows the address
 - Guards check your face but have no official record
 
 **mTLS (Mutual)**:
+
 - You check the embassy's credentials
 - The embassy checks YOUR diplomatic passport
 - Your passport is issued by a trusted authority (your government)
 - Both parties cryptographically verified
 
+```mermaid
+sequenceDiagram
+    participant D as DIPLOMAT<br/>(Client)
+    participant E as EMBASSY<br/>(Server)
+
+    Note over E: 1. "Show me your embassy credentials"
+    E->>D: Embassy shows government-issued ID
+    Note over D: 2. Diplomat verifies with their<br/>government's list of real embassies
+
+    Note over D: 3. "Now show me YOUR diplomatic passport"
+    D->>E: Diplomat shows passport
+    Note over E: 4. Embassy verifies passport with<br/>trusted authority list
+
+    Note over D,E: 5. BOTH verified, secure communication
+    D<->>E: Encrypted Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         mTLS AS EMBASSY SECURITY                         │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -132,6 +177,8 @@ Imagine you're a diplomat entering a foreign embassy:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### The Key Insight
 
 mTLS is "I know who you are, and you know who I am, and we both proved it mathematically."
@@ -142,7 +189,34 @@ mTLS is "I know who you are, and you know who I am, and we both proved it mathem
 
 ### The mTLS Handshake (Extended from TLS)
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    C->>S: 1. ClientHello<br/>(Supported TLS versions,<br/>Cipher suites, Random bytes)
+    S->>C: 2. ServerHello<br/>(Selected version and cipher)
+    S->>C: 3. Server Certificate<br/>(Server's X.509 certificate,<br/>Certificate chain)
+    Note over S: ← NEW IN mTLS
+    S->>C: 4. CertificateRequest<br/>(Acceptable CA list,<br/>Acceptable certificate types)
+    S->>C: 5. ServerHelloDone
+    Note over C: ← NEW IN mTLS
+    C->>S: 6. Client Certificate<br/>(Client's X.509 certificate,<br/>Certificate chain)
+    C->>S: 7. ClientKeyExchange<br/>(Pre-master secret)
+    Note over C: ← NEW IN mTLS
+    C->>S: 8. CertificateVerify<br/>(Signature proving client owns<br/>private key, Signs hash of<br/>all handshake messages)
+    C->>S: 9. ChangeCipherSpec
+    C->>S: 10. Finished
+    S->>C: 11. ChangeCipherSpec
+    S->>C: 12. Finished
+    Note over C,S: Both identities verified!
+    C<->>S: Encrypted Data
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         mTLS HANDSHAKE                                    │
 ├──────────────────────────────────────────────────────────────────────────┤
@@ -190,17 +264,20 @@ mTLS is "I know who you are, and you know who I am, and we both proved it mathem
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What's Different from Regular TLS
 
-| Step | Regular TLS | mTLS |
-|------|-------------|------|
-| CertificateRequest | Not sent | Server requests client cert |
-| Client Certificate | Not sent | Client sends its certificate |
-| CertificateVerify | Not sent | Client proves key ownership |
+| Step               | Regular TLS | mTLS                         |
+| ------------------ | ----------- | ---------------------------- |
+| CertificateRequest | Not sent    | Server requests client cert  |
+| Client Certificate | Not sent    | Client sends its certificate |
+| CertificateVerify  | Not sent    | Client proves key ownership  |
 
 ### Certificate Verification on Both Sides
 
 **Server Verifies Client**:
+
 1. Client certificate is not expired
 2. Certificate chain leads to trusted CA
 3. CertificateVerify signature is valid (proves private key ownership)
@@ -208,13 +285,56 @@ mTLS is "I know who you are, and you know who I am, and we both proved it mathem
 5. (Optional) Subject/SAN matches expected identity
 
 **Client Verifies Server**:
+
 1. Server certificate matches expected hostname
 2. Certificate chain leads to trusted CA
 3. Certificate not expired or revoked
 
 ### PKI Architecture for mTLS
 
+```mermaid
+flowchart TD
+    ROOT["ROOT CA<br/>(10-20 year cert)<br/>Offline, air-gapped<br/>Maximum security"]
+
+    INT_PROD["INTERMEDIATE CA<br/>(Production)<br/>(2-5 year cert)"]
+    INT_STAGE["INTERMEDIATE CA<br/>(Staging)<br/>(2-5 year cert)"]
+    INT_DEV["INTERMEDIATE CA<br/>(Development)<br/>(2-5 year cert)"]
+
+    subgraph SERVICES["SERVICE CERTIFICATES<br/>(Hours to days)"]
+        ORDER["Order Service"]
+        PAYMENT["Payment Service"]
+        USER["User Service"]
+        INVENTORY["Inventory Service"]
+    end
+
+    ROOT --> INT_PROD
+    ROOT --> INT_STAGE
+    ROOT --> INT_DEV
+
+    INT_PROD --> SERVICES
+    INT_STAGE --> SERVICES
+    INT_DEV --> SERVICES
+
+    INT_PROD --> ORDER
+    INT_PROD --> PAYMENT
+    INT_PROD --> USER
+    INT_PROD --> INVENTORY
+
+    style ROOT fill:#ffcdd2
+    style INT_PROD fill:#fff9c4
+    style INT_STAGE fill:#fff9c4
+    style INT_DEV fill:#fff9c4
+    style SERVICES fill:#c8e6c9
+    style ORDER fill:#e3f2fd
+    style PAYMENT fill:#e3f2fd
+    style USER fill:#e3f2fd
+    style INVENTORY fill:#e3f2fd
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    INTERNAL PKI FOR mTLS                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -247,6 +367,8 @@ mTLS is "I know who you are, and you know who I am, and we both proved it mathem
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 4️⃣ Simulation-First Explanation
@@ -256,11 +378,13 @@ mTLS is "I know who you are, and you know who I am, and we both proved it mathem
 Let's follow exactly what happens when the Order Service calls the Payment Service using mTLS:
 
 **Setup**:
+
 - Order Service has certificate: `CN=order-service.prod.internal`
 - Payment Service has certificate: `CN=payment-service.prod.internal`
 - Both trust the same internal CA
 
 **Step 1: TCP Connection**
+
 ```
 Order Service → Payment Service:5443: SYN
 Payment Service → Order Service: SYN-ACK
@@ -269,6 +393,7 @@ Order Service → Payment Service: ACK
 ```
 
 **Step 2: ClientHello (Order Service)**
+
 ```
 Order Service sends:
 - TLS version: 1.3
@@ -278,11 +403,12 @@ Order Service sends:
 ```
 
 **Step 3: ServerHello + CertificateRequest (Payment Service)**
+
 ```
 Payment Service sends:
 - Selected cipher: TLS_AES_256_GCM_SHA384
 - Key share: [ECDHE public value]
-- Certificate: 
+- Certificate:
     Subject: CN=payment-service.prod.internal
     Issuer: CN=Internal-Prod-CA
     Valid: 2024-01-15 to 2024-01-16 (24 hours)
@@ -293,6 +419,7 @@ Payment Service sends:
 ```
 
 **Step 4: Order Service Verifies Payment Service**
+
 ```
 Order Service:
 1. Check: Is payment-service.prod.internal in SANs? ✓
@@ -303,6 +430,7 @@ Order Service:
 ```
 
 **Step 5: Client Certificate (Order Service)**
+
 ```
 Order Service sends:
 - Certificate:
@@ -316,6 +444,7 @@ Order Service sends:
 ```
 
 **Step 6: Payment Service Verifies Order Service**
+
 ```
 Payment Service:
 1. Check: Is certificate from acceptable CA? Yes ✓
@@ -326,6 +455,7 @@ Payment Service:
 ```
 
 **Step 7: Encrypted Application Data**
+
 ```
 Order Service → Payment Service (encrypted):
 POST /api/v1/payments HTTP/1.1
@@ -359,7 +489,37 @@ Content-Type: application/json
 
 Modern systems use **service meshes** to handle mTLS automatically:
 
+```mermaid
+flowchart LR
+    subgraph POD1["POD 1"]
+        APP1["Application<br/>(Order Svc)<br/>[No TLS code!]<br/>[Plain HTTP]"]
+        SIDECAR1["Envoy Sidecar<br/>Proxy<br/>[Handles all<br/>mTLS magic]"]
+        APP1 -->|HTTP| SIDECAR1
+    end
+
+    SIDECAR1 -->|mTLS| SIDECAR2
+
+    subgraph POD2["POD 2"]
+        SIDECAR2["Envoy Sidecar<br/>Proxy<br/>[Terminates mTLS]"]
+        APP2["Application<br/>(Payment Svc)<br/>[No TLS code!]<br/>[Plain HTTP]"]
+        SIDECAR2 -->|HTTP| APP2
+    end
+
+    BENEFITS["Benefits:<br/>• Applications don't manage certificates<br/>• Automatic certificate rotation<br/>• Centralized policy management<br/>• Observable (metrics, tracing)"]
+
+    style POD1 fill:#e3f2fd
+    style POD2 fill:#e3f2fd
+    style APP1 fill:#fff9c4
+    style APP2 fill:#fff9c4
+    style SIDECAR1 fill:#c8e6c9
+    style SIDECAR2 fill:#c8e6c9
+    style BENEFITS fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SERVICE MESH mTLS (ISTIO)                             │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -397,9 +557,12 @@ Modern systems use **service meshes** to handle mTLS automatically:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Netflix's Approach
 
 Netflix uses mTLS extensively:
+
 - **Short-lived certificates**: 24-hour validity
 - **Automatic rotation**: No service restart needed
 - **Identity-based access**: Policies based on service identity, not IP
@@ -408,6 +571,7 @@ Netflix uses mTLS extensively:
 ### Google's BeyondCorp
 
 Google pioneered Zero Trust with mTLS:
+
 - Every service has a cryptographic identity
 - No trusted network zones
 - All traffic encrypted and authenticated
@@ -417,7 +581,37 @@ Google pioneered Zero Trust with mTLS:
 
 **SPIFFE** (Secure Production Identity Framework for Everyone) is an open standard for service identity:
 
+```mermaid
+flowchart TD
+    FORMAT["SPIFFE ID Format:<br/>spiffe://trust-domain/path"]
+
+    EXAMPLE1["Example 1:<br/>spiffe://example.com/ns/production/sa/order-service"]
+    EXAMPLE2["Example 2:<br/>spiffe://example.com/ns/staging/sa/payment-service"]
+
+    TRUST["trust-domain:<br/>Organization boundary"]
+    PATH["path:<br/>Hierarchical identity<br/>(namespace, service account)"]
+
+    SVID["SVID (SPIFFE Verifiable Identity Document):<br/>• X.509 certificate with SPIFFE ID in SAN<br/>• Short-lived (minutes to hours)<br/>• Automatically rotated"]
+
+    FORMAT --> TRUST
+    FORMAT --> PATH
+    FORMAT --> EXAMPLE1
+    FORMAT --> EXAMPLE2
+    EXAMPLE1 --> SVID
+    EXAMPLE2 --> SVID
+
+    style FORMAT fill:#e3f2fd
+    style EXAMPLE1 fill:#fff9c4
+    style EXAMPLE2 fill:#fff9c4
+    style TRUST fill:#c8e6c9
+    style PATH fill:#c8e6c9
+    style SVID fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         SPIFFE IDENTITY                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -440,6 +634,8 @@ Google pioneered Zero Trust with mTLS:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -464,7 +660,7 @@ import java.security.cert.X509Certificate;
 
 /**
  * Payment Service with mTLS enabled.
- * 
+ *
  * This service:
  * 1. Presents its own certificate to clients
  * 2. Requires clients to present a valid certificate
@@ -479,41 +675,41 @@ public class PaymentServiceApplication {
 
     /**
      * Configure Tomcat for mTLS.
-     * 
+     *
      * Key settings:
      * - key-store: Contains THIS service's private key and certificate
      * - trust-store: Contains CA certificates we trust for CLIENT verification
      * - client-auth: "need" means mTLS is REQUIRED
      */
     @Bean
-    public WebServerFactoryCustomizer<TomcatServletWebServerFactory> 
+    public WebServerFactoryCustomizer<TomcatServletWebServerFactory>
             tomcatCustomizer() {
-        
+
         return factory -> {
             Ssl ssl = new Ssl();
-            
+
             // Our identity (what we present to clients)
             ssl.setKeyStore("classpath:payment-service.p12");
             ssl.setKeyStorePassword("changeit");
             ssl.setKeyStoreType("PKCS12");
             ssl.setKeyAlias("payment-service");
-            
+
             // Who we trust (for verifying client certificates)
             ssl.setTrustStore("classpath:truststore.p12");
             ssl.setTrustStorePassword("changeit");
             ssl.setTrustStoreType("PKCS12");
-            
+
             // CRITICAL: Require client certificate
             // Options:
             // - "need": Client MUST present valid certificate (mTLS)
             // - "want": Client MAY present certificate (optional mTLS)
             // - "none": Don't request client certificate (regular TLS)
             ssl.setClientAuth(Ssl.ClientAuth.NEED);
-            
+
             // TLS configuration
             ssl.setProtocol("TLS");
             ssl.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-            
+
             factory.setSsl(ssl);
             factory.setPort(8443);
         };
@@ -532,31 +728,31 @@ class PaymentController {
     @GetMapping("/api/v1/payments")
     public String processPayment(HttpServletRequest request) {
         // Extract client certificate from request
-        X509Certificate[] certs = (X509Certificate[]) 
+        X509Certificate[] certs = (X509Certificate[])
             request.getAttribute("javax.servlet.request.X509Certificate");
-        
+
         if (certs == null || certs.length == 0) {
             // This shouldn't happen with client-auth=need
             throw new SecurityException("No client certificate provided");
         }
-        
+
         X509Certificate clientCert = certs[0];
-        
+
         // Extract client identity
         String clientDN = clientCert.getSubjectX500Principal().getName();
         String clientCN = extractCN(clientDN);
-        
+
         // Log for audit
         System.out.println("Request from: " + clientCN);
-        
+
         // Authorization: Check if this service is allowed to call us
         if (!isAuthorized(clientCN)) {
             throw new SecurityException("Service " + clientCN + " not authorized");
         }
-        
+
         return "Payment processed for caller: " + clientCN;
     }
-    
+
     private String extractCN(String dn) {
         // DN format: CN=order-service,OU=prod,O=example
         for (String part : dn.split(",")) {
@@ -566,10 +762,10 @@ class PaymentController {
         }
         return dn;
     }
-    
+
     private boolean isAuthorized(String serviceName) {
         // In production, check against policy service or config
-        return serviceName.equals("order-service") || 
+        return serviceName.equals("order-service") ||
                serviceName.equals("refund-service");
     }
 }
@@ -592,7 +788,7 @@ import java.time.Duration;
 
 /**
  * Order Service that calls Payment Service using mTLS.
- * 
+ *
  * This client:
  * 1. Presents its certificate to the server
  * 2. Verifies the server's certificate
@@ -601,65 +797,65 @@ import java.time.Duration;
 public class OrderServiceClient {
 
     private final HttpClient httpClient;
-    
+
     /**
      * Create mTLS-enabled HTTP client.
-     * 
+     *
      * @param keyStorePath Path to PKCS12 file with our private key and cert
      * @param keyStorePassword Password for the key store
      * @param trustStorePath Path to PKCS12 file with trusted CA certs
      * @param trustStorePassword Password for the trust store
      */
     public OrderServiceClient(String keyStorePath, String keyStorePassword,
-                              String trustStorePath, String trustStorePassword) 
+                              String trustStorePath, String trustStorePassword)
             throws Exception {
-        
+
         SSLContext sslContext = createMutualTLSContext(
             keyStorePath, keyStorePassword,
             trustStorePath, trustStorePassword
         );
-        
+
         this.httpClient = HttpClient.newBuilder()
             .sslContext(sslContext)
             .connectTimeout(Duration.ofSeconds(10))
             .version(HttpClient.Version.HTTP_2)
             .build();
     }
-    
+
     /**
      * Creates SSLContext configured for mTLS.
-     * 
+     *
      * The key difference from regular TLS:
      * - We provide KeyManagers (our identity) in addition to TrustManagers
      */
     private SSLContext createMutualTLSContext(
             String keyStorePath, String keyStorePassword,
             String trustStorePath, String trustStorePassword) throws Exception {
-        
+
         // Load our identity (private key + certificate)
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         try (FileInputStream fis = new FileInputStream(keyStorePath)) {
             keyStore.load(fis, keyStorePassword.toCharArray());
         }
-        
+
         // Create KeyManager with our identity
         KeyManagerFactory kmf = KeyManagerFactory.getInstance(
             KeyManagerFactory.getDefaultAlgorithm()
         );
         kmf.init(keyStore, keyStorePassword.toCharArray());
-        
+
         // Load trusted CAs (for verifying server)
         KeyStore trustStore = KeyStore.getInstance("PKCS12");
         try (FileInputStream fis = new FileInputStream(trustStorePath)) {
             trustStore.load(fis, trustStorePassword.toCharArray());
         }
-        
+
         // Create TrustManager with trusted CAs
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(
             TrustManagerFactory.getDefaultAlgorithm()
         );
         tmf.init(trustStore);
-        
+
         // Create SSL context with BOTH key managers and trust managers
         SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
         sslContext.init(
@@ -667,52 +863,52 @@ public class OrderServiceClient {
             tmf.getTrustManagers(),  // Who we trust
             new SecureRandom()
         );
-        
+
         return sslContext;
     }
-    
+
     /**
      * Call Payment Service using mTLS.
      */
-    public String processPayment(String orderId, double amount) 
+    public String processPayment(String orderId, double amount)
             throws Exception {
-        
+
         String requestBody = String.format(
-            "{\"orderId\": \"%s\", \"amount\": %.2f}", 
+            "{\"orderId\": \"%s\", \"amount\": %.2f}",
             orderId, amount
         );
-        
+
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create("https://payment-service.prod.internal:8443/api/v1/payments"))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
-        
+
         HttpResponse<String> response = httpClient.send(
             request,
             HttpResponse.BodyHandlers.ofString()
         );
-        
+
         // Log TLS session details
         response.sslSession().ifPresent(session -> {
             System.out.println("Connected to: " + session.getPeerPrincipal());
             System.out.println("Protocol: " + session.getProtocol());
             System.out.println("Cipher: " + session.getCipherSuite());
         });
-        
+
         if (response.statusCode() != 200 && response.statusCode() != 201) {
             throw new RuntimeException("Payment failed: " + response.body());
         }
-        
+
         return response.body();
     }
-    
+
     public static void main(String[] args) throws Exception {
         OrderServiceClient client = new OrderServiceClient(
             "/etc/ssl/order-service.p12", "changeit",
             "/etc/ssl/truststore.p12", "changeit"
         );
-        
+
         String result = client.processPayment("ord-123", 99.99);
         System.out.println("Payment result: " + result);
     }
@@ -732,15 +928,15 @@ server:
     key-store-password: ${SSL_KEYSTORE_PASSWORD}
     key-store-type: PKCS12
     key-alias: payment-service
-    
+
     # Trusted CAs for client verification
     trust-store: classpath:truststore.p12
     trust-store-password: ${SSL_TRUSTSTORE_PASSWORD}
     trust-store-type: PKCS12
-    
+
     # REQUIRE client certificate (mTLS)
     client-auth: need
-    
+
     # TLS settings
     protocol: TLS
     enabled-protocols: TLSv1.3,TLSv1.2
@@ -903,15 +1099,15 @@ echo "  - truststore.p12 (Trust store with CA certs)"
 
 ### Common mTLS Mistakes
 
-| Mistake | Impact | Fix |
-|---------|--------|-----|
+| Mistake                  | Impact                           | Fix                         |
+| ------------------------ | -------------------------------- | --------------------------- |
 | Long-lived service certs | Compromised cert = long exposure | Use short-lived certs (24h) |
-| Shared private keys | One compromise = all compromised | Unique key per instance |
-| No certificate rotation | Manual rotation = downtime | Automate with SPIRE/Vault |
-| Trust store too broad | Any cert from CA is trusted | Use specific trust stores |
-| No revocation checking | Compromised certs still work | Enable OCSP/CRL |
-| Hardcoded passwords | Secrets in code | Use secrets management |
-| No monitoring | Don't know when certs expire | Alert on expiration |
+| Shared private keys      | One compromise = all compromised | Unique key per instance     |
+| No certificate rotation  | Manual rotation = downtime       | Automate with SPIRE/Vault   |
+| Trust store too broad    | Any cert from CA is trusted      | Use specific trust stores   |
+| No revocation checking   | Compromised certs still work     | Enable OCSP/CRL             |
+| Hardcoded passwords      | Secrets in code                  | Use secrets management      |
+| No monitoring            | Don't know when certs expire     | Alert on expiration         |
 
 ### Certificate Rotation Challenge
 
@@ -950,12 +1146,12 @@ echo "  - truststore.p12 (Trust store with CA certs)"
 
 mTLS adds overhead compared to plain HTTP:
 
-| Aspect | Overhead | Mitigation |
-|--------|----------|------------|
-| Handshake latency | +1-2 RTT | Session resumption, TLS 1.3 |
-| CPU (encryption) | +2-5% | Hardware acceleration (AES-NI) |
-| Certificate validation | +1-5ms | OCSP stapling, caching |
-| Memory (session state) | +10-50KB per connection | Connection pooling |
+| Aspect                 | Overhead                | Mitigation                     |
+| ---------------------- | ----------------------- | ------------------------------ |
+| Handshake latency      | +1-2 RTT                | Session resumption, TLS 1.3    |
+| CPU (encryption)       | +2-5%                   | Hardware acceleration (AES-NI) |
+| Certificate validation | +1-5ms                  | OCSP stapling, caching         |
+| Memory (session state) | +10-50KB per connection | Connection pooling             |
 
 For most systems, this overhead is negligible compared to security benefits.
 
@@ -978,12 +1174,12 @@ For most systems, this overhead is negligible compared to security benefits.
 
 ### Alternatives to Consider
 
-| Alternative | Use When | Tradeoff |
-|-------------|----------|----------|
-| JWT tokens | Service identity via tokens | No transport encryption (still need TLS) |
-| API Gateway | Centralized authentication | Single point of failure |
-| Network policies | Kubernetes network isolation | No encryption, no identity |
-| VPN/WireGuard | Network-level encryption | No service identity |
+| Alternative      | Use When                     | Tradeoff                                 |
+| ---------------- | ---------------------------- | ---------------------------------------- |
+| JWT tokens       | Service identity via tokens  | No transport encryption (still need TLS) |
+| API Gateway      | Centralized authentication   | Single point of failure                  |
+| Network policies | Kubernetes network isolation | No encryption, no identity               |
+| VPN/WireGuard    | Network-level encryption     | No service identity                      |
 
 ---
 
@@ -991,26 +1187,26 @@ For most systems, this overhead is negligible compared to security benefits.
 
 ### mTLS vs JWT for Service-to-Service Auth
 
-| Aspect | mTLS | JWT |
-|--------|------|-----|
-| Identity proof | Cryptographic (certificate) | Token signature |
-| Transport security | Built-in | Requires separate TLS |
-| Revocation | CRL/OCSP | Token expiration only |
-| Performance | Handshake overhead | Token validation overhead |
-| Complexity | PKI infrastructure needed | Token issuer needed |
-| Replay protection | Session-based | Requires additional measures |
+| Aspect             | mTLS                        | JWT                          |
+| ------------------ | --------------------------- | ---------------------------- |
+| Identity proof     | Cryptographic (certificate) | Token signature              |
+| Transport security | Built-in                    | Requires separate TLS        |
+| Revocation         | CRL/OCSP                    | Token expiration only        |
+| Performance        | Handshake overhead          | Token validation overhead    |
+| Complexity         | PKI infrastructure needed   | Token issuer needed          |
+| Replay protection  | Session-based               | Requires additional measures |
 
 **Recommendation**: Use mTLS for transport + identity, JWT for authorization claims.
 
 ### mTLS vs Network Segmentation
 
-| Aspect | mTLS | Network Segmentation |
-|--------|------|---------------------|
-| Encryption | Yes | No |
-| Identity verification | Cryptographic | IP-based |
-| Lateral movement protection | Strong | Weak |
-| Cloud-native friendly | Yes | Difficult |
-| Zero Trust compatible | Yes | No |
+| Aspect                      | mTLS          | Network Segmentation |
+| --------------------------- | ------------- | -------------------- |
+| Encryption                  | Yes           | No                   |
+| Identity verification       | Cryptographic | IP-based             |
+| Lateral movement protection | Strong        | Weak                 |
+| Cloud-native friendly       | Yes           | Difficult            |
+| Zero Trust compatible       | Yes           | No                   |
 
 ---
 
@@ -1027,7 +1223,8 @@ A: API keys are shared secrets that can be stolen, leaked, or guessed. mTLS uses
 ### L5 (Mid Level) Questions
 
 **Q: How would you handle certificate rotation without downtime?**
-A: 
+A:
+
 1. Generate new certificates before old ones expire (30+ days)
 2. Update trust stores to accept both old and new CA (if CA is changing)
 3. Deploy new certificates to services gradually
@@ -1037,6 +1234,7 @@ A:
 
 **Q: How do you debug mTLS connection failures?**
 A:
+
 1. Check certificate expiration: `openssl x509 -in cert.pem -noout -dates`
 2. Verify certificate chain: `openssl verify -CAfile ca-chain.pem cert.pem`
 3. Test connection: `openssl s_client -connect host:port -cert client.pem -key client-key.pem`
@@ -1049,27 +1247,29 @@ A:
 
 **Q: Design a certificate management system for 500 microservices.**
 A:
+
 1. **Identity Provider**: SPIRE or HashiCorp Vault for automatic certificate issuance
 2. **Short-lived certificates**: 1-24 hour validity, auto-renewed
 3. **Workload identity**: Based on Kubernetes service account or cloud IAM
 4. **No secrets in containers**: Certificates mounted via CSI driver or init container
 5. **Centralized policy**: OPA or service mesh policies for authorization
-6. **Monitoring**: 
+6. **Monitoring**:
    - Certificate expiration alerts
    - Failed handshake metrics
    - Certificate issuance rate
-7. **Disaster recovery**: 
+7. **Disaster recovery**:
    - Offline root CA
    - Multiple intermediate CAs
    - Cross-region redundancy
 
 **Q: What are the security implications of using mTLS in a service mesh vs application-level mTLS?**
 A:
+
 - **Service mesh (sidecar) mTLS**:
   - Pros: Transparent to application, consistent policy, easier management
   - Cons: Traffic is plaintext between app and sidecar (localhost), sidecar compromise exposes traffic
-  
 - **Application-level mTLS**:
+
   - Pros: End-to-end encryption including within pod, application has access to peer identity
   - Cons: Each app must implement TLS, harder to manage certificates
 
@@ -1124,4 +1324,3 @@ java -Djavax.net.debug=ssl:handshake -jar app.jar
 - [HashiCorp Vault PKI](https://www.vaultproject.io/docs/secrets/pki)
 - [Google BeyondCorp](https://cloud.google.com/beyondcorp)
 - [Netflix Security Blog](https://netflixtechblog.com/tagged/security)
-

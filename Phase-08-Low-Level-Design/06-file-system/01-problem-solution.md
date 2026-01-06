@@ -107,7 +107,73 @@ System.out.println("Backup size: " + size + " bytes");
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class FileSystem {
+        - Directory root
+        - Directory currentDirectory
+        + mkdir(path) Directory
+        + touch(path) File
+        + rm(path) boolean
+        + mv(src, dest) boolean
+        + cp(src, dest) boolean
+        + ls(path) List~Entry~
+        + cd(path) boolean
+        + find(name) List~Entry~
+    }
+    
+    class Entry {
+        <<abstract>>
+        - String name
+        - Directory parent
+        - LocalDateTime createdAt
+        - LocalDateTime modifiedAt
+        - Permissions permissions
+        + getPath() String
+        + getSize() long
+        + isDirectory() boolean
+    }
+    
+    class File {
+        - byte[] content
+        - String extension
+        + read() byte[]
+        + write(byte[]) void
+        + getSize() long
+    }
+    
+    class Directory {
+        - Map~String,Entry~ children
+        + addChild(entry) void
+        + removeChild(name) void
+        + getChild(name) Entry
+        + getSize() long
+    }
+    
+    class Permissions {
+        - boolean read
+        - boolean write
+        - boolean execute
+    }
+    
+    class SearchCriteria {
+        - String name
+        - String extension
+        - long minSize
+    }
+    
+    FileSystem --> Directory
+    Entry <|-- File
+    Entry <|-- Directory
+    Entry --> Permissions
+    Directory --> Entry
+    FileSystem --> SearchCriteria
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              FILE SYSTEM                                         │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -167,6 +233,8 @@ System.out.println("Backup size: " + size + " bytes");
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Directory Tree Visualization
 

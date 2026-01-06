@@ -189,7 +189,29 @@ flowchart TB
 
 ### Search Service Architecture
 
+```mermaid
+flowchart TD
+    SearchRequest["Search Request<br/>'coffee near me'"]
+    QueryParser["Query Parser<br/>- Extract query<br/>- Parse location<br/>- Parse filters"]
+    TextSearch["Text Search (Full-text)<br/>- PostgreSQL GIN index<br/>- Name matching"]
+    GeospatialSearch["Geospatial Search<br/>- PostGIS GIST index<br/>- Proximity"]
+    ResultMerger["Result Merger<br/>- Combine results<br/>- Rank by score<br/>- Apply filters"]
+    CacheResult["Cache Result<br/>(Redis, 1h TTL)"]
+    ReturnResults["Return Results"]
+    
+    SearchRequest --> QueryParser
+    QueryParser --> TextSearch
+    QueryParser --> GeospatialSearch
+    TextSearch --> ResultMerger
+    GeospatialSearch --> ResultMerger
+    ResultMerger --> CacheResult
+    CacheResult --> ReturnResults
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              SEARCH SERVICE                                            │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -241,11 +263,44 @@ flowchart TB
                     └───────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ### Routing Engine Architecture
 
+```mermaid
+flowchart TD
+    RouteRequest["Route Request<br/>Origin → Dest"]
+    CheckCache["Check Cache<br/>(Redis)"]
+    CacheHIT["Cache HIT<br/>Return"]
+    CacheMISS["Cache MISS<br/>Calculate"]
+    LoadGraph["Load Road Network Graph<br/>(In-memory)"]
+    Dijkstra["Dijkstra Algorithm<br/>- Shortest path<br/>- Guaranteed"]
+    AStar["A* Algorithm<br/>(with heuristics)<br/>- Faster<br/>- Near-optimal"]
+    ApplyTraffic["Apply Traffic<br/>- Adjust weights<br/>- Recalculate"]
+    GeneratePolyline["Generate Polyline<br/>- Encode route<br/>- Calculate ETA"]
+    CacheRoute["Cache Route<br/>(Redis, 1h TTL)"]
+    ReturnRoute["Return Route"]
+    
+    RouteRequest --> CheckCache
+    CheckCache --> CacheHIT
+    CheckCache --> CacheMISS
+    CacheMISS --> LoadGraph
+    LoadGraph --> Dijkstra
+    LoadGraph --> AStar
+    Dijkstra --> ApplyTraffic
+    AStar --> ApplyTraffic
+    ApplyTraffic --> GeneratePolyline
+    GeneratePolyline --> CacheRoute
+    CacheRoute --> ReturnRoute
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              ROUTING ENGINE                                           │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -312,6 +367,9 @@ flowchart TB
                     ┌───────────────────┐
                     │  Return Route     │
                     └───────────────────┘
+```
+
+</details>
 ```
 
 ---

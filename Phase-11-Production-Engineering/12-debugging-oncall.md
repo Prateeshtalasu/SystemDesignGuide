@@ -116,7 +116,39 @@ Debugging is like being a **detective solving a crime**.
 
 ### Debugging Mental Model
 
+```mermaid
+flowchart TD
+    STEP1["1. DETECT<br/>Alert fires or user reports issue"]
+    STEP2["2. OBSERVE<br/>Check dashboards, logs, metrics<br/>Understand current state"]
+    STEP3["3. HYPOTHESIZE<br/>Maybe it's the database?<br/>Maybe it's a recent deployment?"]
+    STEP4["4. INVESTIGATE<br/>Check logs for that service<br/>Check metrics for anomalies<br/>Check traces for slow requests"]
+    STEP5["5. VERIFY<br/>Confirm hypothesis with evidence"]
+    STEP6["6. FIX<br/>Deploy fix or rollback"]
+    STEP7["7. VERIFY FIX<br/>Confirm issue is resolved"]
+    STEP8["8. DOCUMENT<br/>Write postmortem<br/>Update runbooks"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP7
+    STEP7 --> STEP8
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
+    style STEP6 fill:#c8e6c9
+    style STEP7 fill:#fce4ec
+    style STEP8 fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DEBUGGING PROCESS                             │
 │                                                                  │
@@ -150,6 +182,8 @@ Debugging is like being a **detective solving a crime**.
 │     Update runbooks                                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -703,6 +737,7 @@ Debugging production issues requires systematic investigation using logs, metric
 On-call requires clear processes: acknowledge alerts, assess severity, communicate, investigate using runbooks, mitigate quickly (rollback if needed), verify resolution, and document in postmortems. Use 5 Whys for root cause analysis. Postmortems should be blameless and focus on improving systems.
 
 The key insight: Good debugging is systematic, not guesswork. Use observability tools (logs, metrics, traces) to gather evidence, form hypotheses, and verify. On-call is about restoring service quickly, then finding root cause. Learn from incidents to prevent recurrence.
+
 
 
 

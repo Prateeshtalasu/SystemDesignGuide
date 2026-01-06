@@ -122,7 +122,26 @@ Think of your system as a **highway**.
 
 ### Performance Mental Model
 
+```mermaid
+flowchart TD
+    subgraph METRICS["PERFORMANCE METRICS"]
+        LATENCY["LATENCY (How fast?)<br/>├─ p50 (median): 50% faster<br/>├─ p95: 95% faster<br/>├─ p99: 99% faster<br/>└─ p99.9: 99.9% faster"]
+        THROUGHPUT["THROUGHPUT (How many?)<br/>└─ Requests per second (RPS)"]
+        ERROR["ERROR RATE (How reliable?)<br/>└─ Percentage of failed requests"]
+        RESOURCES["RESOURCE UTILIZATION (How efficient?)<br/>├─ CPU usage<br/>├─ Memory usage<br/>├─ Network I/O<br/>└─ Database connections"]
+    end
+    
+    style METRICS fill:#e3f2fd
+    style LATENCY fill:#fff9c4
+    style THROUGHPUT fill:#c8e6c9
+    style ERROR fill:#fce4ec
+    style RESOURCES fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PERFORMANCE METRICS                           │
 │                                                                  │
@@ -146,9 +165,29 @@ Think of your system as a **highway**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Types of Load Tests
 
+```mermaid
+flowchart TD
+    SMOKE["1. SMOKE TEST<br/>Purpose: Verify basic functionality<br/>Load: Minimal (1-5 users)<br/>Duration: Short (1-5 minutes)"]
+    LOAD["2. LOAD TEST<br/>Purpose: Test expected load<br/>Load: Normal production load<br/>Duration: Extended (30-60 minutes)"]
+    STRESS["3. STRESS TEST<br/>Purpose: Find breaking point<br/>Load: Beyond expected (2-10x normal)<br/>Duration: Until failure"]
+    SPIKE["4. SPIKE TEST<br/>Purpose: Test sudden traffic surge<br/>Load: Sudden increase (10x in seconds)<br/>Duration: Short burst"]
+    SOAK["5. SOAK TEST (Endurance)<br/>Purpose: Find memory leaks, degradation<br/>Load: Normal load<br/>Duration: Extended (hours/days)"]
+    
+    style SMOKE fill:#e3f2fd
+    style LOAD fill:#fff9c4
+    style STRESS fill:#c8e6c9
+    style SPIKE fill:#fce4ec
+    style SOAK fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LOAD TEST TYPES                               │
 │                                                                  │
@@ -179,13 +218,32 @@ Think of your system as a **highway**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
 
 ### Load Test Architecture
 
+```mermaid
+flowchart TD
+    GEN["Load Generator<br/>(k6, JMeter, Gatling)<br/><br/>Virtual Users: 1000<br/>Requests/sec: 5000<br/>Duration: 30 minutes"]
+    SUT["System Under Test<br/><br/>Load Balancer → App Servers → Database<br/>↓ Metrics ↓ Metrics ↓ Metrics"]
+    MON["Monitoring<br/>(Prometheus, Grafana)<br/><br/>- Response times<br/>- Error rates<br/>- Resource utilization<br/>- Throughput"]
+    
+    GEN -->|HTTP Requests| SUT
+    SUT -->|Metrics| MON
+    
+    style GEN fill:#e3f2fd
+    style SUT fill:#fff9c4
+    style MON fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LOAD TEST ARCHITECTURE                        │
 │                                                                  │
@@ -222,9 +280,35 @@ Think of your system as a **highway**.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Virtual Users Model
 
+```mermaid
+flowchart TD
+    INIT["1. INIT<br/>- Set up user data<br/>- Initialize connections"]
+    SCENARIO["2. SCENARIO EXECUTION<br/>- Login<br/>- Browse products<br/>- Add to cart<br/>- Checkout<br/>- Logout"]
+    THINK["3. THINK TIME<br/>- Pause between actions<br/>- Simulates real user behavior"]
+    ITERATE["4. ITERATION<br/>- Repeat scenario<br/>- Until test duration ends"]
+    TEARDOWN["5. TEARDOWN<br/>- Clean up resources<br/>- Close connections"]
+    
+    INIT --> SCENARIO
+    SCENARIO --> THINK
+    THINK --> ITERATE
+    ITERATE --> SCENARIO
+    ITERATE --> TEARDOWN
+    
+    style INIT fill:#e3f2fd
+    style SCENARIO fill:#fff9c4
+    style THINK fill:#c8e6c9
+    style ITERATE fill:#fce4ec
+    style TEARDOWN fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    VIRTUAL USER LIFECYCLE                        │
 │                                                                  │
@@ -252,6 +336,8 @@ Think of your system as a **highway**.
 │     - Close connections                                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

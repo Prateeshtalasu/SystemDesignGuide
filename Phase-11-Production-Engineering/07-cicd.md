@@ -162,6 +162,24 @@ CI/CD is the same:
 - "Is this safe to deploy automatically?"
 
 ```
+```mermaid
+flowchart TD
+    DEV["Developer commits code"]
+    CI["CI (Continuous Integration)<br/><br/>1. Build (compile, package)<br/>2. Unit tests<br/>3. Integration tests<br/>4. Code quality checks (linting, security)<br/><br/>If any step fails → Stop, notify developer"]
+    CD["CD (Continuous Delivery/Deployment)<br/><br/>5. Deploy to staging<br/>6. Run E2E tests<br/>7. Manual approval (if Continuous Delivery)<br/>8. Deploy to production<br/>9. Smoke tests<br/><br/>If any step fails → Rollback automatically"]
+    
+    DEV --> CI
+    CI --> CD
+    
+    style DEV fill:#e3f2fd
+    style CI fill:#fff9c4
+    style CD fill:#c8e6c9
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CI/CD PIPELINE                                │
 │                                                                  │
@@ -194,13 +212,44 @@ CI/CD is the same:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
 
 ### Pipeline Execution Model
 
+```mermaid
+flowchart TD
+    STEP1["1. Trigger Event<br/>- Push to branch<br/>- Pull request opened<br/>- Scheduled (cron)<br/>- Manual trigger"]
+    STEP2["2. Pipeline Definition Loaded<br/>- Read from repository<br/>- Parse YAML/DSL<br/>- Validate syntax"]
+    STEP3["3. Agent/Runner Provisioned<br/>- Allocate compute resource<br/>- Install dependencies<br/>- Clone repository"]
+    STEP4["4. Stages Execute Sequentially<br/>Stage 1: Build<br/>Stage 2: Test<br/>Stage 3: Deploy"]
+    STEP5["5. Artifacts Stored<br/>- Build artifacts (JARs, Docker images)<br/>- Test reports<br/>- Logs"]
+    STEP6["6. Notifications Sent<br/>- Success: Slack, email<br/>- Failure: PagerDuty, Slack"]
+    STEP7["7. Cleanup<br/>- Remove temporary files<br/>- Release agent/runner"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP7
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#c8e6c9
+    style STEP4 fill:#fce4ec
+    style STEP5 fill:#fff9c4
+    style STEP6 fill:#c8e6c9
+    style STEP7 fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PIPELINE EXECUTION                            │
 │                                                                  │
@@ -251,9 +300,28 @@ CI/CD is the same:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Pipeline State Management
 
+```mermaid
+stateDiagram-v2
+    [*] --> START
+    START --> QUEUED
+    QUEUED --> RUNNING
+    RUNNING --> SUCCESS
+    RUNNING --> FAILED
+    FAILED --> [*]
+    QUEUED --> CANCELLED
+    RUNNING --> CANCELLED
+    CANCELLED --> [*]
+    SUCCESS --> [*]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Pipeline State Machine:
 
     START
@@ -269,6 +337,8 @@ Pipeline State Machine:
       └───────── CANCELLED
 ```
 
+</details>
+
 **State transitions**:
 
 - **QUEUED**: Waiting for available runner
@@ -279,7 +349,27 @@ Pipeline State Machine:
 
 ### Artifact Management
 
+```mermaid
+flowchart TD
+    BUILD["Build Stage"]
+    JAR["JAR file<br/>(myapp.jar)<br/>Created during build"]
+    REPO["Artifact Repository<br/>Stored with metadata:<br/>- Build number<br/>- Git commit SHA<br/>- Timestamp<br/>- Build environment"]
+    DEPLOY["Deployment Target<br/>Same artifact used in<br/>all environments"]
+    
+    BUILD --> JAR
+    JAR -->|Uploaded to artifact store| REPO
+    REPO -->|Downloaded in deploy stage| DEPLOY
+    
+    style BUILD fill:#e3f2fd
+    style JAR fill:#fff9c4
+    style REPO fill:#c8e6c9
+    style DEPLOY fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ARTIFACT LIFECYCLE                            │
 │                                                                  │
@@ -309,6 +399,8 @@ Pipeline State Machine:
 │  └──────────────┘                                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -694,7 +786,44 @@ node {
 
 ### Blue-Green Deployment
 
+```mermaid
+flowchart LR
+    subgraph BEFORE["Before Deployment"]
+        LB1["Load Balancer"]
+        BLUE1["Blue (v1.0.0)<br/>3 instances"]
+        GREEN1["Green (v2.0.0)<br/>0 instances"]
+        LB1 --> BLUE1
+    end
+    
+    subgraph DURING["During Deployment"]
+        LB2["Load Balancer"]
+        BLUE2["Blue (v1.0.0)<br/>3 instances"]
+        GREEN2["Green (v2.0.0)<br/>3 instances<br/>← Deploy new version"]
+        LB2 --> BLUE2
+    end
+    
+    subgraph AFTER["After Switch"]
+        LB3["Load Balancer"]
+        BLUE3["Blue (v1.0.0)<br/>0 instances<br/>← Keep for rollback"]
+        GREEN3["Green (v2.0.0)<br/>3 instances"]
+        LB3 --> GREEN3
+    end
+    
+    style LB1 fill:#e3f2fd
+    style BLUE1 fill:#2196f3
+    style GREEN1 fill:#4caf50
+    style LB2 fill:#e3f2fd
+    style BLUE2 fill:#2196f3
+    style GREEN2 fill:#4caf50
+    style LB3 fill:#e3f2fd
+    style BLUE3 fill:#2196f3
+    style GREEN3 fill:#4caf50
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    BLUE-GREEN DEPLOYMENT                         │
 │                                                                  │
@@ -746,6 +875,8 @@ node {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **Implementation in CI/CD**:
 
 ```yaml
@@ -778,7 +909,35 @@ node {
 
 ### Canary Deployment
 
+```mermaid
+flowchart TD
+    LB["Load Balancer"]
+    STABLE["Stable (v1.0.0)<br/>27 pods"]
+    CANARY["Canary (v2.0.0)<br/>3 pods"]
+    MONITOR["Step 2: Monitor metrics (5 min)<br/>- Error rate: OK<br/>- Latency: OK<br/>- CPU/Memory: OK"]
+    STEP3["Step 3: Increase to 50%"]
+    STEP4["Step 4: Monitor (5 min)"]
+    STEP5["Step 5: Increase to 100%"]
+    STEP6["Step 6: Remove old version"]
+    
+    LB -->|90%| STABLE
+    LB -->|10%| CANARY
+    CANARY --> MONITOR
+    MONITOR --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    
+    style LB fill:#e3f2fd
+    style STABLE fill:#2196f3
+    style CANARY fill:#ff9800
+    style MONITOR fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      CANARY DEPLOYMENT                           │
 │                                                                  │
@@ -808,6 +967,8 @@ node {
 │  Step 6: Remove old version                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Implementation with Istio**:
 

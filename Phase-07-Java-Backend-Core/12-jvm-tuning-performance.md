@@ -14,7 +14,30 @@ Before diving into JVM Tuning, you need to understand:
 
 ## 1️⃣ JVM Memory Architecture
 
+```mermaid
+flowchart TD
+    subgraph JVM["JVM PROCESS"]
+        subgraph Heap["HEAP (-Xmx, -Xms)"]
+            subgraph Young["YOUNG GENERATION (-Xmn)"]
+                Eden["EDEN"]
+                S0["Survivor0"]
+                S1["Survivor1"]
+            end
+            Old["OLD GENERATION<br/>(Long-lived objects)"]
+        end
+        
+        Metaspace["METASPACE<br/>Class metadata, method bytecode, static variables<br/>(-XX:MetaspaceSize, -XX:MaxMetaspaceSize)"]
+        
+        Native["NATIVE MEMORY<br/>Thread stacks (-Xss), JNI, Direct buffers"]
+        
+        CodeCache["CODE CACHE<br/>JIT compiled code<br/>(-XX:ReservedCodeCacheSize)"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JVM MEMORY ARCHITECTURE                               │
 │                                                                          │
@@ -54,6 +77,8 @@ Before diving into JVM Tuning, you need to understand:
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -182,7 +207,24 @@ Before diving into JVM Tuning, you need to understand:
 
 ### How JIT Works
 
+```mermaid
+flowchart TD
+    Bytecode["BYTECODE"]
+    Interpreter["INTERPRETER<br/>Executes bytecode directly<br/>(slow, but no compilation delay)"]
+    C1["C1 COMPILER (Client)<br/>Quick compilation, basic optimizations<br/>- Inlining<br/>- Simple dead code elimination<br/>- Basic loop optimizations"]
+    C2["C2 COMPILER (Server)<br/>Aggressive optimizations<br/>(takes longer to compile)<br/>- Advanced inlining<br/>- Escape analysis<br/>- Loop unrolling<br/>- Vectorization (SIMD)<br/>- Dead code elimination<br/>- Speculative optimizations"]
+    
+    Bytecode --> Interpreter
+    Interpreter -->|Method called frequently (profiling)| C1
+    C1 -->|Method still hot (more profiling data)| C2
+    
+    Tiered["TIERED COMPILATION (Default):<br/>Level 0: Interpreter<br/>Level 1: C1 with full optimization (no profiling)<br/>Level 2: C1 with invocation counters<br/>Level 3: C1 with full profiling<br/>Level 4: C2 with full optimization"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JIT COMPILATION TIERS                                 │
 │                                                                          │
@@ -225,6 +267,8 @@ Before diving into JVM Tuning, you need to understand:
 │   Level 4: C2 with full optimization                                   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Key JIT Optimizations
@@ -387,7 +431,39 @@ jvisualvm
 
 ## 5️⃣ Flame Graphs
 
+```mermaid
+flowchart TD
+    Main["main()"]
+    
+    PO["processOrders()"]
+    GR["generateReport()"]
+    
+    VO["validateOrder()"]
+    SO["saveOrder()"]
+    QD["queryDatabase()"]
+    
+    Check["check()"]
+    Write["write()"]
+    ES["executeSQL()"]
+    
+    Main --> PO
+    Main --> GR
+    
+    PO --> VO
+    PO --> SO
+    GR --> QD
+    
+    VO --> Check
+    SO --> Write
+    QD --> ES
+    
+    Guide["HOW TO READ:<br/>- X-axis: Percentage of samples (width = time spent)<br/>- Y-axis: Stack depth (bottom = entry point, top = leaf function)<br/>- Wide boxes = Hot spots (where time is spent)<br/>- Narrow boxes = Quick functions<br/><br/>WHAT TO LOOK FOR:<br/>- Wide plateaus at top = Time spent in that specific function<br/>- Wide boxes anywhere = Significant time consumers<br/>- Deep stacks = Many nested calls"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    READING FLAME GRAPHS                                  │
 │                                                                          │
@@ -416,6 +492,8 @@ jvisualvm
 │   - Deep stacks = Many nested calls                                    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -643,7 +721,48 @@ java \
 
 ## 8️⃣ Troubleshooting Checklist
 
+```mermaid
+flowchart TD
+    subgraph CPU["HIGH CPU USAGE"]
+        C1["Check thread dump for busy threads"]
+        C2["Profile with async-profiler (CPU mode)"]
+        C3["Look for infinite loops, inefficient algorithms"]
+        C4["Check for excessive GC (jstat -gc)"]
+    end
+    
+    subgraph Memory["HIGH MEMORY USAGE"]
+        M1["Take heap dump (jcmd <pid> GC.heap_dump)"]
+        M2["Analyze with Eclipse MAT or VisualVM"]
+        M3["Look for memory leaks (retained objects)"]
+        M4["Check GC logs for increasing heap after Full GC"]
+    end
+    
+    subgraph GC["LONG GC PAUSES"]
+        G1["Check GC logs for pause times"]
+        G2["Consider switching GC (G1 → ZGC for lower latency)"]
+        G3["Tune GC parameters (-XX:MaxGCPauseMillis)"]
+        G4["Reduce allocation rate (profile allocations)"]
+    end
+    
+    subgraph Slow["SLOW RESPONSE TIMES"]
+        S1["Profile with JFR or async-profiler"]
+        S2["Check for lock contention (async-profiler lock mode)"]
+        S3["Review database queries (slow query log)"]
+        S4["Check external service latencies"]
+    end
+    
+    subgraph OOM["OUTOFMEMORYERROR"]
+        O1["Heap space: Increase -Xmx or fix memory leak"]
+        O2["Metaspace: Increase -XX:MaxMetaspaceSize"]
+        O3["Direct buffer: Increase -XX:MaxDirectMemorySize"]
+        O4["Unable to create thread: Reduce -Xss or increase ulimit"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PERFORMANCE TROUBLESHOOTING                           │
 │                                                                          │
@@ -683,6 +802,8 @@ java \
 │   □ Unable to create thread: Reduce -Xss or increase ulimit           │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

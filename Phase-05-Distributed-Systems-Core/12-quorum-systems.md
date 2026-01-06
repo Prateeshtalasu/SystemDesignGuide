@@ -1320,7 +1320,37 @@ void runAntiEntropy() {
 **A**: Global quorum requires careful design to balance latency, consistency, and availability.
 
 **Architecture**:
+```mermaid
+flowchart TB
+    subgraph Regions["Global Regions"]
+        subgraph USEast["US-East"]
+            R1[R1]
+            R2[R2]
+        end
+        subgraph USWest["US-West"]
+            R3[R3]
+            R4[R4]
+        end
+        subgraph EUWest["EU-West"]
+            R5[R5]
+            R6[R6]
+        end
+        subgraph APACTokyo["APAC-Tokyo"]
+            R7[R7]
+            R8[R8]
+        end
+        subgraph APACSydney["APAC-Sydney"]
+            R9[R9]
+            R10[R10]
+        end
+    end
+    note1["N = 10 replicas (2 per region)"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Global Regions                           │
 │                                                              │
@@ -1332,6 +1362,7 @@ void runAntiEntropy() {
 │  N = 10 replicas (2 per region)                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Design Decisions**:
 
@@ -1433,7 +1464,18 @@ void handlePartition() {
 **A**: Tunable consistency allows per-query consistency level selection.
 
 **Architecture**:
+```mermaid
+flowchart TD
+    Client["Client<br/>query.setConsistency(QUORUM)"] --> Coordinator["Coordinator<br/>- Parse consistency level<br/>- Calculate required replicas<br/>- Route to replicas<br/>- Wait for required responses"]
+    Coordinator --> R1[Replica 1]
+    Coordinator --> R2[Replica 2]
+    Coordinator --> R3[Replica 3]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Client                                  │
 │  query.setConsistency(QUORUM)                               │
@@ -1454,6 +1496,7 @@ void handlePartition() {
      │Replica 1│     │Replica 2│     │Replica 3│
      └─────────┘     └─────────┘     └─────────┘
 ```
+</details>
 
 **Implementation**:
 
@@ -1602,7 +1645,30 @@ In production, systems like Cassandra and DynamoDB offer **tunable consistency**
 
 ## Quick Reference Card
 
-```
+| Category | Term/Config | Description |
+|----------|-------------|-------------|
+| **QUORUM SYSTEMS** | N (Replicas) | Total number of replicas |
+| | R (Read Quorum) | Replicas to read from |
+| | W (Write Quorum) | Replicas to write to |
+| | Quorum | Majority = floor(N/2) + 1 |
+| **CONSISTENCY RULE** | R + W > N | Strong consistency guaranteed |
+| | R + W ≤ N | Eventual consistency only |
+| **COMMON CONFIGURATIONS** | N=3, R=2, W=2 | Balanced, tolerates 1 failure |
+| | N=3, R=1, W=3 | Fast reads, slow writes |
+| | N=3, R=3, W=1 | Slow reads, fast writes |
+| | N=5, R=3, W=3 | Tolerates 2 failures |
+| **AVAILABILITY** | Read available | If ≥ R replicas up |
+| | Write available | If ≥ W replicas up |
+| | Max failures | min(N-R, N-W) for full operation |
+| **CASSANDRA LEVELS** | ONE | Single replica (fastest) |
+| | QUORUM | Majority of replicas |
+| | ALL | All replicas (slowest) |
+| | LOCAL_QUORUM | Majority in local DC |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    QUORUM SYSTEMS                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -1639,4 +1705,5 @@ In production, systems like Cassandra and DynamoDB offer **tunable consistency**
 │ LOCAL_QUORUM       │ Majority in local DC                   │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 

@@ -21,7 +21,37 @@ If you understand that multiple servers can have different cached versions of th
 
 You have an e-commerce site with 3 servers. A product's price changes from $100 to $80.
 
+```mermaid
+flowchart LR
+    Update["Time: 10:00:00 - Admin updates price: $100 → $80"]
+    
+    subgraph S1["Server 1 (updated)"]
+        C1["Cache:<br/>price = $80"]
+    end
+    
+    subgraph S2["Server 2 (stale)"]
+        C2["Cache:<br/>price = $100"]
+    end
+    
+    subgraph S3["Server 3 (stale)"]
+        C3["Cache:<br/>price = $100"]
+    end
+    
+    U1["User A<br/>sees $80<br/>✅ Correct"]
+    U2["User B<br/>sees $100<br/>❌ Wrong"]
+    U3["User C<br/>sees $100<br/>❌ Wrong"]
+    
+    C1 --> U1
+    C2 --> U2
+    C3 --> U3
+    
+    Problem["User B adds to cart at $100<br/>Checkout shows $80<br/>User B is confused and angry!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE COHERENCY PROBLEM                                 │
 │                                                                          │
@@ -42,6 +72,7 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   User B is confused and angry!                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### What is Cache Coherency?
 
@@ -51,7 +82,25 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 
 ### The Coherency Problem in Distributed Systems
 
+```mermaid
+flowchart TD
+    Title["Classic Problem: Update arrives at different times"]
+    
+    T1["10:00:00.000<br/>Database updated: price = $80"]
+    T2["10:00:00.001<br/>Invalidation sent to all caches"]
+    T3["10:00:00.002<br/>Server 1 receives invalidation → Cache cleared"]
+    T4["10:00:00.003<br/>User on Server 2 requests product<br/>Server 2 hasn't received invalidation yet!<br/>Returns stale $100 from cache"]
+    T5["10:00:00.005<br/>Server 2 receives invalidation → Cache cleared<br/>(Too late, user already saw $100)"]
+    
+    T1 --> T2 --> T3 --> T4 --> T5
+    
+    Note["The window between update and invalidation = Inconsistency window"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    WHY COHERENCY IS HARD                                 │
 │                                                                          │
@@ -76,6 +125,7 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   The window between update and invalidation = Inconsistency window     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Real Examples of Coherency Failures
 
@@ -91,7 +141,38 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 
 ### The Restaurant Menu Board Analogy
 
+```mermaid
+flowchart TD
+    subgraph Without["WITHOUT COHERENCY"]
+        HO1["Head Office: Burger is now $8 (was $10)"]
+        LA1["Location A<br/>Burger $8<br/>(Updated)"]
+        LB1["Location B<br/>Burger $10<br/>(Not yet)"]
+        LC1["Location C<br/>Burger $10<br/>(Not yet)"]
+        Problem1["Customer at B orders at $10, expects $8 like they saw online"]
+    end
+    
+    subgraph With["WITH COHERENCY"]
+        HO2["Head Office: Burger is now $8"]
+        Broadcast["CENTRAL BROADCAST SYSTEM<br/>All locations receive message within seconds<br/>All update their menu boards simultaneously"]
+        LA2["Location A<br/>Burger $8"]
+        LB2["Location B<br/>Burger $8"]
+        LC2["Location C<br/>Burger $8"]
+        Success["(All consistent!)"]
+        
+        HO2 -->|"IMMEDIATELY broadcasts<br/>Update your burger price!"| Broadcast
+        Broadcast --> LA2
+        Broadcast --> LB2
+        Broadcast --> LC2
+        LA2 --> Success
+        LB2 --> Success
+        LC2 --> Success
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE MENU BOARD ANALOGY                                │
 │                                                                          │
@@ -135,6 +216,7 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -142,7 +224,30 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 
 ### Coherency Models
 
+```mermaid
+flowchart TD
+    subgraph Strong["STRONG COHERENCY"]
+        S1["All caches always have the same value<br/>Write completes only when all caches updated<br/>High latency, high consistency"]
+        S2["Write: Update DB → Update ALL caches → Acknowledge"]
+    end
+    
+    subgraph Eventual["EVENTUAL COHERENCY"]
+        E1["Caches converge to same value eventually<br/>Write completes immediately<br/>Low latency, temporary inconsistency"]
+        E2["Write: Update DB → Acknowledge (returns here) → Async invalidate caches"]
+    end
+    
+    subgraph RYW["READ-YOUR-WRITES"]
+        R1["A user always sees their own writes<br/>Other users may see stale data temporarily"]
+        R2["Write: Update DB → Update LOCAL cache → Acknowledge"]
+        R3["Async invalidate other caches"]
+        R2 --> R3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE COHERENCY MODELS                                │
 │                                                                          │
@@ -178,12 +283,32 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Coherency Protocols
 
 **Protocol 1: Invalidation-Based**
 
+```mermaid
+flowchart LR
+    Title["On Write:<br/>1. Update database<br/>2. Send invalidation message to all caches<br/>3. Each cache deletes the entry<br/>4. Next read fetches fresh data"]
+    
+    S1["Server 1"]
+    Bus["Message Bus"]
+    S2["Server 2, 3, ..."]
+    
+    S1 -->|"Update DB"| Bus
+    S1 -->|"INVALIDATE product:123"| Bus
+    Bus -->|"DEL product:123"| S2
+    
+    Pros["Pros: Simple, low bandwidth"]
+    Cons["Cons: Next read causes cache miss"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    INVALIDATION PROTOCOL                                 │
 │                                                                          │
@@ -209,10 +334,30 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   Cons: Next read causes cache miss                                     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Protocol 2: Update-Based**
 
+```mermaid
+flowchart LR
+    Title["On Write:<br/>1. Update database<br/>2. Send new value to all caches<br/>3. Each cache updates its entry"]
+    
+    S1["Server 1"]
+    Bus["Message Bus"]
+    S2["Server 2, 3, ..."]
+    
+    S1 -->|"Update DB"| Bus
+    S1 -->|"UPDATE product:123 = {new data}"| Bus
+    Bus -->|"SET product:123 = {new data}"| S2
+    
+    Pros["Pros: No cache miss after update"]
+    Cons["Cons: High bandwidth (sending full objects), ordering issues"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    UPDATE PROTOCOL                                       │
 │                                                                          │
@@ -238,10 +383,33 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   Cons: High bandwidth (sending full objects), ordering issues          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Protocol 3: Version-Based**
 
+```mermaid
+flowchart TD
+    Entry["Cache Entry:<br/>key: product:123<br/>value: {...}<br/>version: 5"]
+    
+    subgraph Read["On Read"]
+        R1["1. Get from cache"]
+        R2["2. Check version against database (lightweight query)"]
+        R3["3. If version matches, return cached value"]
+        R4["4. If version differs, invalidate and fetch fresh"]
+        
+        R1 --> R2 --> R3
+        R2 --> R4
+    end
+    
+    Pros["Pros: No coordination needed, works with network partitions"]
+    Cons["Cons: Extra database call to check version"]
+    Opt["Optimization: Check version periodically or on suspicious operations"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VERSION-BASED PROTOCOL                                │
 │                                                                          │
@@ -265,6 +433,7 @@ You have an e-commerce site with 3 servers. A product's price changes from $100 
 │   Optimization: Check version periodically or on suspicious operations  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -353,7 +522,37 @@ Inconsistency window: ~10ms (vs ~1 second without protocol)
 
 ### Facebook's Cache Coherency
 
+```mermaid
+flowchart TD
+    Problem["Problem: 1000+ Memcached servers across regions"]
+    Solution["Solution: McSqueal + Remote Markers"]
+    
+    Steps["1. McSqueal reads MySQL binlog<br/>2. Extracts changed rows<br/>3. Sends invalidations to all Memcached servers"]
+    
+    Markers["Remote Markers (for cross-region):<br/>- When data changes in Region A<br/>- Set a marker in Region B's Memcached<br/>- Marker says: This data is being updated, refresh from DB<br/>- Prevents returning stale data during replication lag"]
+    
+    subgraph RegionA["Region A (Primary)"]
+        MySQL1["MySQL (Primary)"]
+        McSqueal["McSqueal"]
+        MemA["Memcached A<br/>(invalidated)"]
+        
+        MySQL1 -->|"binlog"| McSqueal
+        McSqueal --> MemA
+    end
+    
+    subgraph RegionB["Region B (Replica)"]
+        MySQL2["MySQL (Replica)"]
+        MemB["Memcached B<br/>(marker: refresh from DB)"]
+    end
+    
+    MySQL1 -->|"Replication"| MySQL2
+    McSqueal -->|"Set remote marker"| MemB
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    FACEBOOK'S APPROACH                                   │
 │                                                                          │
@@ -391,6 +590,7 @@ Inconsistency window: ~10ms (vs ~1 second without protocol)
 │   └───────────────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Netflix's Approach
 

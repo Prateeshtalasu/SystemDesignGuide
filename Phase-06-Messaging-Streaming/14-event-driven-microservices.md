@@ -21,7 +21,24 @@ Before diving into event-driven microservices, you should understand:
 
 In a microservices architecture, services need to communicate. The naive approach causes problems:
 
+```mermaid
+flowchart LR
+  subgraph Synchronous_Microservices_Problems
+    Order["Order Service"]
+    Payment["Payment Service"]
+    Inventory["Inventory Service"]
+    Order --> Payment --> Inventory
+    P1["Problem 1: Tight Coupling"]
+    P2["Problem 2: Cascading Failures"]
+    P3["Problem 3: Latency Accumulation (50+100+80=230ms)"]
+    P4["Problem 4: Scalability (multiplicative)"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              SYNCHRONOUS MICROSERVICES PROBLEMS              │
 │                                                              │
@@ -52,9 +69,29 @@ In a microservices architecture, services need to communicate. The naive approac
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Event-Driven Solution
 
+```mermaid
+flowchart TD
+  subgraph Event_Driven_Architecture
+    Order["Order Service"]
+    Bus["Event Bus (Kafka)"]
+    Payment["Payment Service"]
+    Inventory["Inventory Service"]
+    Email["Email Service"]
+    Order -- "OrderCreated" --> Bus
+    Bus --> Payment
+    Bus --> Inventory
+    Bus --> Email
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVENT-DRIVEN ARCHITECTURE                       │
 │                                                              │
@@ -81,6 +118,8 @@ In a microservices architecture, services need to communicate. The naive approac
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### What Event-Driven Architecture Enables
 
 1. **Loose Coupling**: Services don't know about each other
@@ -95,7 +134,19 @@ In a microservices architecture, services need to communicate. The naive approac
 
 ### The Newspaper Analogy
 
+```mermaid
+flowchart TD
+  subgraph Newspaper_Analogy
+    Sync["Synchronous (Phone calls):\n- Reporter calls editor to printer\n- Must be available at same time\n- One unavailable = blocked"]
+    EDA["Event-driven (Newspaper):\n- Reporter publishes to newspaper\n- Readers subscribe and read later\n- Producer doesn't know readers"]
+    Types["Event types:\n- Event Notification (headline)\n- Event-Carried State Transfer (full article)"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              NEWSPAPER ANALOGY                               │
 │                                                              │
@@ -124,9 +175,22 @@ In a microservices architecture, services need to communicate. The naive approac
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Event Types
 
+```mermaid
+flowchart TD
+  subgraph Event_Types
+    EN["Event Notification:\n- 'Something happened, here's the ID'\n- Consumer fetches details\nPros: small, simple\nCons: requires callback, coupling"]
+    ECST["Event-Carried State Transfer:\n- 'Here's all the data'\nPros: decoupled, consumer autonomy\nCons: larger events, duplication"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVENT TYPES                                     │
 │                                                              │
@@ -158,6 +222,8 @@ In a microservices architecture, services need to communicate. The naive approac
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How It Works Internally
@@ -166,7 +232,24 @@ In a microservices architecture, services need to communicate. The naive approac
 
 In choreography, services react to events without central coordination.
 
+```mermaid
+flowchart LR
+  subgraph Event_Choreography
+    Order["Order Service"]
+    Payment["Payment Service"]
+    Inventory["Inventory Service"]
+    Shipping["Shipping Service"]
+    Order -- "OrderCreated" --> Payment
+    Payment -- "PaymentCompleted" --> Inventory
+    Inventory -- "InventoryReserved" --> Shipping
+    Shipping -- "ShipmentScheduled" --> Order
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVENT CHOREOGRAPHY                              │
 │                                                              │
@@ -207,11 +290,35 @@ In choreography, services react to events without central coordination.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Event Orchestration
 
 In orchestration, a central coordinator directs the flow.
 
+```mermaid
+flowchart TD
+  subgraph Event_Orchestration
+    Orchestrator["Order Saga Orchestrator\nState: CREATED to PAYMENT_PENDING to INVENTORY_PENDING to SHIPPING_PENDING to COMPLETED"]
+    Payment["Payment Service"]
+    Inventory["Inventory Service"]
+    Shipping["Shipping Service"]
+    Order["Order Service"]
+    Orchestrator -- "Command" --> Payment
+    Orchestrator -- "Command" --> Inventory
+    Orchestrator -- "Command" --> Shipping
+    Orchestrator -- "Command" --> Order
+    Payment -- "Reply" --> Orchestrator
+    Inventory -- "Reply" --> Orchestrator
+    Shipping -- "Reply" --> Orchestrator
+    Order -- "Reply" --> Orchestrator
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVENT ORCHESTRATION                             │
 │                                                              │
@@ -248,11 +355,29 @@ In orchestration, a central coordinator directs the flow.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Eventual Consistency
 
 Event-driven systems are eventually consistent:
 
+```mermaid
+sequenceDiagram
+  participant Order as Order Service
+  participant Kafka as Event Bus (Kafka)
+  participant Inventory as Inventory Service
+  Order->>Order: Create Order O123 (CREATED)
+  Order->>Kafka: Publish event
+  Kafka-->>Inventory: Deliver event
+  Inventory->>Inventory: Reserve for O123
+  Note over Order,Inventory: Inconsistency window: 0-50ms\n- Order exists in Order Service\n- Inventory not updated yet
+  Note over Order,Inventory: Handling:\n1) Accept brief inconsistency\n2) Compensate on problems\n3) Read from event store\n4) UI: Processing...
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              EVENTUAL CONSISTENCY                            │
 │                                                              │
@@ -279,11 +404,26 @@ Event-driven systems are eventually consistent:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Compensating Transactions
 
 When something fails, we need to undo previous steps:
 
+```mermaid
+flowchart TD
+  subgraph Compensating_Transactions
+    HP["Happy Path:\n1) Create Order (OK)\n2) Charge Payment (OK)\n3) Reserve Inventory (OK)\n4) Schedule Shipping (OK)\nto Order Complete"]
+    F3["Failure at Step 3:\nReserve Inventory (FAIL - out of stock)"]
+    C1["Compensation:\n- Publish InventoryReservationFailed\n- Payment refunds customer\n- Order cancels order"]
+    Map["Compensation Map:\nCreate Order to Cancel Order\nCharge Payment to Refund Payment\nReserve Inventory to Release Inventory\nSchedule Shipping to Cancel Shipment"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              COMPENSATING TRANSACTIONS                       │
 │                                                              │
@@ -319,6 +459,8 @@ When something fails, we need to undo previous steps:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 4️⃣ Simulation-First Explanation
@@ -336,7 +478,33 @@ Let's trace through an order flow in an event-driven system.
 
 ### Happy Path
 
+```mermaid
+sequenceDiagram
+  participant Customer
+  participant Order as Order Service
+  participant Payment as Payment Service
+  participant Inventory as Inventory Service
+  participant Notification as Notification Service
+  participant Analytics as Analytics Service
+  Customer->>Order: Place Order
+  Order->>Order: Create order (PENDING)
+  Order-->>Payment: OrderCreated
+  Order-->>Analytics: OrderCreated
+  Analytics->>Analytics: Record analytics
+  Payment->>Payment: Charge $100
+  Payment-->>Inventory: PaymentCompleted
+  Payment-->>Notification: PaymentCompleted
+  Inventory->>Inventory: Reserve 2 items
+  Inventory-->>Order: InventoryReserved
+  Order->>Order: Update status CONFIRMED
+  Order-->>Notification: OrderConfirmed
+  Notification->>Notification: Send emails
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              HAPPY PATH FLOW                                 │
 │                                                              │
@@ -381,9 +549,36 @@ Let's trace through an order flow in an event-driven system.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Failure Path with Compensation
 
+```mermaid
+sequenceDiagram
+  participant Customer
+  participant Order as Order Service
+  participant Payment as Payment Service
+  participant Inventory as Inventory Service
+  participant Notification as Notification Service
+  Customer->>Order: Place Order
+  Order->>Order: Create order (PENDING)
+  Order-->>Payment: OrderCreated
+  Payment->>Payment: Charge $100 ✓
+  Payment-->>Inventory: PaymentCompleted
+  Inventory->>Inventory: Reserve items (FAIL)
+  Inventory-->>Payment: InventoryReservationFailed
+  Inventory-->>Order: InventoryReservationFailed
+  Payment->>Payment: Refund customer $100
+  Payment-->>Order: PaymentRefunded
+  Order->>Order: Update status CANCELLED
+  Order-->>Notification: OrderCancelled
+  Notification->>Notification: Send cancellation email
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              FAILURE PATH FLOW                               │
 │                                                              │
@@ -422,6 +617,8 @@ Let's trace through an order flow in an event-driven system.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -946,7 +1143,21 @@ public void handleEvent(OrderCreated event) {
 
 ### When to Use Each
 
+```mermaid
+flowchart TD
+  A["Need immediate response?"]
+  A -- "Yes" --> B["Synchronous HTTP"]
+  A -- "No" --> C["Need to coordinate multiple services?"]
+  C -- "No" --> D["Simple async events"]
+  C -- "Yes" --> E["Need central visibility?"]
+  E -- "Yes" --> F["Saga orchestration"]
+  E -- "No" --> G["Saga choreography"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              PATTERN SELECTION                               │
 │                                                              │
@@ -960,6 +1171,8 @@ public void handleEvent(OrderCreated event) {
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -1058,7 +1271,24 @@ True exactly-once delivery is impossible, but we can achieve exactly-once semant
 **Answer:**
 Architecture:
 
+```mermaid
+flowchart LR
+  APIGW["API Gateway"] --> Order["Order Service"]
+  subgraph Kafka_Cluster ["Kafka Cluster (Event Bus)"]
+    K[(Kafka)]
+  end
+  Order --> K
+  K --> Payment["Payment Service"]
+  K --> Inventory["Inventory Service"]
+  K --> Shipping["Shipping Service"]
+  K --> Notification["Notification Service"]
+  K --> Analytics["Analytics Service"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    EVENT-DRIVEN ORDER SYSTEM                 │
 │                                                              │
@@ -1081,6 +1311,8 @@ Architecture:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 **Key decisions:**
 
@@ -1115,7 +1347,22 @@ Event-driven microservices communicate through events rather than direct calls, 
 
 ## Quick Reference Card
 
+```mermaid
+flowchart TD
+  subgraph Cheat_Sheet ["Event-Driven Microservices Cheat Sheet"]
+    ET["Event Types:\n- Notification (ID only)\n- State Transfer (full payload)"]
+    CP["Coordination Patterns:\n- Choreography\n- Orchestration"]
+    C["Consistency:\n- Eventual\n- Compensation"]
+    R["Reliability Patterns:\n- Outbox\n- Inbox\n- Saga"]
+    FH["Failure Handling:\n- Retry with backoff\n- Compensate\n- DLQ"]
+    WTU["When to Use:\n+ Loose coupling\n+ Independent scaling\n+ Eventual consistency\n- Immediate consistency\n- Simple request-response"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           EVENT-DRIVEN MICROSERVICES CHEAT SHEET             │
 ├─────────────────────────────────────────────────────────────┤
@@ -1149,4 +1396,6 @@ Event-driven microservices communicate through events rather than direct calls, 
 │   ✗ Simple request-response                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 

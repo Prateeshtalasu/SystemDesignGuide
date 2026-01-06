@@ -53,7 +53,32 @@ void deposit(String accountHolder, double amount) {
 
 In the 1960s-1970s, programming was **procedural**:
 
+```mermaid
+flowchart LR
+    subgraph Data["Data"]
+        AB["account_balance"]
+        AH["account_holder"]
+        AT["account_type"]
+        IR["interest_rate"]
+    end
+    
+    subgraph Functions["Functions"]
+        D["deposit()"]
+        W["withdraw()"]
+        T["transfer()"]
+        CI["calculate_interest()"]
+    end
+    
+    Data -.->|"Any function can access any data"| Functions
+    
+    style Data fill:#ffcccc
+    style Functions fill:#ccffcc
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                 PROCEDURAL PROGRAMMING                       │
 │                                                              │
@@ -69,6 +94,7 @@ In the 1960s-1970s, programming was **procedural**:
 │   No boundaries, no protection                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 Languages like C, FORTRAN, and COBOL followed this model. As programs grew to millions of lines, they became impossible to maintain.
 
@@ -94,7 +120,28 @@ Languages like C, FORTRAN, and COBOL followed this model. As programs grew to mi
 
 Think of OOP like architecture:
 
+```mermaid
+flowchart TD
+    subgraph Blueprint["CLASS = Blueprint"]
+        HB["House Blueprint<br/>Properties: bedrooms, bathrooms, squareFeet<br/>Behaviors: openDoor(), turnOnLights()"]
+    end
+    
+    subgraph Objects["OBJECTS = Actual Houses"]
+        H1["House 1<br/>3 bed, 2 bath"]
+        H2["House 2<br/>4 bed, 3 bath"]
+        H3["House 3<br/>2 bed, 1 bath"]
+    end
+    
+    Blueprint -->|"creates"| Objects
+    
+    style Blueprint fill:#e1f5ff
+    style Objects fill:#fff4e1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    THE BLUEPRINT ANALOGY                     │
 │                                                              │
@@ -120,6 +167,7 @@ Think of OOP like architecture:
 │   Same blueprint, different actual values                    │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key insight**: A class is a template. Objects are real instances created from that template.
 
@@ -139,7 +187,25 @@ This analogy will be referenced throughout:
 
 OOP is built on four fundamental concepts:
 
+```mermaid
+flowchart TD
+    OOP["FOUR PILLARS OF OOP"]
+    OOP --> E1["1. ENCAPSULATION<br/>Bundle data and methods,<br/>hide internal details"]
+    OOP --> E2["2. INHERITANCE<br/>Create new classes based<br/>on existing ones"]
+    OOP --> E3["3. POLYMORPHISM<br/>Same interface,<br/>different implementations"]
+    OOP --> E4["4. ABSTRACTION<br/>Hide complexity,<br/>show only essentials"]
+    
+    style OOP fill:#e1f5ff
+    style E1 fill:#ffe1f5
+    style E2 fill:#f5ffe1
+    style E3 fill:#fff5e1
+    style E4 fill:#e1fff5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   FOUR PILLARS OF OOP                        │
 │                                                              │
@@ -157,6 +223,7 @@ OOP is built on four fundamental concepts:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 Let's understand each one deeply.
 
@@ -246,7 +313,28 @@ public class BankAccount {
 
 **Why it exists**: To reuse code and establish "is-a" relationships.
 
+```mermaid
+flowchart TD
+    Animal["Animal<br/>(Parent/Superclass)<br/>- name<br/>- age<br/>+ eat()<br/>+ sleep()"]
+    
+    Animal --> Dog["Dog<br/>- breed<br/>+ bark()"]
+    Animal --> Cat["Cat<br/>- indoor<br/>+ meow()"]
+    Animal --> Bird["Bird<br/>- wingspan<br/>+ fly()"]
+    
+    Dog -.->|"IS-A"| Animal
+    Cat -.->|"IS-A"| Animal
+    Bird -.->|"IS-A"| Animal
+    
+    style Animal fill:#e1f5ff
+    style Dog fill:#ffe1f5
+    style Cat fill:#f5ffe1
+    style Bird fill:#fff5e1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    INHERITANCE HIERARCHY                     │
 │                                                              │
@@ -273,6 +361,7 @@ public class BankAccount {
 │        Bird IS-A Animal                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ```java
 // Parent class (Superclass)
@@ -627,7 +716,37 @@ Employee emp2 = new Employee("Bob", 80000);
 
 **What happens in memory**:
 
+```mermaid
+flowchart LR
+    subgraph Stack["STACK (Method execution)"]
+        Main["main() frame"]
+        E1["emp1 (reference)"]
+        E2["emp2 (reference)"]
+        Main --> E1
+        Main --> E2
+    end
+    
+    subgraph Heap["HEAP (Objects live here)"]
+        O1["Employee Object<br/>@address: 0x1000<br/>name: 'Alice'<br/>salary: 75000.0"]
+        O2["Employee Object<br/>@address: 0x2000<br/>name: 'Bob'<br/>salary: 80000.0"]
+    end
+    
+    subgraph Metaspace["METASPACE (Class data)"]
+        EC["Employee.class<br/>employeeCount: 2<br/>(static field)"]
+    end
+    
+    E1 -->|"points to"| O1
+    E2 -->|"points to"| O2
+    
+    style Stack fill:#ffe1f5
+    style Heap fill:#e1f5ff
+    style Metaspace fill:#f5ffe1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           MEMORY LAYOUT                                  │
 │                                                                          │
@@ -654,6 +773,7 @@ Employee emp2 = new Employee("Bob", 80000);
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Step-by-step execution**:
 
@@ -670,7 +790,29 @@ Animal animal = new Dog("Buddy", 3, "Labrador");
 animal.eat();  // Which eat() is called?
 ```
 
+```mermaid
+flowchart TD
+    Stack["Stack:<br/>animal (type: Animal)"]
+    Heap["Heap:<br/>Dog Object<br/>@address: 0x3000<br/>name: 'Buddy'<br/>age: 3<br/>breed: 'Labrador'"]
+    VTable["Virtual Method Table (vtable):<br/>Dog's vtable<br/>eat() → Dog.eat()<br/>sleep() → Animal.sleep()"]
+    
+    Stack -->|"references"| Heap
+    Heap -->|"vtable pointer"| VTable
+    
+    Process["When animal.eat() is called:<br/>1. JVM looks at ACTUAL object type (Dog)<br/>2. Finds Dog's vtable<br/>3. Calls Dog's eat() method"]
+    
+    VTable -.->|"dispatch"| Process
+    
+    style Stack fill:#ffe1f5
+    style Heap fill:#e1f5ff
+    style VTable fill:#f5ffe1
+    style Process fill:#fff5e1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      METHOD DISPATCH (RUNTIME)                           │
 │                                                                          │
@@ -703,6 +845,7 @@ animal.eat();  // Which eat() is called?
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -1727,7 +1870,36 @@ StringUtils.capitalize("hello");
 
 ### OOP vs Functional Programming
 
+```mermaid
+flowchart LR
+    subgraph OOP["OOP"]
+        O1["Objects with state + behavior"]
+        O2["Mutable state"]
+        O3["Encapsulation"]
+        O4["Inheritance/Polymorphism"]
+        O5["Best for:<br/>- Modeling real-world entities<br/>- Complex state management<br/>- Large team collaboration"]
+        O1 --> O2 --> O3 --> O4 --> O5
+    end
+    
+    subgraph FP["Functional Programming"]
+        F1["Pure functions, immutable data"]
+        F2["No side effects"]
+        F3["Composition of functions"]
+        F4["Higher-order functions"]
+        F5["Best for:<br/>- Data transformations<br/>- Parallel processing<br/>- Stateless operations"]
+        F1 --> F2 --> F3 --> F4 --> F5
+    end
+    
+    OOP -.->|"Modern Java: USE BOTH!"| FP
+    
+    style OOP fill:#e1f5ff
+    style FP fill:#f5ffe1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OOP vs FUNCTIONAL PROGRAMMING                         │
 │                                                                          │
@@ -1755,6 +1927,7 @@ StringUtils.capitalize("hello");
 │   Modern Java: USE BOTH! OOP for structure, FP for operations.          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### When to Use Each
 

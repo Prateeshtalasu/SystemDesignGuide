@@ -27,42 +27,50 @@ This unreliability is the foundation of why message delivery is complex.
 Imagine you're building a payment system. A customer clicks "Pay $100." Your service sends a message to the payment processor.
 
 **Scenario 1: Message Lost**
-```
-Customer: "Pay $100"
-    │
-    ▼
-Your Service ──── "Process $100" ────X──── Payment Processor
-                  (message lost)
-    
-Result: Customer thinks they paid, but payment never happened.
+```mermaid
+sequenceDiagram
+  participant C as Customer
+  participant YS as Your Service
+  participant PP as Payment Processor
+  
+  C->>YS: "Pay $100"
+  YS->>PP: "Process $100"
+  Note over YS,PP: message lost (X)
+  
+  Note over C,PP: Result: Customer thinks they paid, but payment never happened.
 ```
 
 **Scenario 2: Acknowledgment Lost**
-```
-Customer: "Pay $100"
-    │
-    ▼
-Your Service ──── "Process $100" ────────► Payment Processor
-                                           (processes payment)
-             ◄────── "OK" ────────X
-                  (ACK lost)
-    │
-    ▼
-Your Service: "Did it work? Let me retry..."
-Your Service ──── "Process $100" ────────► Payment Processor
-                                           (processes AGAIN!)
-    
-Result: Customer charged TWICE!
+```mermaid
+sequenceDiagram
+  participant C as Customer
+  participant YS as Your Service
+  participant PP as Payment Processor
+  
+  C->>YS: "Pay $100"
+  YS->>PP: "Process $100"
+  Note over PP: processes payment
+  PP-->>YS: "OK"
+  Note over PP,YS: ACK lost (X)
+  Note over YS: "Did it work? Let me retry..."
+  YS->>PP: "Process $100"
+  Note over PP: processes AGAIN!
+  
+  Note over C,PP: Result: Customer charged TWICE!
 ```
 
 **Scenario 3: Message Duplicated**
-```
-Your Service ──── "Process $100" ────────► Payment Processor
-                  (network retransmits)
-Your Service ──── "Process $100" ────────► Payment Processor
-                  (duplicate arrives)
-
-Result: Customer charged TWICE!
+```mermaid
+sequenceDiagram
+  participant YS as Your Service
+  participant PP as Payment Processor
+  
+  YS->>PP: "Process $100"
+  Note over YS,PP: network retransmits
+  YS->>PP: "Process $100"
+  Note over YS,PP: duplicate arrives
+  
+  Note over YS,PP: Result: Customer charged TWICE!
 ```
 
 ### What Systems Looked Like Before Formal Delivery Guarantees
@@ -98,51 +106,36 @@ Early messaging systems had no formal guarantees:
 Think of message delivery like different postal services:
 
 **At-Most-Once: Postcard**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      POSTCARD                                │
-│                                                              │
-│   You drop postcard in mailbox                              │
-│   No tracking, no confirmation                              │
-│   Might arrive, might not                                   │
-│   You'll never know                                         │
-│                                                              │
-│   Guarantee: Delivered 0 or 1 time                          │
-│   Risk: Message might be lost                               │
-│   Benefit: Simple, fast, cheap                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Postcard["POSTCARD"]
+    Steps["You drop postcard in mailbox\nNo tracking, no confirmation\nMight arrive, might not\nYou'll never know"]
+    Guarantee["Guarantee: Delivered 0 or 1 time"]
+    Risk["Risk: Message might be lost"]
+    Benefit["Benefit: Simple, fast, cheap"]
+  end
 ```
 
 **At-Least-Once: Registered Mail with Retry**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   REGISTERED MAIL                            │
-│                                                              │
-│   You send registered mail                                  │
-│   Post office tracks it                                     │
-│   If no delivery confirmation in 7 days, they resend        │
-│   Keeps resending until confirmed                           │
-│                                                              │
-│   Guarantee: Delivered 1 or more times                      │
-│   Risk: Recipient might get duplicates                      │
-│   Benefit: Message will definitely arrive                   │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph RegisteredMail["REGISTERED MAIL"]
+    Steps["You send registered mail\nPost office tracks it\nIf no delivery confirmation in 7 days, they resend\nKeeps resending until confirmed"]
+    Guarantee["Guarantee: Delivered 1 or more times"]
+    Risk["Risk: Recipient might get duplicates"]
+    Benefit["Benefit: Message will definitely arrive"]
+  end
 ```
 
 **Exactly-Once: Bank Wire Transfer**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   BANK WIRE TRANSFER                         │
-│                                                              │
-│   Bank assigns unique transaction ID                        │
-│   Transfer happens exactly once                             │
-│   If duplicate request with same ID, bank ignores it        │
-│   Both sender and receiver see same transaction             │
-│                                                              │
-│   Guarantee: Delivered exactly 1 time                       │
-│   Risk: Complex, slower, more expensive                     │
-│   Benefit: Perfect accuracy                                 │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph BankWire["BANK WIRE TRANSFER"]
+    Steps["Bank assigns unique transaction ID\nTransfer happens exactly once\nIf duplicate request with same ID, bank ignores it\nBoth sender and receiver see same transaction"]
+    Guarantee["Guarantee: Delivered exactly 1 time"]
+    Risk["Risk: Complex, slower, more expensive"]
+    Benefit["Benefit: Perfect accuracy"]
+  end
 ```
 
 ### The Three Delivery Guarantees
@@ -161,22 +154,14 @@ Think of message delivery like different postal services:
 
 **Mechanism**: Send once, don't retry, don't wait for acknowledgment.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    AT-MOST-ONCE                              │
-│                                                              │
-│   Producer                    Broker                        │
-│      │                          │                           │
-│      │ ─── Send Message ──────► │                           │
-│      │     (fire and forget)    │                           │
-│      │                          │                           │
-│      │     No waiting for ACK   │                           │
-│      │     No retry logic       │                           │
-│      │                          │                           │
-│   Producer continues            Broker may or may not       │
-│   immediately                   have received it            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+  participant P as Producer
+  participant B as Broker
+  
+  P->>B: Send Message (fire and forget)
+  Note over P: No waiting for ACK\nNo retry logic\nProducer continues immediately
+  Note over B: Broker may or may not\nhave received it
 ```
 
 **Implementation Details:**
@@ -203,146 +188,171 @@ producer.send(message);  // Returns immediately
 
 **Mechanism**: Send, wait for acknowledgment, retry if no ACK received.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    AT-LEAST-ONCE                             │
-│                                                              │
-│   Producer                    Broker                        │
-│      │                          │                           │
-│      │ ─── Send Message ──────► │                           │
-│      │                          │ (stores message)          │
-│      │ ◄────── ACK ──────────── │                           │
-│      │                          │                           │
-│   If no ACK within timeout:     │                           │
-│      │                          │                           │
-│      │ ─── Send Message ──────► │ (might be duplicate!)     │
-│      │     (retry)              │                           │
-│      │ ◄────── ACK ──────────── │                           │
-│      │                          │                           │
-│   Producer only continues       │                           │
-│   after receiving ACK           │                           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+  participant P as Producer
+  participant B as Broker
+  
+  P->>B: Send Message
+  Note over B: stores message
+  B-->>P: ACK
+  
+  alt If no ACK within timeout
+    P->>B: Send Message (retry)
+    Note over B: might be duplicate!
+    B-->>P: ACK
+  end
+  
+  Note over P: Producer only continues\nafter receiving ACK
 ```
 
 **Why Duplicates Happen:**
 
-```
-Scenario: ACK Lost
-
-Time 0ms:   Producer sends M1 ─────────► Broker receives M1
-Time 10ms:  Broker stores M1
-Time 15ms:  Broker sends ACK ────X────── ACK lost in network!
-Time 1000ms: Producer timeout, no ACK received
-Time 1001ms: Producer retries M1 ─────► Broker receives M1 AGAIN!
-
-Result: Broker has M1 twice
+```mermaid
+sequenceDiagram
+  participant P as Producer
+  participant B as Broker
+  
+  Note over P,B: Scenario: ACK Lost
+  
+  Note over P: Time 0ms
+  P->>B: sends M1
+  Note over B: receives M1
+  
+  Note over B: Time 10ms: stores M1
+  
+  Note over B: Time 15ms
+  B-->>P: sends ACK
+  Note over B,P: ACK lost in network! (X)
+  
+  Note over P: Time 1000ms: timeout, no ACK received
+  
+  Note over P: Time 1001ms
+  P->>B: retries M1
+  Note over B: receives M1 AGAIN!
+  
+  Note over P,B: Result: Broker has M1 twice
 ```
 
 **Consumer-Side At-Least-Once:**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              CONSUMER AT-LEAST-ONCE                          │
-│                                                              │
-│   Broker                      Consumer                      │
-│      │                          │                           │
-│      │ ─── Deliver Message ───► │                           │
-│      │                          │ (processes message)       │
-│      │ ◄────── ACK ──────────── │                           │
-│      │                          │                           │
-│   If no ACK:                    │                           │
-│      │ ─── Redeliver Message ─► │ (processes AGAIN!)        │
-│      │                          │                           │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+  participant B as Broker
+  participant C as Consumer
+  
+  B->>C: Deliver Message
+  Note over C: processes message
+  C-->>B: ACK
+  
+  alt If no ACK
+    B->>C: Redeliver Message
+    Note over C: processes AGAIN!
+  end
 ```
 
 **Why Consumer Duplicates Happen:**
 
-```
-Scenario: Consumer crashes after processing but before ACK
-
-Time 0ms:   Broker delivers M1 to Consumer
-Time 10ms:  Consumer processes M1 (e.g., inserts to DB)
-Time 11ms:  Consumer crashes before sending ACK!
-Time 5000ms: Consumer restarts
-Time 5001ms: Broker redelivers M1 (no ACK received)
-Time 5010ms: Consumer processes M1 AGAIN (duplicate in DB!)
+```mermaid
+sequenceDiagram
+  participant B as Broker
+  participant C as Consumer
+  participant DB as Database
+  
+  Note over B,DB: Scenario: Consumer crashes after processing but before ACK
+  
+  Note over B: Time 0ms
+  B->>C: delivers M1
+  
+  Note over C: Time 10ms
+  C->>DB: processes M1 (e.g., inserts to DB)
+  
+  Note over C: Time 11ms: Consumer crashes before sending ACK!
+  
+  Note over C: Time 5000ms: Consumer restarts
+  
+  Note over B: Time 5001ms
+  B->>C: redelivers M1 (no ACK received)
+  
+  Note over C: Time 5010ms
+  C->>DB: processes M1 AGAIN (duplicate in DB!)
 ```
 
 ### Exactly-Once Delivery
 
 **The Hard Truth**: True exactly-once delivery is impossible in distributed systems due to the Two Generals Problem. What we achieve is **exactly-once semantics** through:
 
-```
-Exactly-Once Semantics = At-Least-Once Delivery + Idempotent Processing
+```mermaid
+flowchart LR
+  A["At-Least-Once Delivery"]
+  B["Idempotent Processing"]
+  C["Exactly-Once Semantics"]
+  A --> C
+  B --> C
 ```
 
 **Mechanism 1: Idempotency Keys**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              EXACTLY-ONCE VIA IDEMPOTENCY                    │
-│                                                              │
-│   Producer                    Broker/Consumer               │
-│      │                          │                           │
-│      │ ─── M1 (key: abc123) ──► │                           │
-│      │                          │ Check: seen abc123?       │
-│      │                          │ NO → Process, store key   │
-│      │ ◄────── ACK ──────────── │                           │
-│      │                          │                           │
-│   ACK lost, producer retries:   │                           │
-│      │                          │                           │
-│      │ ─── M1 (key: abc123) ──► │                           │
-│      │                          │ Check: seen abc123?       │
-│      │                          │ YES → Skip, return ACK    │
-│      │ ◄────── ACK ──────────── │                           │
-│      │                          │                           │
-│   Message processed exactly once!                           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+  participant P as Producer
+  participant BC as Broker/Consumer
+  
+  P->>BC: M1 (key: abc123)
+  Note over BC: Check: seen abc123? NO
+  Note over BC: Process, store key
+  BC-->>P: ACK
+  
+  Note over P: ACK lost, producer retries
+  
+  P->>BC: M1 (key: abc123)
+  Note over BC: Check: seen abc123? YES
+  Note over BC: Skip, return ACK
+  BC-->>P: ACK
+  
+  Note over P,BC: Message processed exactly once!
 ```
 
 **Mechanism 2: Transactional Outbox**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              EXACTLY-ONCE VIA TRANSACTIONS                   │
-│                                                              │
-│   Single Database Transaction:                              │
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │ BEGIN TRANSACTION                                    │   │
-│   │   1. Process business logic (e.g., create order)    │   │
-│   │   2. Insert message to outbox table                 │   │
-│   │ COMMIT                                               │   │
-│   └─────────────────────────────────────────────────────┘   │
-│                                                              │
-│   Separate process reads outbox, sends to broker            │
-│   If send fails, retry from outbox                          │
-│   Message is EITHER processed AND sent, OR neither          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Transaction["Single Database Transaction"]
+    BEGIN["BEGIN TRANSACTION"]
+    BL["1. Process business logic\n(e.g., create order)"]
+    OUTBOX["2. Insert message to outbox table"]
+    COMMIT["COMMIT"]
+    BEGIN --> BL --> OUTBOX --> COMMIT
+  end
+  
+  PROCESS["Separate process reads outbox,\nsends to broker"]
+  RETRY["If send fails, retry from outbox"]
+  
+  COMMIT --> PROCESS
+  PROCESS --> RETRY
+  
+  Note["Message is EITHER processed AND sent, OR neither"]
 ```
 
 **Mechanism 3: Kafka Transactions**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              KAFKA EXACTLY-ONCE                              │
-│                                                              │
-│   Producer (with transactions enabled):                     │
-│      │                                                      │
-│      │ beginTransaction()                                   │
-│      │ send(message1)                                       │
-│      │ send(message2)                                       │
-│      │ commitTransaction()  ← All or nothing                │
-│      │                                                      │
-│   Consumer (with read_committed):                           │
-│      │                                                      │
-│      │ Only sees messages from committed transactions       │
-│      │ Never sees partial transaction                       │
-│      │                                                      │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Producer["Producer (with transactions enabled)"]
+    BT["beginTransaction()"]
+    S1["send(message1)"]
+    S2["send(message2)"]
+    CT["commitTransaction()\nAll or nothing"]
+    BT --> S1 --> S2 --> CT
+  end
+  
+  subgraph Consumer["Consumer (with read_committed)"]
+    C1["Only sees messages from\ncommitted transactions"]
+    C2["Never sees partial transaction"]
+  end
+  
+  CT --> C1
+  C1 --> C2
 ```
 
 ---
@@ -360,89 +370,89 @@ Let's trace through each delivery guarantee with a concrete payment example.
 
 ### At-Most-Once Simulation
 
-```
-Time 0ms: Payment Service sends "charge $100, id=PAY001"
-          ───────────────────────────────────────────────►
-          
-Time 1ms: Network drops packet (10% chance)
-          ─────────────X
-
-Time 2ms: Payment Service continues (no waiting)
-          Returns "Payment submitted" to user
-
-Time ???: Payment Processor never receives message
-
-Result: 
-- User thinks payment was made
-- Payment never processed
-- $100 not charged
-- Order might ship without payment!
+```mermaid
+sequenceDiagram
+  participant PS as Payment Service
+  participant User
+  participant Network
+  participant PP as Payment Processor
+  
+  Note over PS: Time 0ms
+  PS->>Network: "charge $100, id=PAY001"
+  Note over Network: Time 1ms: Network drops packet (10% chance) (X)
+  
+  Note over PS: Time 2ms: Payment Service continues (no waiting)
+  PS->>User: Returns "Payment submitted"
+  
+  Note over PP: Time ???: Payment Processor never receives message
+  
+  Note over PS,PP: Result:\n- User thinks payment was made\n- Payment never processed\n- $100 not charged\n- Order might ship without payment!
 ```
 
 ### At-Least-Once Simulation
 
-```
-Attempt 1:
-Time 0ms:   Payment Service sends "charge $100, id=PAY001"
-            ───────────────────────────────────────────────►
-Time 50ms:  Payment Processor receives, charges $100
-Time 51ms:  Payment Processor sends ACK
-            ◄───────────────────────────────────────────────
-Time 52ms:  Network drops ACK (10% chance)
-            ────────X
-
-Time 1000ms: Payment Service timeout (no ACK received)
-             "Let me retry..."
-
-Attempt 2:
-Time 1001ms: Payment Service sends "charge $100, id=PAY001" (SAME message)
-             ───────────────────────────────────────────────►
-Time 1051ms: Payment Processor receives, charges $100 AGAIN!
-Time 1052ms: Payment Processor sends ACK
-             ◄───────────────────────────────────────────────
-Time 1053ms: Payment Service receives ACK
-             "Success!"
-
-Result:
-- User charged $200 instead of $100!
-- At-least-once guarantees delivery but allows duplicates
+```mermaid
+sequenceDiagram
+  participant PS as Payment Service
+  participant PP as Payment Processor
+  participant Network
+  
+  Note over PS,PP: Attempt 1:
+  Note over PS: Time 0ms
+  PS->>PP: "charge $100, id=PAY001"
+  Note over PP: Time 50ms: receives, charges $100
+  Note over PP: Time 51ms
+  PP-->>Network: sends ACK
+  Note over Network: Time 52ms: Network drops ACK (10% chance) (X)
+  
+  Note over PS: Time 1000ms: timeout (no ACK received)\n"Let me retry..."
+  
+  Note over PS,PP: Attempt 2:
+  Note over PS: Time 1001ms
+  PS->>PP: "charge $100, id=PAY001" (SAME message)
+  Note over PP: Time 1051ms: receives, charges $100 AGAIN!
+  Note over PP: Time 1052ms
+  PP-->>PS: sends ACK
+  Note over PS: Time 1053ms: receives ACK\n"Success!"
+  
+  Note over PS,PP: Result:\n- User charged $200 instead of $100!\n- At-least-once guarantees delivery but allows duplicates
 ```
 
 ### Exactly-Once Simulation (with Idempotency)
 
-```
-Attempt 1:
-Time 0ms:   Payment Service sends "charge $100, id=PAY001, idempotency_key=xyz789"
-            ───────────────────────────────────────────────►
-Time 50ms:  Payment Processor receives message
-            Checks: Have I seen xyz789 before? NO
-            Stores xyz789 in idempotency store
-            Charges $100
-            Stores result: {xyz789: "success, txn=TXN001"}
-Time 51ms:  Payment Processor sends ACK
-            ◄───────────────────────────────────────────────
-Time 52ms:  Network drops ACK
-            ────────X
-
-Time 1000ms: Payment Service timeout (no ACK received)
-             "Let me retry with SAME idempotency key..."
-
-Attempt 2:
-Time 1001ms: Payment Service sends "charge $100, id=PAY001, idempotency_key=xyz789"
-             ───────────────────────────────────────────────►
-Time 1051ms: Payment Processor receives message
-             Checks: Have I seen xyz789 before? YES!
-             Returns stored result: {xyz789: "success, txn=TXN001"}
-             Does NOT charge again
-Time 1052ms: Payment Processor sends ACK with stored result
-             ◄───────────────────────────────────────────────
-Time 1053ms: Payment Service receives ACK
-             "Success! Transaction TXN001"
-
-Result:
-- User charged exactly $100
-- Idempotency key prevented duplicate charge
-- Both attempts return same transaction ID
+```mermaid
+sequenceDiagram
+  participant PS as Payment Service
+  participant PP as Payment Processor
+  participant Store as Idempotency Store
+  participant Network
+  
+  Note over PS,PP: Attempt 1:
+  Note over PS: Time 0ms
+  PS->>PP: "charge $100, id=PAY001, idempotency_key=xyz789"
+  Note over PP: Time 50ms: receives message
+  PP->>Store: Checks: Have I seen xyz789 before? NO
+  PP->>Store: Stores xyz789
+  PP->>PP: Charges $100
+  PP->>Store: Stores result: {xyz789: "success, txn=TXN001"}
+  Note over PP: Time 51ms
+  PP-->>Network: sends ACK
+  Note over Network: Time 52ms: Network drops ACK (X)
+  
+  Note over PS: Time 1000ms: timeout (no ACK received)\n"Let me retry with SAME idempotency key..."
+  
+  Note over PS,PP: Attempt 2:
+  Note over PS: Time 1001ms
+  PS->>PP: "charge $100, id=PAY001, idempotency_key=xyz789"
+  Note over PP: Time 1051ms: receives message
+  PP->>Store: Checks: Have I seen xyz789 before? YES!
+  Store-->>PP: Returns stored result: {xyz789: "success, txn=TXN001"}
+  Note over PP: Does NOT charge again
+  Note over PP: Time 1052ms
+  PP-->>PS: sends ACK with stored result
+  Note over PS: Time 1053ms: receives ACK\n"Success! Transaction TXN001"
+  
+  Note over PS,PP: Result:\n- User charged exactly $100\n- Idempotency key prevented duplicate charge\n- Both attempts return same transaction ID
 ```
 
 ---
@@ -1306,7 +1316,22 @@ Message delivery guarantees define how many times a message is delivered: **at-m
 
 ## Quick Reference Card
 
+```mermaid
+flowchart TD
+  subgraph CheatSheet["MESSAGE DELIVERY CHEAT SHEET"]
+    AMO["AT-MOST-ONCE:\nDelivery: 0 or 1 times\nLost: Yes | Duplicates: No\nHow: Send once, no ACK, no retry\nUse: Metrics, logs, heartbeats\nKafka: acks=0, retries=0"]
+    ALO["AT-LEAST-ONCE:\nDelivery: 1 or more times\nLost: No | Duplicates: Yes\nHow: Send, wait ACK, retry on failure\nUse: Most applications (with idempotency)\nKafka: acks=1 or all, retries=3+"]
+    EO["EXACTLY-ONCE:\nDelivery: Exactly 1 time\nLost: No | Duplicates: No\nHow: At-least-once + Idempotent processing\nUse: Payments, orders, financial\nKafka: enable.idempotence=true, transactions"]
+    IP["IDEMPOTENCY PATTERN:\n1. Producer generates unique key (once)\n2. Key included in every retry\n3. Consumer: SETNX key to process to SET result\n4. Duplicate detected to return stored result"]
+    Formula["FORMULA:\nAt-Least-Once + Idempotent = Exactly-Once Semantics"]
+    PushPull["PUSH vs PULL:\nPush: Broker sends to consumer (RabbitMQ default)\nPull: Consumer requests from broker (Kafka)"]
+  end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │           MESSAGE DELIVERY CHEAT SHEET                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -1345,4 +1370,6 @@ Message delivery guarantees define how many times a message is delivered: **at-m
 │   Pull: Consumer requests from broker (Kafka)               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 

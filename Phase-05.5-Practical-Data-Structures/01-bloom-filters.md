@@ -115,7 +115,14 @@ Now bulbs 42, 567, and 891 are all ON. If you check for "Harry Potter" and it ha
 
 If a book was added, its bulbs are definitely ON. If any bulb is OFF, the book was never added. This is the key guarantee.
 
-```
+**Bloom Filter Guarantee:**
+- "Definitely NOT present" → 100% accurate, guaranteed
+- "Probably present" → Might be wrong (false positive)
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     BLOOM FILTER GUARANTEE                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -123,6 +130,7 @@ If a book was added, its bulbs are definitely ON. If any bulb is OFF, the book w
 │  "Probably present"        →  Might be wrong (false positive)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -217,7 +225,16 @@ k_optimal = (m/n) × ln(2) ≈ 0.693 × (m/n)
 - Required bits: m = -n × ln(p) / (ln(2))² ≈ 9.6 million bits ≈ 1.2 MB
 - Optimal k = 7 hash functions
 
-```
+| Storage Type | Size (1 Million Items) |
+|--------------|------------------------|
+| HashSet<String> (avg 50 bytes/string) | ~50 MB |
+| Bloom Filter (1% FP rate) | ~1.2 MB |
+| Memory savings | ~97% |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │               MEMORY COMPARISON (1 Million Items)               │
 ├────────────────────────────────────────────────────────────────┤
@@ -226,6 +243,7 @@ k_optimal = (m/n) × ln(2) ≈ 0.693 × (m/n)
 │  Memory savings:                         ~97%                   │
 └────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Why You Cannot Delete
 
@@ -363,7 +381,21 @@ BigTable stores data in SSTables (Sorted String Tables) on disk. Each SSTable ha
 
 **Impact**: Reduces disk reads by 90%+
 
+```mermaid
+flowchart TD
+    Request["Client Request:<br/>GET key='user:12345'"] --> MemTable["Check MemTable<br/>In-memory, fast<br/>(recent writes)"]
+    MemTable -->|Not found| BloomCheck["Check SSTable Bloom Filters"]
+    BloomCheck --> SST1["SSTable 1<br/>Bloom: NO<br/>(skip)"]
+    BloomCheck --> SST2["SSTable 2<br/>Bloom: MAYBE<br/>(check)"]
+    BloomCheck --> SST3["SSTable 3<br/>Bloom: NO<br/>(skip)"]
+    BloomCheck --> SST4["SSTable 4<br/>Bloom: NO<br/>(skip)"]
+    SST2 --> ReadDisk["Read SSTable<br/>from disk<br/>Only 1 disk read instead of 4"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    BIGTABLE READ PATH                            │
 ├─────────────────────────────────────────────────────────────────┤
@@ -395,6 +427,7 @@ BigTable stores data in SSTables (Sorted String Tables) on disk. Each SSTable ha
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Apache Cassandra
 

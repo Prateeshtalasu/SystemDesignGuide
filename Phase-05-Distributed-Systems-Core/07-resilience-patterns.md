@@ -214,7 +214,22 @@ A circuit breaker prevents an application from repeatedly trying to execute an o
 
 #### State Machine
 
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED: Initial
+    CLOSED --> OPEN: failure threshold exceeded
+    OPEN --> HALF_OPEN: timeout
+    HALF_OPEN --> OPEN: failure
+    HALF_OPEN --> CLOSED: success
+    note right of CLOSED: CLOSED (normal)
+    note right of OPEN: OPEN (blocking)
+    note right of HALF_OPEN: HALF-OPEN (testing)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
          ┌─────────────────────────────────────────────┐
          │                                             │
          ▼                                             │
@@ -231,6 +246,7 @@ A circuit breaker prevents an application from repeatedly trying to execute an o
                                       │ (testing) │ failure
                                       └───────────┘
 ```
+</details>
 
 **States explained**:
 

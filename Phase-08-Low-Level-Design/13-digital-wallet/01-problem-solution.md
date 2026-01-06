@@ -74,7 +74,83 @@ try {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class WalletService {
+        - Map~String,Wallet~ wallets
+        - Map~String,Transaction~ transactions
+        - FraudDetector fraudDetector
+        + createWallet(userId) Wallet
+        + deposit(walletId, amount, source) Transaction
+        + withdraw(walletId, amount, destination) Transaction
+        + transfer(fromId, toId, amount) Transaction
+        + getBalance(walletId) BigDecimal
+        + getTransactionHistory(walletId) List~Transaction~
+    }
+    
+    class Wallet {
+        - String id
+        - String userId
+        - BigDecimal balance
+        - Currency currency
+        - SpendLimit limits
+        + credit(amount) void
+        + debit(amount) boolean
+    }
+    
+    class Transaction {
+        - String id
+        - TransactionType type
+        - BigDecimal amount
+        - TransactionStatus status
+        - long timestamp
+        - Wallet fromWallet
+        - Wallet toWallet
+    }
+    
+    class SpendLimit {
+        - BigDecimal daily
+        - BigDecimal monthly
+        - BigDecimal perTxn
+    }
+    
+    class FraudDetector {
+        - List~FraudRule~ rules
+        + check(transaction) boolean
+    }
+    
+    class FraudRule {
+        <<interface>>
+        + isSuspicious(transaction) boolean
+    }
+    
+    class LargeAmountRule {
+        + isSuspicious(transaction) boolean
+    }
+    
+    class FrequencyRule {
+        + isSuspicious(transaction) boolean
+    }
+    
+    class VelocityRule {
+        + isSuspicious(transaction) boolean
+    }
+    
+    WalletService --> Wallet
+    WalletService --> Transaction
+    WalletService --> FraudDetector
+    Wallet --> SpendLimit
+    Transaction --> Wallet
+    FraudDetector --> FraudRule
+    FraudRule <|.. LargeAmountRule
+    FraudRule <|.. FrequencyRule
+    FraudRule <|.. VelocityRule
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           DIGITAL WALLET SYSTEM                                  │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -122,9 +198,28 @@ try {
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Transaction Flow
 
+```mermaid
+flowchart LR
+    A["User Request"]
+    B["Validate Request<br/>- Amount > 0<br/>- Sufficient balance<br/>- Within limits"]
+    C["Fraud Check<br/>- Large amount?<br/>- High frequency?<br/>- Unusual pattern?"]
+    D["Execute<br/>- Debit source<br/>- Credit dest<br/>- Record txn"]
+    E["Result"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     ┌─────────────────────────────────────────┐
                     │           TRANSACTION FLOW               │
                     └─────────────────────────────────────────┘
@@ -143,6 +238,8 @@ try {
     balance           - Unusual pattern?  - Record txn
   - Within limits
 ```
+
+</details>
 
 ---
 

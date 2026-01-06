@@ -112,7 +112,44 @@ Think of API security like a secure office building:
 
 Think of API security like a border checkpoint:
 
+```mermaid
+flowchart LR
+    REQUEST["Request"]
+    CHECKPOINT["Border Checkpoint"]
+    COUNTRY["Your Country"]
+    
+    AUTH["Authentication:<br/>Show your passport"]
+    AUTHZ["Authorization:<br/>Do you have a visa?"]
+    RATE["Rate Limiting:<br/>Only 10 visits per day"]
+    VALID["Input Validation:<br/>No dangerous items"]
+    ENCRYPT["Encryption:<br/>All communication encrypted"]
+    
+    REQUEST --> CHECKPOINT
+    CHECKPOINT --> AUTH
+    CHECKPOINT --> AUTHZ
+    CHECKPOINT --> RATE
+    CHECKPOINT --> VALID
+    CHECKPOINT --> ENCRYPT
+    AUTH --> COUNTRY
+    AUTHZ --> COUNTRY
+    RATE --> COUNTRY
+    VALID --> COUNTRY
+    ENCRYPT --> COUNTRY
+    
+    style REQUEST fill:#e3f2fd
+    style CHECKPOINT fill:#fff9c4
+    style COUNTRY fill:#c8e6c9
+    style AUTH fill:#fff9c4
+    style AUTHZ fill:#fff9c4
+    style RATE fill:#fce4ec
+    style VALID fill:#c8e6c9
+    style ENCRYPT fill:#c8e6c9
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Request → [Border Checkpoint] → [Your Country]
            │
            ├─ Authentication: "Show your passport"
@@ -122,6 +159,8 @@ Request → [Border Checkpoint] → [Your Country]
            └─ Encryption: "All communication encrypted"
 ```
 
+</details>
+
 Only authorized, validated requests pass through.
 
 ---
@@ -130,7 +169,44 @@ Only authorized, validated requests pass through.
 
 ### Security Layers
 
+```mermaid
+flowchart TD
+    REQUEST["Request"]
+    
+    LAYER1["1. Transport Security (HTTPS/TLS)<br/>- Encrypt all traffic<br/>- Certificate validation"]
+    LAYER2["2. Authentication<br/>- Verify identity (JWT, API key)<br/>- Token validation"]
+    LAYER3["3. Authorization<br/>- Check permissions (RBAC/ABAC)<br/>- Resource-level access control"]
+    LAYER4["4. Input Validation<br/>- Sanitize input<br/>- Validate format"]
+    LAYER5["5. Rate Limiting<br/>- Limit requests per time<br/>- Prevent abuse"]
+    LAYER6["6. Business Logic<br/>- Process request"]
+    LAYER7["7. Response Filtering<br/>- Remove sensitive data<br/>- Mask PII"]
+    
+    RESPONSE["Response"]
+    
+    REQUEST --> LAYER1
+    LAYER1 --> LAYER2
+    LAYER2 --> LAYER3
+    LAYER3 --> LAYER4
+    LAYER4 --> LAYER5
+    LAYER5 --> LAYER6
+    LAYER6 --> LAYER7
+    LAYER7 --> RESPONSE
+    
+    style REQUEST fill:#e3f2fd
+    style LAYER1 fill:#fff9c4
+    style LAYER2 fill:#fff9c4
+    style LAYER3 fill:#c8e6c9
+    style LAYER4 fill:#c8e6c9
+    style LAYER5 fill:#fce4ec
+    style LAYER6 fill:#fff9c4
+    style LAYER7 fill:#c8e6c9
+    style RESPONSE fill:#e3f2fd
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    API SECURITY LAYERS                      │
 ├─────────────────────────────────────────────────────────────┤
@@ -190,6 +266,8 @@ Only authorized, validated requests pass through.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Request Flow with Security
 

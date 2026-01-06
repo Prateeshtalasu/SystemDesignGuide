@@ -138,7 +138,22 @@ Think of your microservices as an airport terminal with many gates (services). P
 
 The core of a service mesh is the **sidecar proxy**:
 
+```mermaid
+flowchart LR
+    subgraph Pod["Pod"]
+        App[Your Service<br/>App]
+        Proxy[Sidecar Proxy<br/>Envoy]
+    end
+    Incoming[Incoming traffic] --> Proxy
+    Proxy <-->|localhost| App
+    App --> Proxy
+    Proxy --> Outgoing[Outgoing traffic]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────┐
 │              Pod                     │
 │  ┌─────────────┐  ┌──────────────┐  │
@@ -153,6 +168,7 @@ The core of a service mesh is the **sidecar proxy**:
                     All traffic goes
                     through proxy
 ```
+</details>
 
 **Why "sidecar"?** Like a motorcycle sidecar, it's attached to the main vehicle (your service) and travels with it everywhere.
 
@@ -171,7 +187,31 @@ Your application code just makes a simple HTTP call. The mesh handles everything
 
 ### Architecture Components
 
+```mermaid
+flowchart TB
+    subgraph CP["CONTROL PLANE"]
+        Config[Config Store]
+        Registry[Service Registry]
+        CA[Certificate Authority]
+        Control[Control Server]
+        Config --> Control
+        Registry --> Control
+        CA --> Control
+    end
+    Control -->|Push config to proxies| DataPlane
+    subgraph DataPlane["DATA PLANE"]
+        SvcA[Svc A<br/>+Proxy]
+        SvcB[Svc B<br/>+Proxy]
+        SvcC[Svc C<br/>+Proxy]
+        SvcA --> SvcB
+        SvcB --> SvcC
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      CONTROL PLANE                           │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
@@ -204,6 +244,7 @@ Your application code just makes a simple HTTP call. The mesh handles everything
 │    └──────────────────────────────────────────┘            │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Control Plane
 

@@ -116,7 +116,35 @@ To find words starting with "pro":
 
 ### The Tree Visualization
 
+```mermaid
+flowchart TD
+    Root["(root)"] --> A[a]
+    Root --> P[p]
+    Root --> T[t]
+    A --> AP[p]
+    P --> PR[r]
+    T --> TH[h]
+    AP --> APP[p]
+    PR --> PRO[o]
+    TH --> THE[e*]
+    APP --> APPL[l]
+    PRO --> PROG[g]
+    PRO --> PROM[m*]
+    APPL --> APPLE[e*]
+    PROG --> PROGR[r]
+    PROGR --> PROGRA[a]
+    PROGRA --> PROGRAMMER[m*]
+    
+    style APPLE fill:#90EE90
+    style PROM fill:#90EE90
+    style THE fill:#90EE90
+    style PROGRAMMER fill:#90EE90
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
                     (root)
                    /  |  \
                   a   p   t
@@ -138,12 +166,23 @@ To find words starting with "pro":
 Words: apple, program, programmer, prom, the
 (* marks end of word)
 ```
+</details>
 
 ### Key Insight
 
 Each path from root to a node represents a prefix. Nodes marked as "end of word" indicate complete words. All words sharing a prefix share the same path from the root.
 
-```
+**Trie Key Insight**: "Common prefixes are stored only once"
+
+- Words: program, programmer, programming
+- Shared path: p → r → o → g → r → a → m
+- Then branches: (end), m → e → r, m → i → n → g
+- Storage: 7 + 3 + 4 = 14 characters (not 7 + 10 + 11 = 28)
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                      TRIE KEY INSIGHT                            │
 ├─────────────────────────────────────────────────────────────────┤
@@ -158,6 +197,7 @@ Each path from root to a node represents a prefix. Nodes marked as "end of word"
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

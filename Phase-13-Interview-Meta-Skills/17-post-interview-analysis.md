@@ -15,7 +15,20 @@ Quick refresher: The interview doesn't end when you hang up. Post-interview anal
 
 ### The Learning Loop
 
+```mermaid
+flowchart TD
+    Prepare["PREPARE"] --> Interview["INTERVIEW"]
+    Interview --> Analyze["ANALYZE<br/>(You are here)"]
+    Analyze --> Improve["IMPROVE"]
+    Improve -.->|Back to| Prepare
+    
+    style Analyze fill:#e1f5ff
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    THE INTERVIEW LEARNING LOOP                       │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -46,6 +59,7 @@ Quick refresher: The interview doesn't end when you hang up. Post-interview anal
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 Without analysis, you repeat the same mistakes. With analysis, each interview makes you stronger.
 

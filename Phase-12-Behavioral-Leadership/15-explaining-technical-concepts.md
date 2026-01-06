@@ -32,7 +32,20 @@ Without effective technical communication:
 
 ### The Audience Spectrum
 
+```mermaid
+flowchart LR
+    NT["Non-Technical<br/>Executives, Sales, Customers, Marketing<br/>Focus: Business impact, Analogies,<br/>High-level flow, Why it matters"]
+    T["Technical<br/>Product Managers, Junior Engineers,<br/>QA Engineers, DevOps<br/>Focus: How it works, Implementation,<br/>APIs and interfaces, Diagrams"]
+    E["Expert<br/>Senior Engineers, Architects,<br/>Domain Experts, Interviewers<br/>Focus: Trade-offs, Edge cases,<br/>Scalability, Deep internals"]
+    
+    NT --> T
+    T --> E
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    AUDIENCE SPECTRUM                                     │
 │                                                                          │
@@ -51,6 +64,7 @@ Without effective technical communication:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### How to Assess Your Audience
 
@@ -175,11 +189,21 @@ Use diagrams when:
 ### Simple Diagram Patterns
 
 **Box and Arrow (System Components)**
+```mermaid
+flowchart LR
+    Client["Client"] --> Server["Server"]
+    Server --> Database["Database"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┐    ┌─────────┐    ┌─────────┐
 │ Client  │───►│ Server  │───►│Database │
 └─────────┘    └─────────┘    └─────────┘
 ```
+</details>
 
 **Flow Diagram (Process Steps)**
 ```

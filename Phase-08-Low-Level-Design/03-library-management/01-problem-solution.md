@@ -118,7 +118,131 @@ library.cancelReservation(reservation.getReservationId());
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class Library {
+        <<Singleton>>
+        - BookCatalog catalog
+        - MemberRegistry memberRegistry
+        - BookLendingService lendingService
+        - ReservationService reservationService
+        - NotificationService notificationService
+    }
+    
+    class BookCatalog {
+        - Map~String,Book~ books
+        + searchBooks(query) List~Book~
+        + searchByTitle(title) List~Book~
+    }
+    
+    class Book {
+        - String isbn
+        - String title
+        - String author
+        - List~BookItem~ items
+    }
+    
+    class BookItem {
+        - String barcode
+        - BookItemStatus status
+        - Member borrower
+    }
+    
+    class BookItemStatus {
+        <<enumeration>>
+        AVAILABLE
+        BORROWED
+        RESERVED
+        LOST
+    }
+    
+    class MemberRegistry {
+        - Map~String,Member~ members
+        + registerMember(member) void
+        + findMember(id) Member
+    }
+    
+    class Member {
+        - String memberId
+        - String name
+        - LibraryCard card
+        - List~Lending~ currentLoans
+    }
+    
+    class LibraryCard {
+        - String cardNumber
+        - LocalDate expiryDate
+        - boolean active
+    }
+    
+    class BookLendingService {
+        + checkoutBook(member, barcode) Lending
+        + returnBook(barcode) Fine
+        + payFine(member, fine) void
+    }
+    
+    class Lending {
+        - Member member
+        - BookItem item
+        - LocalDate dueDate
+        - LocalDate returnDate
+    }
+    
+    class Fine {
+        - double amount
+        - LocalDate issueDate
+        - boolean paid
+    }
+    
+    class ReservationService {
+        + reserveBook(member, isbn) Reservation
+        + cancelReservation(id) void
+    }
+    
+    class Reservation {
+        - String reservationId
+        - Member member
+        - Book book
+        - LocalDateTime createdAt
+    }
+    
+    class NotificationService {
+        + notify(member, message) void
+    }
+    
+    class EmailNotifier {
+        + notify(member, message) void
+    }
+    
+    class SMSNotifier {
+        + notify(member, message) void
+    }
+    
+    Library --> BookCatalog
+    Library --> MemberRegistry
+    Library --> BookLendingService
+    Library --> ReservationService
+    Library --> NotificationService
+    BookCatalog --> Book
+    Book --> BookItem
+    BookItem --> BookItemStatus
+    MemberRegistry --> Member
+    Member --> LibraryCard
+    BookLendingService --> Lending
+    BookLendingService --> Fine
+    Lending --> Member
+    Lending --> BookItem
+    ReservationService --> Reservation
+    Reservation --> Member
+    Reservation --> Book
+    NotificationService --> EmailNotifier
+    NotificationService --> SMSNotifier
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           LIBRARY MANAGEMENT SYSTEM                              │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -164,6 +288,8 @@ library.cancelReservation(reservation.getReservationId());
 │                                                                                │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Relationships Summary
 
@@ -1912,11 +2038,24 @@ public class BookItem {
 ```
 
 **State transition:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE
+    AVAILABLE --> BORROWED: checkout()
+    BORROWED --> AVAILABLE: returnItem()
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 AVAILABLE ──checkout()──► BORROWED
     ▲                        │
     └────returnItem()────────┘
 ```
+
+</details>
 
 ---
 

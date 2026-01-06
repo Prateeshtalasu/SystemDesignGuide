@@ -13,7 +13,32 @@ Before diving into Garbage Collection, you need to understand:
 
 Quick mental model:
 
+```mermaid
+flowchart TD
+    Step1["1. CREATION<br/>Object obj = new Object();"]
+    ObjStack["obj (Stack)"]
+    ObjHeap["Object on Heap<br/>(Memory used)"]
+    Step1 --> ObjStack
+    ObjStack -->|"references"| ObjHeap
+    
+    Step2["2. USAGE<br/>obj.doSomething();"]
+    Step1 --> Step2
+    
+    Step3["3. UNREACHABLE<br/>obj = null; // or obj goes out of scope"]
+    ObjStack2["obj (null)"]
+    ObjHeap2["Object on Heap<br/>(GARBAGE)<br/>← No reference!"]
+    Step2 --> Step3
+    Step3 --> ObjStack2
+    ObjStack2 -.->|"no reference"| ObjHeap2
+    
+    Step4["4. COLLECTION<br/>GC identifies unreachable objects<br/>and reclaims memory"]
+    Step3 --> Step4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OBJECT LIFECYCLE                                      │
 │                                                                          │
@@ -38,6 +63,8 @@ Quick mental model:
 │      GC identifies unreachable objects and reclaims memory             │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 If you understand that objects become garbage when no references point to them, you're ready.
@@ -76,7 +103,25 @@ buffer = NULL;
 
 Before automatic garbage collection:
 
+```mermaid
+flowchart TD
+    Manual["MANUAL MEMORY MANAGEMENT"]
+    
+    Responsibilities["Developer responsibilities:<br/>- Track every allocation<br/>- Track every reference<br/>- Determine when object is no longer needed<br/>- Free memory at exactly the right time<br/>- Handle all error paths (free on exception)"]
+    
+    Patterns["Common patterns:<br/>- Reference counting (still used in Objective-C, Swift)<br/>- RAII in C++ (destructors free resources)<br/>- Manual free() calls"]
+    
+    Result["Result: ~50% of C/C++ bugs are memory-related"]
+    
+    Manual --> Responsibilities
+    Manual --> Patterns
+    Patterns --> Result
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MANUAL MEMORY MANAGEMENT                              │
 │                                                                          │
@@ -95,6 +140,8 @@ Before automatic garbage collection:
 │   Result: ~50% of C/C++ bugs are memory-related                        │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### What Breaks Without Proper GC Understanding
@@ -123,7 +170,42 @@ Even with automatic GC, problems occur:
 
 Think of GC like garbage collection in a city:
 
+```mermaid
+flowchart TD
+    City["YOUR APPLICATION = A City"]
+    
+    Objects["OBJECTS = Items in houses<br/>- Some items are in use (referenced)<br/>- Some items are garbage (unreferenced)"]
+    
+    GCRoots["GC ROOTS = City registry<br/>- Active threads (people currently in houses)<br/>- Static variables (permanent fixtures)<br/>- JNI references (government buildings)"]
+    
+    GC["GARBAGE COLLECTOR = Garbage trucks"]
+    
+    subgraph YoungGen["YOUNG GENERATION = New apartments"]
+        Eden["Eden (New items)<br/>Most items become garbage quickly<br/>(daily trash)"]
+        S1["Survivor 1<br/>Items that survived 1 GC"]
+        S2["Survivor 2<br/>Items that survived multiple GCs"]
+        Note1["Collected frequently (Minor GC) - Quick pickup"]
+    end
+    
+    subgraph OldGen["OLD GENERATION = Established homes"]
+        Old["Long-lived objects that survived many Minor GCs<br/>(Furniture, appliances - things you keep for years)"]
+        Note2["Collected infrequently (Major GC) - Big cleanup"]
+    end
+    
+    STW["STOP-THE-WORLD = City-wide cleanup day<br/>- Everyone must stay inside while trucks work<br/>- No new garbage can be created<br/>- City is 'paused'"]
+    
+    City --> Objects
+    City --> GCRoots
+    City --> GC
+    City --> YoungGen
+    City --> OldGen
+    City --> STW
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    GARBAGE TRUCK ANALOGY                                 │
 │                                                                          │
@@ -164,6 +246,8 @@ Think of GC like garbage collection in a city:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 **Key insights**:
 
@@ -179,7 +263,32 @@ Think of GC like garbage collection in a city:
 
 ### Heap Memory Structure
 
+```mermaid
+flowchart TD
+    Heap["HEAP"]
+    
+    subgraph YoungGen["YOUNG GENERATION (~1/3 of heap)"]
+        Eden["EDEN<br/>(New objects)<br/>~80%"]
+        S0["S0<br/>(Survivor)<br/>~10%"]
+        S1["S1<br/>(Survivor)<br/>~10%"]
+    end
+    
+    subgraph OldGen["OLD GENERATION (~2/3 of heap)"]
+        Old["Long-lived objects promoted<br/>from Young Generation"]
+    end
+    
+    subgraph Metaspace["METASPACE (Java 8+)"]
+        Meta["Class metadata, method bytecode<br/>(NOT in heap)<br/>Grows automatically<br/>(was PermGen before Java 8)"]
+    end
+    
+    Heap --> YoungGen
+    Heap --> OldGen
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    JVM HEAP STRUCTURE                                    │
 │                                                                          │
@@ -210,10 +319,46 @@ Think of GC like garbage collection in a city:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Object Allocation Flow
 
+```mermaid
+flowchart TD
+    New["new Object()"]
+    
+    Step1["1. Try to allocate in EDEN<br/>(Fast path: bump pointer allocation)"]
+    
+    Check1{"Eden full?"}
+    
+    Step2["2. MINOR GC (Young Generation Collection)<br/>- Stop-the-world (short pause)<br/>- Mark live objects in Eden and current Survivor<br/>- Copy live objects to other Survivor space<br/>- Clear Eden and old Survivor<br/>- Increment age of surviving objects"]
+    
+    Check2{"Object survived<br/>N collections?"}
+    
+    Step3["3. PROMOTION to Old Generation<br/>(Tenuring threshold, default ~15)"]
+    
+    Check3{"Old Generation<br/>full?"}
+    
+    Step4["4. MAJOR GC (Full Collection)<br/>- Stop-the-world (longer pause)<br/>- Collect entire heap<br/>- Compact memory (optional)"]
+    
+    New --> Step1
+    Step1 --> Check1
+    Check1 -->|"No"| New
+    Check1 -->|"Yes"| Step2
+    Step2 --> Check2
+    Check2 -->|"No"| New
+    Check2 -->|"Yes"| Step3
+    Step3 --> Check3
+    Check3 -->|"No"| New
+    Check3 -->|"Yes"| Step4
+    Step4 --> New
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OBJECT ALLOCATION FLOW                                │
 │                                                                          │
@@ -254,10 +399,54 @@ Think of GC like garbage collection in a city:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### How GC Finds Garbage (Mark and Sweep)
 
+```mermaid
+flowchart TD
+    GCRoots["GC ROOTS (Starting points for reachability analysis):<br/>- Local variables in active stack frames<br/>- Active threads<br/>- Static fields<br/>- JNI references"]
+    
+    subgraph Phase1["PHASE 1: MARK (Find live objects)"]
+        Roots["GC Roots"]
+        A["A (LIVE)"]
+        B["B (LIVE)"]
+        C["C (LIVE)"]
+        D["D (DEAD)"]
+        E["E (DEAD)"]
+        Roots --> A
+        A --> B
+        B --> C
+        D --> E
+        Note1["All marked LIVE<br/>Not reachable from roots = GARBAGE"]
+    end
+    
+    subgraph Phase2["PHASE 2: SWEEP (Reclaim dead objects)"]
+        Before1["Before: [A][D][B][E][C][free][free]"]
+        After1["After: [A][free][B][free][C][free][free]"]
+        Note2["D and E memory reclaimed"]
+        Before1 --> After1
+        After1 --> Note2
+    end
+    
+    subgraph Phase3["PHASE 3: COMPACT (Optional, reduces fragmentation)"]
+        Before2["Before: [A][free][B][free][C][free][free]"]
+        After2["After: [A][B][C][free][free][free][free]"]
+        Note3["Contiguous free space for large allocations"]
+        Before2 --> After2
+        After2 --> Note3
+    end
+    
+    GCRoots --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Phase3
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    MARK AND SWEEP ALGORITHM                              │
 │                                                                          │
@@ -309,6 +498,8 @@ Think of GC like garbage collection in a city:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ---
 
@@ -342,7 +533,40 @@ public class OrderController {
 
 ### Memory Trace
 
+```mermaid
+sequenceDiagram
+    participant R1 as Request 1
+    participant Eden as EDEN
+    participant GC as MINOR GC
+    participant Survivor as SURVIVOR
+    participant OldGen as OLD GENERATION
+    
+    Note over Eden: EDEN (before request):<br/>[free][free][free][free][free][free][free][free]
+    
+    R1->>Eden: Request 1 arrives
+    Eden->>Eden: EDEN (during request):<br/>[Order][ArrayList][Item1][Item2][Item3][free][free][free]
+    R1->>Eden: Request completes, response sent<br/>All objects become unreachable (garbage)
+    
+    Note over Eden: Requests 2-100 arrive (Eden fills up)
+    Eden->>Eden: EDEN (full):<br/>[Obj][Obj][Obj][Obj][Obj][Obj][Obj][Obj]...<br/>(mostly garbage)
+    
+    Eden->>GC: MINOR GC TRIGGERED!
+    GC->>GC: 1. Stop-the-world (application pauses)<br/>2. Mark live objects from GC roots<br/>   - Active request's objects are LIVE<br/>   - Completed requests' objects are GARBAGE<br/>3. Copy live objects to Survivor space<br/>4. Clear Eden<br/>5. Resume application
+    
+    GC->>Eden: EDEN (after Minor GC):<br/>[free][free][free][free][free][free][free][free]
+    GC->>Survivor: SURVIVOR:<br/>[LiveObj1][LiveObj2][free][free]<br/>(objects from active request)
+    
+    Note over GC: Pause time: ~5-20ms (for typical web app)
+    
+    Note over Survivor,OldGen: Long-lived objects (connection pools, caches):<br/>After surviving ~15 Minor GCs, objects are PROMOTED to Old Gen
+    
+    Survivor->>OldGen: OLD GENERATION:<br/>[ConnPool][Cache][Singleton][ThreadPool]...<br/>These are collected only during Major GC<br/>(less frequent, longer)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OBJECT LIFECYCLE TRACE                                │
 │                                                                          │
@@ -396,6 +620,8 @@ public class OrderController {
 │   These are collected only during Major GC (less frequent, longer)     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -497,7 +723,27 @@ Hour 5: 2GB
 
 ### Serial GC (Single-threaded)
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant GC as GC Thread
+    
+    Note over App,GC: -XX:+UseSerialGC<br/>Characteristics:<br/>- Single thread for all GC work<br/>- Stop-the-world for entire collection<br/>- Simple, low overhead<br/>- Long pauses on large heaps
+    
+    App->>App: [Running...]
+    App->>GC: [Paused]
+    GC->>GC: [Mark]
+    GC->>GC: [Sweep]
+    GC->>GC: [Compact]
+    GC->>App: [Running...]
+    
+    Note over App,GC: Best for:<br/>- Small heaps (&lt;100MB)<br/>- Single-core machines<br/>- Client applications
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SERIAL GC                                             │
 │                                                                          │
@@ -524,10 +770,37 @@ Hour 5: 2GB
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Parallel GC (Throughput Collector)
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant T1 as GC Thread 1
+    participant T2 as GC Thread 2
+    participant T3 as GC Thread 3
+    
+    Note over App,T3: -XX:+UseParallelGC (default in Java 8)<br/>Characteristics:<br/>- Multiple threads for GC work<br/>- Stop-the-world, but faster due to parallelism<br/>- Optimized for throughput (minimize total GC time)<br/>- Longer individual pauses acceptable
+    
+    App->>App: [Running...]
+    App->>T1: [Paused]
+    T1->>T1: [Thread1: Mark]
+    T2->>T2: [Thread2: Mark]
+    T3->>T3: [Thread3: Mark]
+    T1->>T1: [Thread1: Sweep]
+    T2->>T2: [Thread2: Sweep]
+    T3->>T3: [Thread3: Sweep]
+    T1->>App: [Running...]
+    
+    Note over App,T3: Tuning:<br/>-XX:ParallelGCThreads=N # Number of GC threads<br/>-XX:MaxGCPauseMillis=N # Target pause time<br/>-XX:GCTimeRatio=N # Throughput goal (1/(1+N))<br/><br/>Best for:<br/>- Batch processing<br/>- Background jobs<br/>- When throughput matters more than latency
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    PARALLEL GC                                           │
 │                                                                          │
@@ -558,10 +831,37 @@ Hour 5: 2GB
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### G1 GC (Garbage First)
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant GC as GC
+    
+    Note over App,GC: -XX:+UseG1GC (default in Java 9+)<br/>Heap divided into regions:<br/>E = Eden, S = Survivor, O = Old, H = Humongous (large objects)<br/>Key innovation: Collect regions with most garbage first
+    
+    Note over App,GC: Phases:<br/>1. Initial Mark (STW, short) - Mark roots<br/>2. Concurrent Mark - Find live objects while app runs<br/>3. Remark (STW, short) - Complete marking<br/>4. Cleanup/Evacuation (STW) - Reclaim empty regions, copy live
+    
+    App->>App: [Running...]
+    App->>GC: [Paused]
+    GC->>GC: [Initial Mark] ~5ms
+    GC->>App: [Running...]
+    GC->>GC: [Concurrent Mark] Runs alongside app
+    App->>GC: [Paused]
+    GC->>GC: [Remark] ~10ms
+    GC->>GC: [Cleanup] ~20ms
+    GC->>App: [Running...]
+    
+    Note over App,GC: Tuning:<br/>-XX:MaxGCPauseMillis=200 # Target pause (default 200ms)<br/>-XX:G1HeapRegionSize=N # Region size (1-32MB)<br/>-XX:InitiatingHeapOccupancyPercent=45 # When to start marking<br/><br/>Best for:<br/>- Large heaps (&gt;4GB)<br/>- Applications needing predictable pauses<br/>- General-purpose, balanced workloads
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    G1 GC (Garbage First)                                 │
 │                                                                          │
@@ -602,10 +902,39 @@ Hour 5: 2GB
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### ZGC (Low Latency)
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant GC as GC
+    
+    Note over App,GC: -XX:+UseZGC (Java 11+, production-ready in Java 15+)<br/>Characteristics:<br/>- Sub-millisecond pauses (typically &lt;1ms)<br/>- Pauses don't increase with heap size<br/>- Supports heaps from 8MB to 16TB<br/>- Concurrent everything (mark, relocate, remap)
+    
+    Note over App,GC: How it achieves low latency:<br/>- Colored pointers (metadata in pointer bits)<br/>- Load barriers (check/fix references on read)<br/>- Concurrent relocation
+    
+    App->>App: [Running...]
+    GC->>GC: [Concurrent Mark]
+    App->>GC: [Paused]
+    GC->>GC: [Pause Mark Start] &lt;1ms
+    GC->>App: [Running...]
+    GC->>GC: [Concurrent Mark]
+    App->>GC: [Paused]
+    GC->>GC: [Pause Mark End] &lt;1ms
+    GC->>App: [Running...]
+    GC->>GC: [Concurrent Relocate]
+    GC->>GC: [Concurrent Remap]
+    
+    Note over App,GC: Tuning (minimal needed):<br/>-XX:+UseZGC<br/>-Xmx&lt;size&gt; # Set max heap<br/>-XX:SoftMaxHeapSize=&lt;size&gt; # Soft limit for GC to aim for<br/><br/>Best for:<br/>- Latency-sensitive applications<br/>- Large heaps where G1 pauses are too long<br/>- Real-time systems
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ZGC (Z Garbage Collector)                             │
 │                                                                          │
@@ -643,10 +972,30 @@ Hour 5: 2GB
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Shenandoah GC
 
+```mermaid
+flowchart TD
+    Shenandoah["SHENANDOAH GC<br/>-XX:+UseShenandoahGC (Java 12+, OpenJDK)"]
+    
+    Goals["Similar goals to ZGC:<br/>- Sub-millisecond pauses<br/>- Concurrent compaction<br/>- Pause times independent of heap size"]
+    
+    Approach["Different approach:<br/>- Brooks pointers (forwarding pointers)<br/>- Works with smaller heaps than ZGC<br/>- Available in OpenJDK (not Oracle JDK)"]
+    
+    BestFor["Best for:<br/>- Same use cases as ZGC<br/>- When using OpenJDK<br/>- Smaller heaps where ZGC overhead is noticeable"]
+    
+    Shenandoah --> Goals
+    Goals --> Approach
+    Approach --> BestFor
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    SHENANDOAH GC                                         │
 │                                                                          │
@@ -668,6 +1017,8 @@ Hour 5: 2GB
 │   - Smaller heaps where ZGC overhead is noticeable                    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### GC Algorithm Comparison
@@ -844,7 +1195,45 @@ Before tuning:
 
 ## 9️⃣ Comparison: GC Selection Guide
 
+```mermaid
+flowchart TD
+    Start{"Is latency critical<br/>(sub-10ms pauses required)?"}
+    
+    Yes1["Use ZGC or Shenandoah<br/>-XX:+UseZGC"]
+    
+    Throughput{"Is throughput<br/>the priority?"}
+    
+    HeapSize{"Is heap &lt; 4GB?"}
+    
+    Parallel["Parallel GC<br/>-XX:+UseParallelGC"]
+    
+    G1_1["G1 GC<br/>-XX:+UseG1GC"]
+    
+    Predictable{"Need predictable<br/>pauses?"}
+    
+    G1_2["G1 GC<br/>-XX:+UseG1GC<br/>-XX:MaxGCPauseMillis=200"]
+    
+    G1_3["G1 GC (default in Java 9+)"]
+    
+    Start -->|"YES"| Yes1
+    Start -->|"NO"| Throughput
+    
+    Throughput -->|"YES"| HeapSize
+    Throughput -->|"NO"| Predictable
+    
+    HeapSize -->|"YES"| Parallel
+    HeapSize -->|"NO"| G1_1
+    
+    Predictable -->|"YES"| G1_2
+    Predictable -->|"NO"| G1_3
+    
+    Special["Special cases:<br/>- Single core / small heap (&lt;100MB): Serial GC<br/>- Containerized with memory limits: G1 or ZGC<br/>- Real-time systems: ZGC or Shenandoah"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    GC SELECTION DECISION TREE                            │
 │                                                                          │
@@ -877,6 +1266,8 @@ Before tuning:
 │   - Real-time systems: ZGC or Shenandoah                               │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---

@@ -21,7 +21,18 @@ Before diving into the split brain problem, you should understand:
 Imagine a database cluster with 3 nodes. Node A is the leader (handles writes). Nodes B and C are followers (replicate from A).
 
 **Normal operation**:
+```mermaid
+flowchart LR
+    A[Node A<br/>Leader] -->|replication| B[Node B<br/>Follower]
+    A -->|replication| C[Node C<br/>Follower]
+    B -.->|replication| A
+    C -.->|replication| A
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┐     ┌─────────┐     ┌─────────┐
 │ Node A  │────►│ Node B  │     │ Node C  │
 │(Leader) │     │(Follower)│◄───│(Follower)│
@@ -30,9 +41,26 @@ Imagine a database cluster with 3 nodes. Node A is the leader (handles writes). 
      └───────────────┴───────────────┘
            Replication
 ```
+</details>
 
 **Network partition occurs**:
+```mermaid
+flowchart TB
+    subgraph Partition1[" "]
+        A[Node A<br/>Leader]
+    end
+    subgraph Partition2[" "]
+        B[Node B<br/>Follower]
+        C[Node C<br/>Follower]
+    end
+    Partition1 -.->|PARTITION| Partition2
+    B --- C
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────┐          ║          ┌─────────┐
 │ Node A  │          ║          │ Node B  │
 │(Leader) │    PARTITION        │(Follower)│
@@ -43,6 +71,7 @@ Imagine a database cluster with 3 nodes. Node A is the leader (handles writes). 
                      ║          │(Follower)│
                      ║          └─────────┘
 ```
+</details>
 
 **The split brain problem**:
 - Node A is isolated but thinks it's still the leader
@@ -108,10 +137,20 @@ When partition heals:
 
 Imagine two generals with armies on opposite sides of an enemy city. They need to attack simultaneously or they'll lose. They can only communicate by sending messengers through enemy territory.
 
+```mermaid
+flowchart LR
+    A[General A] ---|messengers may be captured| City[Enemy City]
+    City ---|messengers may be captured| B[General B]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 General A ────────── Enemy City ────────── General B
               (messengers may be captured)
 ```
+</details>
 
 **The problem**:
 - General A sends: "Attack at dawn"
@@ -156,7 +195,23 @@ Split brain is fundamentally about **conflicting authority**. When nodes can't c
 ### Causes of Split Brain
 
 **1. Network Partition**
+```mermaid
+flowchart TB
+    subgraph DC1["Datacenter A"]
+        N1[Node 1]
+        N2[Node 2]
+    end
+    subgraph DC2["Datacenter B"]
+        N3[Node 3]
+        N4[Node 4]
+    end
+    DC1 -.->|Network link fails| DC2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────┐     ┌─────────────┐
 │ Datacenter A│  X  │ Datacenter B│
 │   Node 1    │     │   Node 3    │
@@ -164,9 +219,25 @@ Split brain is fundamentally about **conflicting authority**. When nodes can't c
 └─────────────┘     └─────────────┘
       Network link fails
 ```
+</details>
 
 **2. Node Isolation**
+```mermaid
+flowchart TB
+    subgraph Network["Network"]
+        A[Node A]
+        B[Node B]
+        C[Node C]
+    end
+    A -.->|network card fails| B
+    B --- C
+    A -.->|network card fails| C
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────┐
 │         Network                  │
 │    ┌───┐   ┌───┐   ┌───┐       │
@@ -178,15 +249,26 @@ Split brain is fundamentally about **conflicting authority**. When nodes can't c
 └─────────────────────────────────┘
 Node A is isolated but still running
 ```
+</details>
 
 **3. Asymmetric Partition**
+```mermaid
+flowchart LR
+    A[Node A] -->|A can send to B| B[Node B]
+    A -.->|B cannot send to A| B
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
      A ──────► B    (A can send to B)
      A ◄────X─ B    (B cannot send to A)
      
 A thinks B is dead (no responses)
 B thinks A is alive (receiving messages)
 ```
+</details>
 
 **4. GC Pause / Process Hang**
 ```
@@ -1593,7 +1675,30 @@ void handleHeartbeat(long timestamp, long term) {
 **A**: A distributed lock service must ensure only one client holds a lock at a time, even during partitions.
 
 **Architecture**:
+```mermaid
+flowchart TB
+    subgraph Cluster["Lock Service Cluster"]
+        N1[Node 1<br/>Leader]
+        N2[Node 2<br/>Follower]
+        N3[Node 3<br/>Follower]
+        N1 --- N2
+        N2 --- N3
+        N1 --- N3
+    end
+    N1 --> C1
+    N1 --> C2
+    N1 --> C3
+    subgraph Clients["Clients"]
+        C1[Client A]
+        C2[Client B]
+        C3[Client C]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Lock Service Cluster                      │
 │                                                              │
@@ -1614,6 +1719,7 @@ void handleHeartbeat(long timestamp, long term) {
 │    └────────┘    └────────┘    └────────┘                  │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Key Design Decisions**:
 
@@ -1727,7 +1833,28 @@ After partition heals:
 **Architecture Options**:
 
 **Option 1: Single Raft cluster across DCs**
+```mermaid
+flowchart TB
+    subgraph DC1["DC1 Primary"]
+        N1[Node 1]
+        N2[Node 2]
+    end
+    subgraph DC2["DC2 Secondary"]
+        N3[Node 3]
+        N4[Node 4]
+    end
+    subgraph DC3["DC3 Witness"]
+        N5[Node 5<br/>no data]
+    end
+    N1 --- N3
+    N3 --- N5
+    N1 --- N5
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 DC1 (Primary)        DC2 (Secondary)      DC3 (Witness)
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  Node 1     │     │  Node 3     │     │  Node 5     │
@@ -1737,12 +1864,28 @@ DC1 (Primary)        DC2 (Secondary)      DC3 (Witness)
       └───────────────────┴───────────────────┘
               Raft consensus (quorum = 3)
 ```
+</details>
 
 **Pros**: Strong consistency, automatic failover
 **Cons**: High latency (cross-DC for every write), requires 3 DCs
 
 **Option 2: Leader per DC with async replication**
+```mermaid
+flowchart LR
+    subgraph DC1["DC1"]
+        L1[Leader 1<br/>Region A]
+    end
+    subgraph DC2["DC2"]
+        L2[Leader 2<br/>Region B]
+    end
+    L1 -.->|async replication| L2
+    L2 -.->|async replication| L1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 DC1                      DC2
 ┌─────────────┐         ┌─────────────┐
 │  Leader 1   │◄───────►│  Leader 2   │
@@ -1753,12 +1896,37 @@ Each DC handles its own region
 Async replication for disaster recovery
 Accept eventual consistency
 ```
+</details>
 
 **Pros**: Low latency, DC-local availability
 **Cons**: Eventual consistency, conflict resolution needed
 
 **Option 3: Hierarchical consensus**
+```mermaid
+flowchart TB
+    subgraph Global["Global Layer (across DCs)"]
+        GR[Global Raft<br/>metadata]
+        R1[DC1-rep]
+        R2[DC2-rep]
+        R3[DC3-rep]
+        R1 --- R2
+        R2 --- R3
+        R1 --- R3
+    end
+    GR --> LR1
+    GR --> LR2
+    subgraph Local1["Local Layer (within DC)"]
+        LR1[DC1 Local Raft<br/>data]
+    end
+    subgraph Local2["Local Layer (within DC)"]
+        LR2[DC2 Local Raft<br/>data]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Global Layer (across DCs):
 ┌─────────────────────────────────────────────┐
 │           Global Raft (metadata)            │
@@ -1773,6 +1941,7 @@ Local Layer (within DC):     Local Layer (within DC):
 │ (data)          │         │ (data)          │
 └─────────────────┘         └─────────────────┘
 ```
+</details>
 
 **Pros**: Local writes fast, global consistency for metadata
 **Cons**: Complex, different consistency for different data
@@ -1853,7 +2022,29 @@ In production, use **Raft/Paxos-based systems** (etcd, ZooKeeper) for coordinati
 
 ## Quick Reference Card
 
-```
+| Category | Item | Description |
+|----------|------|-------------|
+| **SPLIT BRAIN - Cause** | Network partition | Nodes can't communicate |
+| | Node isolation | Single node cut off |
+| | Asymmetric network | One-way communication |
+| | GC pause | Node appears dead but isn't |
+| **PREVENTION** | Quorum | Majority required for decisions |
+| | Fencing tokens | Monotonic tokens reject old leaders |
+| | STONITH | Kill other node before taking over |
+| | Leader lease | Time-bounded authority |
+| **BEST PRACTICES** | Odd node count | 3, 5, 7 nodes for clear majority |
+| | Clock drift buffer | Account for clock differences |
+| | GC awareness | Check authority before AND after ops |
+| | Fencing at storage | Storage rejects stale tokens |
+| **QUORUM FORMULA** | Quorum size | (n / 2) + 1 where n = total nodes |
+| | 3 nodes | Quorum = 2 |
+| | 5 nodes | Quorum = 3 |
+| | 7 nodes | Quorum = 4 |
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    SPLIT BRAIN                               │
 ├─────────────────────────────────────────────────────────────┤
@@ -1886,4 +2077,5 @@ In production, use **Raft/Paxos-based systems** (etcd, ZooKeeper) for coordinati
 │ 7 nodes            │ Quorum = 4                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 

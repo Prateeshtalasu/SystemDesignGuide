@@ -118,7 +118,22 @@ Order Service publishes "OrderCreated" event (asynchronous, others can process l
 
 **Request-Response (REST/gRPC):**
 
+```mermaid
+flowchart TD
+    Client["Client Service"]
+    Send["Send HTTP/gRPC request<br/>'GET /api/users/123'"]
+    Wait["Wait for response (blocking)"]
+    Receive["Receive response<br/>{'id': 123, 'name': 'John'}"]
+    
+    Client --> Send
+    Send --> Wait
+    Wait --> Receive
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client Service
   │
   ├─> Send HTTP/gRPC request
@@ -129,6 +144,7 @@ Client Service
   └─> Receive response
       {"id": 123, "name": "John"}
 ```
+</details>
 
 **Characteristics:**
 - Client waits for response
@@ -145,7 +161,34 @@ Client Service
 
 **Event-Driven (Messaging):**
 
+```mermaid
+flowchart TD
+    Producer["Producer Service"]
+    Publish["Publish event to message broker<br/>Topic: 'order-created'<br/>Payload: {'orderId': '123', ...}"]
+    Continue["Continue (doesn't wait)"]
+    
+    Broker["Message Broker<br/>(Kafka/RabbitMQ)"]
+    Store["Store event"]
+    Route["Route to subscribers"]
+    
+    Inventory["Inventory Service (subscribed)<br/>Receives event, reserves stock"]
+    Payment["Payment Service (subscribed)<br/>Receives event, charges customer"]
+    Shipping["Shipping Service (subscribed)<br/>Receives event, creates shipment"]
+    
+    Producer --> Publish
+    Publish --> Continue
+    Publish --> Broker
+    Broker --> Store
+    Store --> Route
+    Route --> Inventory
+    Route --> Payment
+    Route --> Shipping
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Producer Service
   │
   ├─> Publish event to message broker
@@ -169,6 +212,7 @@ Consumer Services
   └─> Shipping Service (subscribed)
       └─> Receives event, creates shipment
 ```
+</details>
 
 **Characteristics:**
 - Fire-and-forget (producer doesn't wait)
@@ -217,7 +261,43 @@ Processor Service
 
 **How it Works:**
 
+```mermaid
+flowchart TD
+    OrderSvc["Order Service"]
+    OrderEvent["Publishes 'OrderCreated' event"]
+    
+    PaymentSvc["Payment Service (subscribed)"]
+    Receive1["Receives 'OrderCreated'"]
+    Process1["Processes payment"]
+    PaymentEvent["Publishes 'PaymentCompleted' event"]
+    
+    InventorySvc["Inventory Service<br/>(subscribed to 'PaymentCompleted')"]
+    Receive2["Receives 'PaymentCompleted'"]
+    Reserve["Reserves stock"]
+    InventoryEvent["Publishes 'InventoryReserved' event"]
+    
+    ShippingSvc["Shipping Service<br/>(subscribed to 'InventoryReserved')"]
+    Receive3["Receives 'InventoryReserved'"]
+    Create["Creates shipment"]
+    
+    OrderSvc --> OrderEvent
+    OrderEvent --> PaymentSvc
+    PaymentSvc --> Receive1
+    Receive1 --> Process1
+    Process1 --> PaymentEvent
+    PaymentEvent --> InventorySvc
+    InventorySvc --> Receive2
+    Receive2 --> Reserve
+    Reserve --> InventoryEvent
+    InventoryEvent --> ShippingSvc
+    ShippingSvc --> Receive3
+    Receive3 --> Create
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Service
   │
   ├─> Publishes "OrderCreated" event
@@ -239,6 +319,7 @@ Shipping Service (subscribed to "InventoryReserved")
   └─> Receives "InventoryReserved"
       Creates shipment
 ```
+</details>
 
 **Characteristics:**
 - No central coordinator
@@ -251,7 +332,24 @@ Shipping Service (subscribed to "InventoryReserved")
 
 **How it Works:**
 
+```mermaid
+flowchart TD
+    Orchestrator["Order Orchestrator<br/>(Central Coordinator)"]
+    Step1["Step 1: Call Inventory Service<br/>'Reserve stock for order 123'<br/>← Response: 'Reserved'"]
+    Step2["Step 2: Call Payment Service<br/>'Charge customer for order 123'<br/>← Response: 'Charged'"]
+    Step3["Step 3: Call Shipping Service<br/>'Create shipment for order 123'<br/>← Response: 'Created'"]
+    Step4["Step 4: Update Order Status<br/>'Order fulfilled'"]
+    
+    Orchestrator --> Step1
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Order Orchestrator (Central Coordinator)
   │
   ├─> Step 1: Call Inventory Service
@@ -269,6 +367,7 @@ Order Orchestrator (Central Coordinator)
   └─> Step 4: Update Order Status
       "Order fulfilled"
 ```
+</details>
 
 **Characteristics:**
 - Central coordinator knows full flow
@@ -766,6 +865,7 @@ Publish "OrderCreated" event
 ## 1️⃣1️⃣ One Clean Mental Summary
 
 Microservices communicate via synchronous (request-response, immediate) or asynchronous (events, eventual) patterns. **Synchronous** (REST/gRPC) is for when you need immediate response and strong consistency (payment, queries). **Asynchronous** (events, messaging) is for loose coupling and eventual consistency (notifications, analytics). **Choreography** lets services react to events independently (maximum decoupling). **Orchestration** uses a central coordinator for complex workflows (better visibility). **Hybrid approach** is common: synchronous for critical path, asynchronous for non-critical. Choose based on requirements: need immediate feedback → synchronous, can accept eventual → asynchronous, complex workflow → orchestration, simple flow → choreography. The key trade-off is consistency (strong vs eventual) vs coupling (tight vs loose).
+
 
 
 

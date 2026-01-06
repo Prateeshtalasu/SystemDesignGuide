@@ -21,7 +21,31 @@ If you understand that higher hit rates mean better performance and lower databa
 
 You added caching to your application. Great! But your cache hit rate is only 60%. That means 40% of requests still hit the database.
 
+```mermaid
+flowchart TD
+    subgraph Current["Current State"]
+        C1["10,000 requests/second"]
+        C2["Cache Hits: 6,000 (60%) → 1ms response time"]
+        C3["Cache Misses: 4,000 (40%) → 50ms response time"]
+        C4["Average latency: 0.6 × 1ms + 0.4 × 50ms = 20.6ms"]
+        C5["Database load: 4,000 queries/second (struggling)"]
+    end
+    
+    subgraph After["After Optimization (95% hit rate)"]
+        A1["10,000 requests/second"]
+        A2["Cache Hits: 9,500 (95%) → 1ms response time"]
+        A3["Cache Misses: 500 (5%) → 50ms response time"]
+        A4["Average latency: 0.95 × 1ms + 0.05 × 50ms = 3.45ms"]
+        A5["Database load: 500 queries/second (comfortable)"]
+    end
+    
+    Result["6x faster response, 8x less database load!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE OPTIMIZATION PROBLEM                              │
 │                                                                          │
@@ -52,6 +76,7 @@ You added caching to your application. Great! But your cache hit rate is only 60
 │   6x faster response, 8x less database load!                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Why Optimization Matters
 
@@ -89,7 +114,32 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 
 ### The Grocery Store Analogy
 
+```mermaid
+flowchart TD
+    Setup["Your kitchen (local cache) has limited space.<br/>Grocery store (database) is 20 minutes away."]
+    
+    subgraph Unopt["UNOPTIMIZED APPROACH"]
+        U1["- Random items in kitchen"]
+        U2["- Frequent trips to store"]
+        U3["- Hours wasted driving"]
+    end
+    
+    subgraph Opt["OPTIMIZED APPROACH"]
+        O1["1. TRACK what you use frequently (hit rate monitoring)"]
+        O2["2. KEEP frequently used items in kitchen (hot data in cache)"]
+        O3["3. BULK BUY items when you go (cache warming)"]
+        O4["4. THROW OUT expired items (TTL)"]
+        O5["5. ORGANIZE by frequency (partitioning)"]
+        O6["6. KNOW what sells out fast (hot keys)"]
+    end
+    
+    Result["Result: Fewer trips, faster meals, less wasted food"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE GROCERY STORE ANALOGY                             │
 │                                                                          │
@@ -112,6 +162,7 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   Result: Fewer trips, faster meals, less wasted food                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -119,7 +170,23 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 
 ### Cache Optimization Strategies
 
+```mermaid
+flowchart TD
+    S1["1. HIT RATE OPTIMIZATION<br/>- Right cache size<br/>- Right TTL<br/>- Right eviction policy"]
+    
+    S2["2. HOT KEY HANDLING<br/>- Identify hot keys<br/>- Distribute load<br/>- Local caching"]
+    
+    S3["3. CACHE WARMING<br/>- Pre-populate cache<br/>- Predict access patterns<br/>- Scheduled warming"]
+    
+    S4["4. CACHE PARTITIONING<br/>- Separate caches for different data<br/>- Different TTLs for different types<br/>- Isolated failure domains"]
+    
+    S5["5. SIZING OPTIMIZATION<br/>- Right size for working set<br/>- Memory vs hit rate tradeoff<br/>- Cost optimization"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    OPTIMIZATION STRATEGIES                               │
 │                                                                          │
@@ -149,6 +216,7 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │      - Cost optimization                                                 │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -156,7 +224,28 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 
 **Understanding Your Cache Performance**
 
+```mermaid
+flowchart TD
+    Metrics["Key Metrics to Track"]
+    
+    M1["1. Hit Rate = Hits / (Hits + Misses)<br/>Target: >95% for most applications"]
+    M2["2. Miss Rate = 1 - Hit Rate<br/>Lower is better"]
+    M3["3. Eviction Rate = Evictions / Time<br/>High eviction = cache too small"]
+    M4["4. Load Time = Time to populate cache on miss<br/>High load time = expensive misses"]
+    M5["5. Memory Usage = Current Size / Max Size<br/>If always at 100%, might need more space"]
+    
+    subgraph Analysis["Analysis"]
+        A1["If hit rate is low AND eviction rate is high:<br/>→ Cache is too small, increase size"]
+        A2["If hit rate is low AND eviction rate is low:<br/>→ Wrong data is being cached, review what you cache"]
+        A3["If hit rate is low AND TTL is very short:<br/>→ Data expires before reuse, increase TTL"]
+        A4["If memory usage is low AND hit rate is low:<br/>→ Not caching enough, cache more data types"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HIT RATE METRICS                                      │
 │                                                                          │
@@ -193,10 +282,35 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Optimizing TTL**
 
+```mermaid
+flowchart TD
+    subgraph TooShort["TTL Too Short"]
+        TS1["- Data expires before reuse"]
+        TS2["- Low hit rate"]
+        TS3["- High database load"]
+    end
+    
+    subgraph TooLong["TTL Too Long"]
+        TL1["- Stale data served"]
+        TL2["- Memory wasted on old data"]
+        TL3["- Consistency issues"]
+    end
+    
+    subgraph Optimal["Optimal TTL Depends On"]
+        Table["Data Type | Suggested TTL | Reason<br/>Static config | Hours to days | Rarely changes<br/>User profile | 5-30 minutes | Changes sometimes<br/>Product catalog | 5-15 minutes | Moderate changes<br/>Session data | Until logout | User-specific<br/>Real-time prices | 30-60 seconds | Frequent changes<br/>Live scores | 5-10 seconds | Very frequent"]
+    end
+    
+    Adaptive["Adaptive TTL: Adjust based on access patterns<br/>- Frequently accessed → Longer TTL<br/>- Rarely accessed → Shorter TTL"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    TTL OPTIMIZATION                                      │
 │                                                                          │
@@ -227,6 +341,7 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   - Rarely accessed → Shorter TTL                                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -234,7 +349,23 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 
 **What is a Hot Key?**
 
+```mermaid
+flowchart TD
+    subgraph Normal["Normal Distribution"]
+        N1["Key | Requests/sec<br/>product:1 | 100<br/>product:2 | 95<br/>product:3 | 90<br/>... | ..."]
+    end
+    
+    subgraph Hot["With Hot Key (e.g., viral product)"]
+        H1["Key | Requests/sec<br/>product:viral123 | 500,000 ← HOT KEY!<br/>product:1 | 100<br/>product:2 | 95<br/>... | ..."]
+    end
+    
+    Problems["Problems:<br/>1. Single Redis node handling all hot key requests<br/>2. Network bandwidth saturated<br/>3. If key expires, massive stampede<br/>4. Single point of failure"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE HOT KEY PROBLEM                                   │
 │                                                                          │
@@ -265,10 +396,45 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   4. Single point of failure                                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 **Hot Key Solutions**
 
+```mermaid
+flowchart TD
+    subgraph S1["SOLUTION 1: Local Cache (L1)"]
+        Desc1["Add in-memory cache in front of Redis<br/>Hot keys served from local memory (50ns vs 1ms)"]
+        S1A["Server 1<br/>L1 Cache<br/>hot:123"]
+        S1B["Server 2<br/>L1 Cache<br/>hot:123"]
+        S1C["Server 3<br/>L1 Cache<br/>hot:123"]
+        Redis1["Redis<br/>← Much less load"]
+        S1A --> Redis1
+        S1B --> Redis1
+        S1C --> Redis1
+    end
+    
+    subgraph S2["SOLUTION 2: Key Replication"]
+        Desc2["Replicate hot key to multiple Redis nodes<br/>Read from random replica"]
+        Keys["hot:123:0, hot:123:1, hot:123:2 (same value)"]
+        Client["Client: Read from hot:123:{random(0,2)}"]
+    end
+    
+    subgraph S3["SOLUTION 3: Read Replicas"]
+        Desc3["Use Redis replicas for read-heavy hot keys<br/>Master handles writes, replicas handle reads"]
+        Master["Master<br/>← Writes only"]
+        R1["Replica 1<br/>← Reads distributed"]
+        R2["Replica 2<br/>← Reads distributed"]
+        R3["Replica 3<br/>← Reads distributed"]
+        Master -->|"Replication"| R1
+        Master -->|"Replication"| R2
+        Master -->|"Replication"| R3
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    HOT KEY SOLUTIONS                                     │
 │                                                                          │
@@ -318,6 +484,7 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   └──────────┘ └──────────┘ └──────────┘                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -325,7 +492,35 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 
 **What is Cache Warming?**
 
+```mermaid
+flowchart TD
+    Problem["Problem: Cold cache after deployment or restart"]
+    
+    subgraph Before["Before Warming"]
+        B1["9:00 AM Deploy new version"]
+        B2["9:01 AM Cache is empty"]
+        B3["9:02 AM Traffic spike, all requests hit database"]
+        B4["9:03 AM Database overwhelmed"]
+        B5["9:05 AM Site slow or down"]
+        B1 --> B2 --> B3 --> B4 --> B5
+    end
+    
+    subgraph After["After Warming"]
+        A1["9:00 AM Deploy new version"]
+        A2["9:00 AM Cache warming starts (background)"]
+        A3["9:01 AM Top 10,000 products pre-loaded"]
+        A4["9:02 AM Traffic spike, 95% cache hits"]
+        A5["9:03 AM Everything runs smoothly"]
+        A1 --> A2 --> A3 --> A4 --> A5
+    end
+    
+    Strategies["Warming Strategies:<br/>1. Pre-deploy warming: Load cache before switching traffic<br/>2. Gradual traffic shift: Slowly increase traffic to new instances<br/>3. Scheduled warming: Pre-load before known traffic spikes<br/>4. On-demand warming: Warm specific keys based on predictions"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE WARMING                                         │
 │                                                                          │
@@ -356,12 +551,31 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   4. On-demand warming: Warm specific keys based on predictions        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
 ### Strategy 4: Cache Partitioning
 
+```mermaid
+flowchart TD
+    subgraph Unpart["UNPARTITIONED"]
+        Single["Single Cache (10GB)<br/>- Products, Users, Sessions, Config all mixed together<br/>- One TTL for everything<br/>- One eviction policy<br/>- Single point of failure"]
+    end
+    
+    subgraph Part["PARTITIONED"]
+        PC["Product Cache<br/>5GB<br/>TTL: 15min<br/>LRU eviction"]
+        UC["User Cache<br/>3GB<br/>TTL: 30min<br/>LFU eviction"]
+        SC["Session Cache<br/>2GB<br/>TTL: 24hr<br/>TTL eviction"]
+    end
+    
+    Benefits["Benefits:<br/>1. Right TTL for each data type<br/>2. Right eviction policy for access patterns<br/>3. Isolated failures (user cache down ≠ product cache down)<br/>4. Independent scaling<br/>5. Better monitoring per partition"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE PARTITIONING                                    │
 │                                                                          │
@@ -396,12 +610,32 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   5. Better monitoring per partition                                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
 ### Strategy 5: Cache Sizing
 
+```mermaid
+flowchart TD
+    subgraph WSM["WORKING SET METHOD"]
+        W1["Cache should hold your working set - data accessed frequently"]
+        W2["Analysis:<br/>- 80% of requests hit 20% of data (Pareto principle)<br/>- Cache the 20% that gets 80% of traffic"]
+        W3["Example:<br/>- Total products: 1,000,000<br/>- Products accessed in last hour: 50,000<br/>- Products accessed >10 times/hour: 10,000<br/>→ Working set ≈ 10,000-50,000 products<br/>→ Cache size = working set × average item size<br/>→ If product = 10KB, cache = 100MB - 500MB"]
+    end
+    
+    subgraph HRT["HIT RATE TARGET METHOD"]
+        H1["Size cache to achieve target hit rate"]
+        H2["Process:<br/>1. Start with small cache<br/>2. Measure hit rate<br/>3. Increase size until target hit rate achieved<br/>4. Monitor and adjust"]
+        H3["Cache Size | Hit Rate | Marginal Improvement<br/>100MB | 70% | -<br/>200MB | 82% | +12%<br/>400MB | 91% | +9%<br/>800MB | 95% | +4%<br/>1600MB | 97% | +2% ← Diminishing returns"]
+        H4["Stop when marginal improvement < cost of additional memory"]
+    end
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    CACHE SIZING STRATEGIES                               │
 │                                                                          │
@@ -444,6 +678,7 @@ Hit Rate │ DB Queries (per 10K requests) │ Relative DB Load
 │   Stop when marginal improvement < cost of additional memory            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -520,7 +755,27 @@ Impact:
 
 ### Stack Overflow's Optimization
 
+```mermaid
+flowchart TD
+    Title["STACK OVERFLOW CACHING<br/>Key optimizations that enable 1.3B page views/month with 9 servers:"]
+    
+    O1["1. AGGRESSIVE LOCAL CACHING<br/>- Question data cached locally<br/>- User reputation cached locally<br/>- 99%+ hit rate for hot questions"]
+    
+    O2["2. OUTPUT CACHING<br/>- Full HTML pages cached<br/>- Invalidated on question/answer update"]
+    
+    O3["3. TIERED CACHING<br/>- L1: In-process (.NET MemoryCache)<br/>- L2: Redis cluster<br/>- L3: SQL Server"]
+    
+    O4["4. SMART INVALIDATION<br/>- Only invalidate what changed<br/>- Broadcast invalidation to all servers"]
+    
+    Lesson["Lesson: Cache everything, invalidate precisely"]
+    
+    Title --> O1 --> O2 --> O3 --> O4 --> Lesson
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    STACK OVERFLOW CACHING                                │
 │                                                                          │
@@ -547,10 +802,29 @@ Impact:
 │   Lesson: Cache everything, invalidate precisely                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Netflix's Caching Optimization
 
+```mermaid
+flowchart TD
+    Title["NETFLIX OPTIMIZATION TECHNIQUES"]
+    
+    H1["1. HOLLOW (Local Read-Only Datasets)<br/>- Entire catalog loaded into memory<br/>- Zero cache misses for catalog data<br/>- Refreshed periodically via delta updates"]
+    
+    E1["2. EVCache OPTIMIZATION<br/>- Zone-aware caching (prefer same availability zone)<br/>- Fallback to other zones on miss<br/>- Replication factor based on data criticality"]
+    
+    A1["3. ADAPTIVE TTL<br/>- Popular content: longer TTL<br/>- New releases: shorter TTL<br/>- Personalized data: medium TTL"]
+    
+    P1["4. PREDICTIVE WARMING<br/>- Pre-cache data for likely next actions<br/>- User opens app → warm their personalized data<br/>- User hovers on title → warm that title's data"]
+    
+    Title --> H1 --> E1 --> A1 --> P1
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NETFLIX OPTIMIZATION TECHNIQUES                       │
 │                                                                          │
@@ -575,6 +849,7 @@ Impact:
 │      - User hovers on title → warm that title's data                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 

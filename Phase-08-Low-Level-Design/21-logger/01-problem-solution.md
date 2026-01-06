@@ -124,7 +124,85 @@ logger.error("Critical error occurred");
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class Logger {
+        - String name
+        - LogLevel level
+        - List~LogAppender~ appenders
+        - LogFormatter formatter
+        + debug(message) void
+        + info(message) void
+        + warn(message) void
+        + error(message, throwable) void
+        + log(level, message) void
+    }
+    
+    class LogLevel {
+        <<enumeration>>
+        DEBUG
+        INFO
+        WARN
+        ERROR
+    }
+    
+    class LogAppender {
+        <<interface>>
+        + append(event) void
+    }
+    
+    class ConsoleAppender {
+        + append(event) void
+    }
+    
+    class FileAppender {
+        + append(event) void
+    }
+    
+    class RemoteAppender {
+        + append(event) void
+    }
+    
+    class LogFormatter {
+        <<interface>>
+        + format(event) String
+    }
+    
+    class SimpleFormatter {
+        + format(event) String
+    }
+    
+    class JSONFormatter {
+        + format(event) String
+    }
+    
+    class PatternFormatter {
+        + format(event) String
+    }
+    
+    class LogEvent {
+        - long timestamp
+        - LogLevel level
+        - String message
+        - Logger logger
+    }
+    
+    Logger --> LogLevel
+    Logger --> LogAppender
+    Logger --> LogFormatter
+    Logger --> LogEvent
+    LogAppender <|.. ConsoleAppender
+    LogAppender <|.. FileAppender
+    LogAppender <|.. RemoteAppender
+    LogFormatter <|.. SimpleFormatter
+    LogFormatter <|.. JSONFormatter
+    LogFormatter <|.. PatternFormatter
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              LOGGING SYSTEM                                      │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -170,6 +248,8 @@ logger.error("Critical error occurred");
 │                   └─────────────┘  └───────────┘  └───────────┘                │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

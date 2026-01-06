@@ -28,7 +28,7 @@ flowchart TD
     I["F0-C001.isAvailable = false<br/>F0-C001.parkedVehicle = car"]
     J["Create ParkingTicket(car, F0-C001)"]
     K["ticketId, entryTime, status = ACTIVE"]
-    L["activeTickets['TKT-xxx'] = ticket<br/>vehicleToTicket['ABC-1234'] = ticket"]
+    L["activeTickets[TKT-xxx] = ticket<br/>vehicleToTicket[ABC-1234] = ticket"]
     M["updateAllDisplayBoards()<br/>Floor 0 COMPACT: 5 → 4"]
 
     A --> B
@@ -91,7 +91,32 @@ F0-C001.parkedVehicle: Car("ABC-1234")
 
 **Step 2: Truck "TRK-9999" enters via Entry Panel 1**
 
+```mermaid
+flowchart TD
+    A["EntryPanel.processEntry(Truck('TRK-9999'))"]
+    B["ParkingLot.parkVehicle(truck)"]
+    C{"vehicleToTicket.containsKey('TRK-9999')?"}
+    D["findAvailableSpot(truck)"]
+    E["Floor 0: findAvailableSpot(truck)"]
+    F["Search order: LARGE only"]
+    G{"F0-L001.canFitVehicle(truck)?"}
+    H["F0-L001.parkVehicle(truck)"]
+    I["Ticket created, display updated"]
+    
+    A --> B
+    B --> C
+    C -->|false| D
+    D --> E
+    E --> F
+    F --> G
+    G -->|true| H
+    H --> I
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 EntryPanel.processEntry(Truck("TRK-9999"))
     │
     └──► ParkingLot.parkVehicle(truck)
@@ -111,6 +136,8 @@ EntryPanel.processEntry(Truck("TRK-9999"))
               └──► Ticket created, display updated
 ```
 
+</details>
+
 **State After Step 2:**
 
 ```
@@ -123,7 +150,22 @@ vehicleToTicket: {"ABC-1234": ticket1, "TRK-9999": ticket2}
 
 **Step 3: Car "ABC-1234" tries to enter again (Duplicate)**
 
+```mermaid
+flowchart TD
+    A["EntryPanel.processEntry(Car('ABC-1234'))"]
+    B["ParkingLot.parkVehicle(car)"]
+    C{"vehicleToTicket.containsKey('ABC-1234')?"}
+    D["Return null (entry denied)<br/>Print: Vehicle ABC-1234 is already parked!"]
+    
+    A --> B
+    B --> C
+    C -->|true| D
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 EntryPanel.processEntry(Car("ABC-1234"))
     │
     └──► ParkingLot.parkVehicle(car)
@@ -133,6 +175,8 @@ EntryPanel.processEntry(Car("ABC-1234"))
                         └──► Return null (entry denied)
                              Print: "Vehicle ABC-1234 is already parked!"
 ```
+
+</details>
 
 **Result:** Entry rejected, no state change
 
@@ -150,7 +194,7 @@ flowchart TD
     F["ticket1.markAsPaid($2.00)<br/>status = PAID<br/>exitTime = 10:45:00"]
     G["parkingLot.releaseSpot(ticket1)"]
     H["F0-C001.removeVehicle()<br/>F0-C001.isAvailable = true<br/>F0-C001.parkedVehicle = null"]
-    I["activeTickets.remove('TKT-xxx')<br/>vehicleToTicket.remove('ABC-1234')"]
+    I["activeTickets.remove(TKT-xxx)<br/>vehicleToTicket.remove(ABC-1234)"]
     J["updateAllDisplayBoards()<br/>Floor 0 COMPACT: 4 → 5"]
 
     A --> B --> C --> D --> E --> F --> G
@@ -213,7 +257,28 @@ F0-C001.isAvailable: true
 
 **Step 1: Car with permit "HND-0001" enters**
 
+```mermaid
+flowchart TD
+    A["Car handicappedCar = new Car('HND-0001', true)<br/>hasHandicappedPermit = true"]
+    B["ParkingLot.parkVehicle(handicappedCar)"]
+    C["findAvailableSpot(handicappedCar)"]
+    D["Floor 0: findAvailableSpot(handicappedCar)"]
+    E["Search order: COMPACT → LARGE → HANDICAPPED"]
+    F{"F0-C001 available?"}
+    G["Use COMPACT<br/>(saves handicapped for those who need it)"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F -->|Yes| G
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Car handicappedCar = new Car("HND-0001", true);  // hasHandicappedPermit = true
 
 ParkingLot.parkVehicle(handicappedCar)
@@ -228,11 +293,34 @@ ParkingLot.parkVehicle(handicappedCar)
                                    Use COMPACT (saves handicapped for those who need it)
 ```
 
+</details>
+
 **Key insight:** Even with permit, system prefers compact spots first.
 
 **Step 2: All compact/large spots full, handicapped car enters**
 
+```mermaid
+flowchart TD
+    A["Search order: COMPACT → LARGE → HANDICAPPED"]
+    B{"COMPACT spots available?"}
+    C{"LARGE spots available?"}
+    D["HANDICAPPED: F0-H001 available"]
+    E{"handicappedCar.canFitInSpot(HANDICAPPED)?"}
+    F{"hasHandicappedPermit?"}
+    G["Return true<br/>Park in F0-H001"]
+    
+    A --> B
+    B -->|All occupied| C
+    C -->|All occupied| D
+    D --> E
+    E --> F
+    F -->|true| G
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Search order: COMPACT → LARGE → HANDICAPPED
     │
     ├──► COMPACT spots: All occupied → Skip
@@ -245,9 +333,26 @@ Search order: COMPACT → LARGE → HANDICAPPED
                              Park in F0-H001
 ```
 
+</details>
+
 **Step 3: Car WITHOUT permit tries handicapped spot**
 
+```mermaid
+flowchart TD
+    A["Car regularCar = new Car('REG-0001', false)<br/>No permit"]
+    B["Search order: COMPACT → LARGE"]
+    C["HANDICAPPED spots are NOT in search order<br/>for cars without permit"]
+    D["Car cannot be assigned to handicapped spot"]
+    
+    A --> B
+    B --> C
+    C --> D
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Car regularCar = new Car("REG-0001", false);  // No permit
 
 Search order: COMPACT → LARGE
@@ -255,6 +360,8 @@ Search order: COMPACT → LARGE
     └──► HANDICAPPED spots are NOT in search order for cars without permit
          Car cannot be assigned to handicapped spot
 ```
+
+</details>
 
 ---
 
@@ -292,8 +399,8 @@ Return null (no ticket issued)
 
 ```mermaid
 sequenceDiagram
-    participant A as Thread A (Entry Panel 1)
-    participant B as Thread B (Entry Panel 2)
+    participant A as "Thread A (Entry Panel 1)"
+    participant B as "Thread B (Entry Panel 2)"
     participant S as ParkingLot
 
     A->>S: Check F0-C001 available?
@@ -328,8 +435,8 @@ Park in F0-C001
 
 ```mermaid
 sequenceDiagram
-    participant A as Thread A (Entry Panel 1)
-    participant B as Thread B (Entry Panel 2)
+    participant A as "Thread A (Entry Panel 1)"
+    participant B as "Thread B (Entry Panel 2)"
     participant S as ParkingLot
 
     A->>S: Acquire lock on parkVehicle()

@@ -20,37 +20,15 @@ Before diving into message queue patterns, you should understand:
 
 Basic queuing works, but real applications need more sophisticated patterns:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              ADVANCED QUEUING CHALLENGES                     │
-│                                                              │
-│   CHALLENGE 1: Priority Processing                          │
-│   "VIP customers should get faster processing!"             │
-│   - Premium order stuck behind 1000 regular orders          │
-│   - VIP customer angry, cancels subscription                │
-│                                                              │
-│   CHALLENGE 2: Delayed Execution                            │
-│   "Send reminder email 24 hours after signup"               │
-│   - Can't schedule with basic queue                         │
-│   - Need to hold message until specific time                │
-│                                                              │
-│   CHALLENGE 3: Complex Routing                              │
-│   "Route orders to different processors by region"          │
-│   - US orders → US processor                                │
-│   - EU orders → EU processor (GDPR compliance)              │
-│   - Can't do with single queue                              │
-│                                                              │
-│   CHALLENGE 4: Request-Reply                                │
-│   "Call service and wait for response"                      │
-│   - Async messaging but need sync-like behavior             │
-│   - Correlation between request and response                │
-│                                                              │
-│   CHALLENGE 5: Competing Consumers                          │
-│   "Distribute work evenly across workers"                   │
-│   - Some workers faster than others                         │
-│   - Don't want slow worker to block fast ones               │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Challenges["ADVANCED QUEUING CHALLENGES"]
+    C1["CHALLENGE 1: Priority Processing\n'VIP customers should get faster processing!'\n- Premium order stuck behind 1000 regular orders\n- VIP customer angry, cancels subscription"]
+    C2["CHALLENGE 2: Delayed Execution\n'Send reminder email 24 hours after signup'\n- Can't schedule with basic queue\n- Need to hold message until specific time"]
+    C3["CHALLENGE 3: Complex Routing\n'Route orders to different processors by region'\n- US orders → US processor\n- EU orders → EU processor (GDPR compliance)\n- Can't do with single queue"]
+    C4["CHALLENGE 4: Request-Reply\n'Call service and wait for response'\n- Async messaging but need sync-like behavior\n- Correlation between request and response"]
+    C5["CHALLENGE 5: Competing Consumers\n'Distribute work evenly across workers'\n- Some workers faster than others\n- Don't want slow worker to block fast ones"]
+  end
 ```
 
 ### Real Examples of the Problems
@@ -71,37 +49,15 @@ Basic queuing works, but real applications need more sophisticated patterns:
 
 Think of message queue patterns like an emergency room:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              HOSPITAL ER ANALOGY                             │
-│                                                              │
-│   PRIORITY QUEUE = Triage System                            │
-│   - Critical patients first (heart attack)                  │
-│   - Then urgent (broken arm)                                │
-│   - Then routine (cold)                                     │
-│   Same doctors, but order based on severity                 │
-│                                                              │
-│   DELAYED MESSAGES = Scheduled Appointments                 │
-│   - "Come back in 2 hours for test results"                 │
-│   - Patient waits, then gets processed                      │
-│   - Not immediate, but guaranteed time                      │
-│                                                              │
-│   MESSAGE ROUTING = Department Routing                      │
-│   - Cardiac issues → Cardiology                             │
-│   - Broken bones → Orthopedics                              │
-│   - Each department specialized                             │
-│                                                              │
-│   REQUEST-REPLY = Lab Tests                                 │
-│   - Doctor sends sample to lab (request)                    │
-│   - Waits for results (reply)                               │
-│   - Correlation: patient ID on sample and results           │
-│                                                              │
-│   COMPETING CONSUMERS = Multiple Doctors                    │
-│   - Multiple doctors, one patient at a time                 │
-│   - Fast doctor takes next patient when free                │
-│   - Slow doctor doesn't block others                        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph ER["HOSPITAL ER ANALOGY"]
+    Priority["PRIORITY QUEUE = Triage System\n- Critical patients first (heart attack)\n- Then urgent (broken arm)\n- Then routine (cold)\nSame doctors, but order based on severity"]
+    Delayed["DELAYED MESSAGES = Scheduled Appointments\n- 'Come back in 2 hours for test results'\n- Patient waits, then gets processed\n- Not immediate, but guaranteed time"]
+    Routing["MESSAGE ROUTING = Department Routing\n- Cardiac issues → Cardiology\n- Broken bones → Orthopedics\n- Each department specialized"]
+    RR["REQUEST-REPLY = Lab Tests\n- Doctor sends sample to lab (request)\n- Waits for results (reply)\n- Correlation: patient ID on sample and results"]
+    CC["COMPETING CONSUMERS = Multiple Doctors\n- Multiple doctors, one patient at a time\n- Fast doctor takes next patient when free\n- Slow doctor doesn't block others"]
+  end
 ```
 
 ---

@@ -151,7 +151,37 @@ Reusing connections preserves this state and improves performance.
 
 ### Pool Architecture
 
+```mermaid
+flowchart TD
+    AppThreads["Application Threads"]
+    
+    PoolManager["Connection Pool Manager<br/>(HikariCP, DBCP, c3p0, etc.)"]
+    
+    Conn1["Conn 1<br/>(Idle)"]
+    Conn2["Conn 2<br/>(Busy)"]
+    Conn3["Conn 3<br/>(Idle)"]
+    Conn4["Conn 4<br/>(Idle)"]
+    
+    DB["Database Server<br/>(PostgreSQL/MySQL)"]
+    
+    Stats["Pool Stats:<br/>Total: 10<br/>Active: 1<br/>Idle: 9<br/>Max: 20"]
+    
+    AppThreads --> PoolManager
+    PoolManager --> Conn1
+    PoolManager --> Conn2
+    PoolManager --> Conn3
+    PoolManager --> Conn4
+    Conn1 --> DB
+    Conn2 --> DB
+    Conn3 --> DB
+    Conn4 --> DB
+    PoolManager --> Stats
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │              DATABASE CONNECTION POOL                       │
 ├─────────────────────────────────────────────────────────────┤
@@ -187,6 +217,7 @@ Reusing connections preserves this state and improves performance.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Connection Lifecycle
 

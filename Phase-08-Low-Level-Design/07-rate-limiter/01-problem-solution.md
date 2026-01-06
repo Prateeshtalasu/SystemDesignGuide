@@ -97,7 +97,77 @@ if (!burstLimiter.tryAcquire("export-user-1", 20)) {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class RateLimiter {
+        <<interface>>
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    class TokenBucketRateLimiter {
+        - int capacity
+        - double refillRate
+        - Map~String,TokenBucket~ buckets
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    class SlidingWindowRateLimiter {
+        - long windowSize
+        - int maxRequests
+        - Map~String,Deque~Long~~ timestamps
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    class FixedWindowRateLimiter {
+        - long windowSize
+        - int maxRequests
+        - Map~String,Window~ windows
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    class LeakyBucketRateLimiter {
+        - int bucketSize
+        - double leakRate
+        - Map~String,Queue~Long~~ queues
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    class RateLimiterConfig {
+        - int maxRequests
+        - long windowSizeMs
+        - Algorithm algorithm
+    }
+    
+    class DistributedRateLimiter {
+        - Jedis redisClient
+        - String luaScript
+        + tryAcquire(key) boolean
+        + tryAcquire(key, permits) boolean
+        + getRemainingTokens(key) int
+    }
+    
+    RateLimiter <|.. TokenBucketRateLimiter
+    RateLimiter <|.. SlidingWindowRateLimiter
+    RateLimiter <|.. FixedWindowRateLimiter
+    RateLimiter <|.. LeakyBucketRateLimiter
+    RateLimiter <|.. DistributedRateLimiter
+    RateLimiterConfig --> RateLimiter
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              RATE LIMITER                                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -138,6 +208,8 @@ if (!burstLimiter.tryAcquire("export-user-1", 20)) {
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Algorithm Comparison
 

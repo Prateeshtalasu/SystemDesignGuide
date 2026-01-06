@@ -72,7 +72,72 @@ for (Settlement s : settlements) {
 
 ### Class Diagram Overview
 
+```mermaid
+classDiagram
+    class ExpenseService {
+        - Map~String,User~ users
+        - Map~String,Group~ groups
+        - Map~String,Expense~ expenses
+        + addExpense(paidBy, amount, splits, desc) Expense
+        + getBalance(userId) Map~String,BigDecimal~
+        + simplifyDebts(groupId) List~Settlement~
+        + settleUp(fromUser, toUser, amount) void
+    }
+    
+    class User {
+        - String id
+        - String name
+        - String email
+        - Map~String,BigDecimal~ balances
+    }
+    
+    class Group {
+        - String id
+        - String name
+        - List~String~ members
+        - List~String~ expenses
+    }
+    
+    class Expense {
+        - String id
+        - String paidBy
+        - BigDecimal amount
+        - List~Split~ splits
+        - SplitType type
+    }
+    
+    class Split {
+        <<abstract>>
+        - String userId
+        - BigDecimal amount
+    }
+    
+    class EqualSplit {
+        + calculateAmount(total, count) BigDecimal
+    }
+    
+    class ExactSplit {
+        - BigDecimal amount
+    }
+    
+    class PercentSplit {
+        - double percentage
+    }
+    
+    ExpenseService --> User
+    ExpenseService --> Group
+    ExpenseService --> Expense
+    Group --> User
+    Expense --> Split
+    Split <|-- EqualSplit
+    Split <|-- ExactSplit
+    Split <|-- PercentSplit
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                         EXPENSE SHARING SYSTEM                                   │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -112,9 +177,32 @@ for (Settlement s : settlements) {
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### Debt Simplification Algorithm
 
+```mermaid
+flowchart LR
+    subgraph Before["Before Simplification"]
+        A1["Alice ──$20──► Bob"]
+        A2["Bob ──$15──► Charlie"]
+        A3["Charlie ──$10──► Alice"]
+        A4["Total: 3 transactions"]
+    end
+    
+    subgraph After["After Simplification"]
+        B1["Net Balances:<br/>Alice: -20 + 10 = -10 (owes)<br/>Bob: +20 - 15 = +5 (owed)<br/>Charlie: +15 - 10 = +5 (owed)"]
+        B2["Simplified:<br/>Alice ──$5──► Bob<br/>Alice ──$5──► Charlie"]
+        B3["Total: 2 transactions"]
+    end
+    
+    Before --> After
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Before Simplification:
 ┌──────────────────────────────────────────┐
 │  Alice ──$20──► Bob                      │
@@ -138,6 +226,8 @@ After Simplification:
 │  Total: 2 transactions                   │
 └──────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 

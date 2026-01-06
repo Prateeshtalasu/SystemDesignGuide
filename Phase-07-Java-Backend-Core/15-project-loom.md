@@ -16,7 +16,20 @@ Before diving into Project Loom, you need to understand:
 
 ### The Thread-Per-Request Problem
 
+```mermaid
+flowchart LR
+    R1["Request 1"] --> T1["Thread 1"] --> DB1["DB Query 100ms"] --> Res1["Response"]
+    R2["Request 2"] --> T2["Thread 2"] --> DB2["DB Query 100ms"] --> Res2["Response"]
+    R3["Request 3"] --> T3["Thread 3"] --> DB3["DB Query 100ms"] --> Res3["Response"]
+    R1000["Request 1000"] --> T1000["Thread 1000"] --> DB1000["DB Query 100ms"] --> Res1000["Response"]
+    
+    Problem["PROBLEM:<br/>- Each thread uses ~1MB of stack memory<br/>- 1000 threads = 1GB just for stacks!<br/>- Most threads are BLOCKED waiting for I/O<br/>- OS scheduler overhead with many threads<br/>- Can't scale beyond ~10,000 concurrent requests<br/><br/>Thread 1: [Working 1ms][Waiting 99ms]...<br/>↑ 99% of time doing nothing!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE SCALABILITY PROBLEM                               │
 │                                                                          │
@@ -41,6 +54,8 @@ Before diving into Project Loom, you need to understand:
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+</details>
+```
 
 ### Solutions Before Loom
 
@@ -62,7 +77,26 @@ Mono.fromCallable(() -> fetchUser(id))
 
 ### What Loom Provides
 
+```mermaid
+flowchart LR
+    R1["Request 1"] --> VT1["VThread 1"] --> DB1["DB Query"] --> Res1["Response"]
+    R2["Request 2"] --> VT2["VThread 2"] --> DB2["DB Query"] --> Res2["Response"]
+    R1M["Request 1,000,000"] --> VT1M["VThread 1M"] --> DB1M["DB Query"] --> Res1M["Response"]
+    
+    How["HOW IT WORKS:<br/>- Virtual threads are CHEAP (~1KB vs ~1MB)<br/>- Millions of virtual threads possible<br/>- When virtual thread blocks, it's UNMOUNTED from carrier thread<br/>- Carrier thread can run other virtual threads<br/>- Same simple blocking code, massive scalability"]
+    
+    CT1["Carrier Thread 1: [VT1][VT5][VT9][VT13]..."]
+    CT2["Carrier Thread 2: [VT2][VT6][VT10][VT14]..."]
+    CT3["Carrier Thread 3: [VT3][VT7][VT11][VT15]..."]
+    CT4["Carrier Thread 4: [VT4][VT8][VT12][VT16]..."]
+    
+    Note["Virtual threads are multiplexed onto few carrier threads!"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VIRTUAL THREADS SOLUTION                              │
 │                                                                          │
@@ -89,6 +123,8 @@ Mono.fromCallable(() -> fetchUser(id))
 │   Virtual threads are multiplexed onto few carrier threads!            │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ---
@@ -182,7 +218,59 @@ public class VirtualThreadDemo {
 
 ### Carrier Threads and Mounting
 
+```mermaid
+flowchart TD
+    subgraph Carriers["CARRIER THREADS (Platform threads managed by JVM)"]
+        C1["Carrier 1<br/>(OS Thread)"]
+        C2["Carrier 2<br/>(OS Thread)"]
+        C3["Carrier 3<br/>(OS Thread)"]
+        C4["Carrier 4<br/>(OS Thread)"]
+    end
+    
+    subgraph T1["Time T1"]
+        VT1T1["VT1<br/>MOUNTED"]
+        VT2T1["VT2<br/>MOUNTED"]
+        VT3T1["VT3<br/>MOUNTED"]
+        VT4T1["VT4<br/>MOUNTED"]
+    end
+    
+    Block["VT1 blocks on I/O..."]
+    
+    subgraph T2["Time T2"]
+        VT5T2["VT5<br/>MOUNTED"]
+        VT2T2["VT2<br/>MOUNTED"]
+        VT3T2["VT3<br/>MOUNTED"]
+        VT4T2["VT4<br/>MOUNTED"]
+        VT1T2["VT1<br/>UNMOUNTED<br/>(waiting for I/O, not using carrier)"]
+    end
+    
+    Complete["VT1's I/O completes..."]
+    
+    subgraph T3["Time T3"]
+        VT1T3["VT1<br/>MOUNTED"]
+        VT2T3["VT2<br/>MOUNTED"]
+        VT6T3["VT6<br/>MOUNTED"]
+        VT4T3["VT4<br/>MOUNTED"]
+    end
+    
+    Remount["VT1 is remounted and continues execution!"]
+    
+    C1 --> VT1T1
+    C2 --> VT2T1
+    C3 --> VT3T1
+    C4 --> VT4T1
+    
+    VT1T1 --> Block
+    Block --> T2
+    T2 --> Complete
+    Complete --> T3
+    T3 --> Remount
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    VIRTUAL THREAD MECHANICS                              │
 │                                                                          │
@@ -223,6 +311,8 @@ public class VirtualThreadDemo {
 │   VT1 is remounted and continues execution!                            │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
 ```
 
 ### Blocking Operations

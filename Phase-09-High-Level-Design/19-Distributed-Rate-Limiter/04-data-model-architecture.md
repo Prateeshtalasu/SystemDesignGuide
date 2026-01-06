@@ -99,7 +99,31 @@ flowchart TB
 
 ## Token Bucket Architecture
 
+```mermaid
+flowchart TD
+    Request["Request Arrives<br/>User: user_123<br/>Endpoint: /api"]
+    BuildKey["Build Key<br/>rate:user_123:/api"]
+    CheckRedis["Check Redis<br/>GET bucket:key<br/>GET last_refill"]
+    Calculate["Calculate Tokens to Add<br/>elapsed * rate"]
+    Refill["Refill Tokens<br/>Based on Time Since Last"]
+    CheckCapacity["Check Capacity<br/>tokens <= capacity"]
+    TokensGT0["Tokens > 0<br/>Decrement<br/>Return 200"]
+    TokensEQ0["Tokens = 0<br/>Return 429<br/>Rate Limited"]
+    
+    Request --> BuildKey
+    BuildKey --> CheckRedis
+    CheckRedis --> Calculate
+    CheckRedis --> Refill
+    Calculate --> CheckCapacity
+    Refill --> CheckCapacity
+    CheckCapacity --> TokensGT0
+    CheckCapacity --> TokensEQ0
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                              TOKEN BUCKET DETAIL                                      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -150,11 +174,33 @@ flowchart TB
         └──────────────────┘  └──────────────────┘
 ```
 
+</details>
+```
+
 ---
 
 ## Sliding Window Architecture
 
+```mermaid
+flowchart TD
+    Request["Request Arrives<br/>User: user_123"]
+    BuildKey["Build Key<br/>window:user_123"]
+    RedisOps["Redis Operations<br/>1. ZADD key timestamp<br/>2. ZREMRANGEBYSCORE<br/>   key 0 (now-window)<br/>3. ZCARD key"]
+    CheckCount["Check Count<br/>count <= limit?"]
+    CountLELimit["Count <= Limit<br/>Return 200"]
+    CountGTLimit["Count > Limit<br/>Return 429"]
+    
+    Request --> BuildKey
+    BuildKey --> RedisOps
+    RedisOps --> CheckCount
+    CheckCount --> CountLELimit
+    CheckCount --> CountGTLimit
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                            SLIDING WINDOW DETAIL                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -192,6 +238,9 @@ flowchart TB
         │  Count <= Limit  │  │  Count > Limit   │
         │  Return 200      │  │  Return 429      │
         └──────────────────┘  └──────────────────┘
+```
+
+</details>
 ```
 
 ---

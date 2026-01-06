@@ -93,7 +93,29 @@ This analogy captures the key insight: **in distributed systems, we often care m
 
 ### The Three Types of Time
 
+**Types of Time**
+
+```mermaid
+flowchart TD
+    subgraph TYPES["TYPES OF TIME"]
+        PHYSICAL["1. PHYSICAL TIME (Wall Clock)<br/>'What time is it right now?'<br/>- Measured by clocks (quartz, atomic, GPS)<br/>- Subject to drift, leap seconds, NTP corrections<br/>- Can go backwards! (NTP adjustment)"]
+        
+        LOGICAL["2. LOGICAL TIME (Lamport Clock)<br/>'What is the order of events?'<br/>- Just a counter that increments<br/>- Only tells you order, not duration<br/>- Never goes backwards"]
+        
+        HYBRID["3. HYBRID TIME (HLC, TrueTime)<br/>'Best of both worlds'<br/>- Physical time for approximate ordering<br/>- Logical component for tie-breaking<br/>- Bounded uncertainty"]
+        
+        PHYSICAL --> LOGICAL --> HYBRID
+    end
+    
+    style PHYSICAL fill:#fff9c4
+    style LOGICAL fill:#c8e6c9
+    style HYBRID fill:#e3f2fd
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    TYPES OF TIME                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -118,6 +140,7 @@ This analogy captures the key insight: **in distributed systems, we often care m
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ---
 
@@ -148,7 +171,23 @@ Drift rate: typically 10-200 parts per million (ppm)
 
 NTP synchronizes clocks across the internet. It works like this:
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NTP as NTP Server
+    
+    Note over Client: T1 = client send time
+    Client->>NTP: 1. Request (T1)
+    Note over NTP: 2. Server receives at T2<br/>3. Server responds at T3
+    NTP-->>Client: 4. Response (T4 = client receive time)
+    
+    Note over Client,NTP: Calculate:<br/>Round-trip delay = (T4 - T1) - (T3 - T2)<br/>Clock offset = ((T2 - T1) + (T3 - T4)) / 2
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Client                                          NTP Server
    │                                                │
    │  1. Request (T1 = client send time)           │
@@ -164,6 +203,8 @@ Client                                          NTP Server
    │  Round-trip delay = (T4 - T1) - (T3 - T2)    │
    │  Clock offset = ((T2 - T1) + (T3 - T4)) / 2  │
 ```
+
+</details>
 
 **NTP Limitations:**
 - Accuracy: 1-50ms over the internet, 0.1-1ms on LAN
@@ -186,7 +227,29 @@ Leslie Lamport (Turing Award winner) invented logical clocks in 1978. The key in
 
 **Visual Example:**
 
+```mermaid
+sequenceDiagram
+    participant A as Process A
+    participant B as Process B
+    participant C as Process C
+    
+    Note over A: C=1
+    A->>B: Message (C=1)
+    Note over B: C=2 (max(0,1)+1)
+    
+    Note over B: C=3
+    B->>C: Message (C=3)
+    Note over C: C=4 (max(0,3)+1)
+    
+    Note over A: C=2
+    C-->>A: Reply (C=4)
+    Note over A: C=5 (max(2,4)+1)
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Process A        Process B        Process C
     │                │                │
     │ C=1            │                │
@@ -201,6 +264,8 @@ Process A        Process B        Process C
     │<───────────────┼────────────────┤
     │ C=5 (max(2,4)+1)                │
 ```
+
+</details>
 
 **What Lamport Clocks Guarantee:**
 
@@ -244,7 +309,27 @@ Process C's vector: [A's count, B's count, C's count]
 
 **Visual Example:**
 
+```mermaid
+sequenceDiagram
+    participant A as Process A<br/>V=[0,0,0]
+    participant B as Process B<br/>V=[0,0,0]
+    participant C as Process C<br/>V=[0,0,0]
+    
+    Note over A: V=[1,0,0]
+    A->>B: Message (V=[1,0,0])
+    Note over B: V=[1,1,0]
+    
+    Note over B: V=[1,2,0]
+    B->>C: Message (V=[1,2,0])
+    Note over C: V=[1,2,1]
+    
+    Note over A: V=[2,0,0]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 Process A              Process B              Process C
 V=[0,0,0]             V=[0,0,0]             V=[0,0,0]
     │                      │                      │
@@ -259,6 +344,8 @@ V=[0,0,0]             V=[0,0,0]             V=[0,0,0]
     │ V=[2,0,0]           │                      │
     │                      │                      │
 ```
+
+</details>
 
 **Comparing Vector Clocks:**
 

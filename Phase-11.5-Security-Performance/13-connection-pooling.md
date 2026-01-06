@@ -151,7 +151,23 @@ The connection is created once and reused many times.
 
 ### Pool Architecture
 
+```mermaid
+flowchart TB
+    subgraph Pool["Connection Pool"]
+        Conn1["Connection 1<br/>(Active)"]
+        Conn2["Connection 2<br/>(Idle)"]
+        Conn3["Connection 3<br/>(Idle)"]
+        Conn4["Connection 4<br/>(Idle)"]
+        Conn5["Connection 5<br/>(Idle)"]
+    end
+    
+    Stats["Pool Size: 5<br/>Active: 1<br/>Idle: 4<br/>Max: 10"]
 ```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    CONNECTION POOL                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -175,6 +191,7 @@ The connection is created once and reused many times.
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+</details>
 
 ### Connection Lifecycle
 
