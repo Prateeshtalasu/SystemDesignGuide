@@ -894,6 +894,245 @@ public class CacheControlInterceptor implements HandlerInterceptor {
 }
 ```
 
+### Browser-Specific Caching Behavior
+
+Different browsers handle HTTP caching slightly differently. Understanding these differences helps debug caching issues.
+
+#### Chrome/Edge (Chromium-based)
+
+**Cache Storage**:
+- **Location**: `%LocalAppData%\Google\Chrome\User Data\Default\Cache` (Windows)
+- **Size Limit**: ~80% of available disk space (configurable)
+- **Eviction**: LRU (Least Recently Used) when cache is full
+
+**Behavior**:
+- Respects `Cache-Control` headers strictly
+- Supports `stale-while-revalidate` (Chrome 75+)
+- Aggressive prefetching can bypass cache
+- DevTools Network tab shows cache status (from-cache, from-memory-cache, from-disk-cache)
+
+**DevTools Cache Inspection**:
+```javascript
+// Check cache in DevTools Console
+caches.keys().then(keys => console.log('Cache keys:', keys));
+caches.open('cache-name').then(cache => cache.keys().then(keys => console.log('Cached URLs:', keys)));
+```
+
+**Common Issues**:
+- Hard refresh (Ctrl+Shift+R) bypasses cache
+- Disable cache checkbox in DevTools affects all requests
+- Service Workers can intercept and modify cache behavior
+
+#### Firefox
+
+**Cache Storage**:
+- **Location**: `%LocalAppData%\Mozilla\Firefox\Profiles\<profile>\cache2` (Windows)
+- **Size Limit**: Configurable via `browser.cache.disk.capacity` (default: ~350MB)
+- **Eviction**: Adaptive based on available disk space
+
+**Behavior**:
+- More aggressive caching than Chrome for some content types
+- Respects `Cache-Control` but may cache longer for performance
+- Supports `stale-while-revalidate` (Firefox 68+)
+- Better handling of `Vary` header
+
+**Configuration**:
+```javascript
+// about:config settings
+browser.cache.disk.enable = true
+browser.cache.disk.capacity = 1048576  // 1GB in KB
+browser.cache.memory.enable = true
+browser.cache.memory.capacity = 65536  // 64MB in KB
+```
+
+**Common Issues**:
+- Private browsing mode disables cache entirely
+- `about:cache` shows detailed cache statistics
+- Extensions can interfere with caching
+
+#### Safari
+
+**Cache Storage**:
+- **Location**: `~/Library/Caches/com.apple.Safari` (macOS)
+- **Size Limit**: Managed by macOS, typically 100-500MB
+- **Eviction**: Automatic based on system memory pressure
+
+**Behavior**:
+- Most conservative caching (prioritizes freshness)
+- ITP (Intelligent Tracking Prevention) can affect caching
+- Private browsing uses separate cache that's cleared on close
+- Less aggressive prefetching
+
+**ITP Impact**:
+- ITP 2.1+ limits cross-site tracking, which can affect cache sharing
+- First-party cache is unaffected
+- Third-party resources may have shorter cache times
+
+**Common Issues**:
+- Cmd+Shift+R (hard refresh) clears cache for that page
+- Develop menu → Empty Caches clears all cache
+- ITP can cause unexpected cache misses
+
+#### Browser Cache Size Limits
+
+| Browser | Default Cache Size | Configurable | Location |
+|---------|-------------------|--------------|----------|
+| Chrome | ~80% disk space | Yes | Settings → Privacy → Clear browsing data |
+| Firefox | ~350MB | Yes | about:config |
+| Safari | System managed | Limited | Develop menu |
+| Edge | ~80% disk space | Yes | Settings → Privacy |
+
+#### Browser Cache Debugging
+
+**Chrome DevTools**:
+```javascript
+// Network tab shows cache status:
+// - (from disk cache) - Served from disk cache
+// - (from memory cache) - Served from memory cache
+// - (from ServiceWorker) - Served from Service Worker cache
+// - 304 Not Modified - Validated with server
+
+// Check cache headers in Response Headers section
+// Check Request Headers for If-None-Match, If-Modified-Since
+```
+
+**Firefox DevTools**:
+```javascript
+// Network tab shows cache status:
+// - 200 (from cache) - Served from cache
+// - 304 Not Modified - Validated with server
+
+// about:cache shows detailed cache statistics
+// about:networking shows network activity
+```
+
+**Safari Web Inspector**:
+```javascript
+// Network tab shows cache status
+// Develop menu → Show Web Inspector → Network tab
+// Look for "Size" column showing "(cached)"
+```
+
+#### Browser Cache Headers Priority
+
+Browsers evaluate cache headers in this order:
+
+1. **Cache-Control** (highest priority, HTTP/1.1)
+2. **Expires** (HTTP/1.0, ignored if Cache-Control present)
+3. **Last-Modified** (used for validation, not freshness)
+4. **ETag** (used for validation, not freshness)
+
+**Example**:
+```
+Cache-Control: max-age=60
+Expires: Wed, 15 Jan 2025 10:00:00 GMT
+```
+→ Browser uses `max-age=60` (Cache-Control), ignores Expires
+
+#### Browser Cache Validation Flow
+
+```mermaid
+flowchart TD
+    Request["Browser Request"]
+    CheckCache["Check Browser Cache"]
+    
+    NoCache["No cached entry"]
+    HasCache["Has cached entry"]
+    
+    CheckFresh["Is cache fresh?<br/>(max-age not expired)"]
+    
+    Fresh["Yes: Fresh"]
+    Stale["No: Stale"]
+    
+    ReturnCache["Return from cache<br/>(no network request)"]
+    
+    HasETag["Has ETag?"]
+    HasLastMod["Has Last-Modified?"]
+    
+    SendConditional["Send conditional request<br/>If-None-Match or<br/>If-Modified-Since"]
+    
+    Server304["Server: 304 Not Modified"]
+    Server200["Server: 200 OK<br/>(new content)"]
+    
+    UpdateCache["Update cache timestamp"]
+    ReplaceCache["Replace cache entry"]
+    
+    Request --> CheckCache
+    CheckCache --> NoCache
+    CheckCache --> HasCache
+    
+    NoCache --> SendConditional
+    
+    HasCache --> CheckFresh
+    CheckFresh --> Fresh
+    CheckFresh --> Stale
+    
+    Fresh --> ReturnCache
+    
+    Stale --> HasETag
+    Stale --> HasLastMod
+    
+    HasETag --> SendConditional
+    HasLastMod --> SendConditional
+    
+    SendConditional --> Server304
+    SendConditional --> Server200
+    
+    Server304 --> UpdateCache
+    Server200 --> ReplaceCache
+    
+    UpdateCache --> ReturnCache
+    ReplaceCache --> ReturnCache
+```
+
+#### Browser-Specific Cache Headers
+
+Some browsers add custom headers:
+
+**Chrome/Edge**:
+- `Sec-Fetch-Site`: Indicates request context (same-site, cross-site, etc.)
+- `Sec-Fetch-Mode`: Request mode (navigate, cors, etc.)
+- `Sec-Fetch-Dest`: Request destination (document, image, etc.)
+
+**Firefox**:
+- Similar `Sec-Fetch-*` headers
+- `DNT` (Do Not Track) header if enabled
+
+**Safari**:
+- ITP-related headers for tracking prevention
+- Less aggressive prefetch headers
+
+#### Testing Cache Behavior Across Browsers
+
+```java
+// Test cache headers work correctly
+@RestController
+public class CacheTestController {
+    
+    @GetMapping("/test-cache")
+    public ResponseEntity<String> testCache() {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
+            .eTag("\"test-v1\"")
+            .body("Cached content");
+    }
+    
+    @GetMapping("/test-no-cache")
+    public ResponseEntity<String> testNoCache() {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noCache())
+            .body("Never cached");
+    }
+}
+```
+
+**Testing Checklist**:
+1. ✅ First request: 200 OK, content downloaded
+2. ✅ Second request (within max-age): 200 OK (from cache), no network request
+3. ✅ Request after expiry: 304 Not Modified (if ETag/Last-Modified present)
+4. ✅ Hard refresh: Bypasses cache, always 200 OK
+5. ✅ Private browsing: No cache, always fresh requests
+
 ### Nginx Configuration
 
 ```nginx

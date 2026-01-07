@@ -175,6 +175,25 @@ public class TwitterService {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of repository interfaces for the following reasons:
+
+1. **In-Memory Data Structures**: The system operates on in-memory data structures (users, tweets, feeds). Repository interfaces are more relevant for persistent storage, which is often out of scope for LLD.
+
+2. **Core Algorithm Focus**: LLD interviews focus on feed generation algorithms, tweet posting logic, and follower management. Adding repository abstractions shifts focus away from these core concepts.
+
+3. **Single Implementation**: There's no requirement for multiple data access or feed generation implementations in the interview context. The abstraction doesn't provide value for demonstrating LLD skills.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `UserRepository`, `TweetRepository`, and `FeedGenerator` interfaces for:
+   - Testability (mock repositories and generators in unit tests)
+   - Data access flexibility (swap database implementations)
+   - Algorithm flexibility (swap feed generation strategies)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on feed algorithms and social graph management
+- **Production Scope**: Repository interfaces provide testability and data access flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -185,7 +204,7 @@ public class TwitterService {
 | **OCP** | PASS | System is open for extension (new tweet types, feed algorithms) without modifying existing code. Factory pattern and strategy pattern enable this. | N/A | - |
 | **LSP** | PASS | All tweet types (Tweet, Retweet) properly implement the tweet contract. They are substitutable. | N/A | - |
 | **ISP** | PASS | Interfaces are minimal and focused. No unused methods forced on clients. | N/A | - |
-| **DIP** | WEAK | TwitterService depends on concrete classes. Could depend on UserRepository, TweetRepository, and FeedGenerator interfaces. Mentioned in DIP section but not fully implemented. | Extract repository and feed generator interfaces | More abstraction layers, but improves testability and data access flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | TwitterService depends on concrete classes. For LLD interview scope, this is acceptable as it focuses on core feed generation and tweet management algorithms. In production, we would depend on UserRepository, TweetRepository, and FeedGenerator interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and data access flexibility |
 
 ---
 

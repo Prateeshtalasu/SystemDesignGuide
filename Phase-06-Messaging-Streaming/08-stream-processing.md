@@ -672,6 +672,8 @@ package com.systemdesign.streaming.flink;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 
 public class FlinkFraudDetection {
@@ -719,6 +721,216 @@ public class FlinkFraudDetection {
             ));
         
         env.execute("Fraud Detection");
+    }
+}
+
+// Detailed Windowing Examples
+public class WindowingExamples {
+    
+    /**
+     * Example 1: Tumbling Window - Count transactions per user every 5 minutes
+     */
+    public static void tumblingWindowExample(DataStream<Transaction> transactions) {
+        transactions
+            .keyBy(Transaction::getUserId)
+            // Tumbling window: 5-minute windows, no overlap
+            // Window 1: 10:00-10:05
+            // Window 2: 10:05-10:10
+            // Window 3: 10:10-10:15
+            .window(TumblingEventTimeWindows.of(Time.minutes(5)))
+            .aggregate(new AggregateFunction<Transaction, Long, Long>() {
+                @Override
+                public Long createAccumulator() {
+                    return 0L;
+                }
+                
+                @Override
+                public Long add(Transaction value, Long accumulator) {
+                    return accumulator + 1;
+                }
+                
+                @Override
+                public Long getResult(Long accumulator) {
+                    return accumulator;
+                }
+                
+                @Override
+                public Long merge(Long a, Long b) {
+                    return a + b;
+                }
+            })
+            .print();
+    }
+    
+    /**
+     * Example 2: Sliding Window - Moving average over last 10 minutes, updated every 1 minute
+     */
+    public static void slidingWindowExample(DataStream<Transaction> transactions) {
+        transactions
+            .keyBy(Transaction::getUserId)
+            // Sliding window: 10-minute window, slides every 1 minute
+            // Window 1: 10:00-10:10 (output at 10:10)
+            // Window 2: 10:01-10:11 (output at 10:11)
+            // Window 3: 10:02-10:12 (output at 10:12)
+            .window(SlidingEventTimeWindows.of(Time.minutes(10), Time.minutes(1)))
+            .aggregate(new AggregateFunction<Transaction, AvgAccumulator, Double>() {
+                @Override
+                public AvgAccumulator createAccumulator() {
+                    return new AvgAccumulator(0, 0);
+                }
+                
+                @Override
+                public AvgAccumulator add(Transaction value, AvgAccumulator accumulator) {
+                    return new AvgAccumulator(
+                        accumulator.sum + value.getAmount(),
+                        accumulator.count + 1
+                    );
+                }
+                
+                @Override
+                public Double getResult(AvgAccumulator accumulator) {
+                    return accumulator.count > 0 
+                        ? (double) accumulator.sum / accumulator.count 
+                        : 0.0;
+                }
+                
+                @Override
+                public AvgAccumulator merge(AvgAccumulator a, AvgAccumulator b) {
+                    return new AvgAccumulator(a.sum + b.sum, a.count + b.count);
+                }
+            })
+            .print();
+    }
+    
+    /**
+     * Example 3: Session Window - Group transactions by user activity periods
+     */
+    public static void sessionWindowExample(DataStream<Transaction> transactions) {
+        transactions
+            .keyBy(Transaction::getUserId)
+            // Session window: Groups events within 30 minutes of each other
+            // If gap > 30 minutes, new session starts
+            // Session 1: 10:00, 10:05, 10:15 (all within 30 min)
+            // Gap: 10:15 to 10:50 (35 min gap)
+            // Session 2: 10:50, 10:55 (new session)
+            .window(EventTimeSessionWindows.withGap(Time.minutes(30)))
+            .aggregate(new AggregateFunction<Transaction, SessionStats, SessionStats>() {
+                @Override
+                public SessionStats createAccumulator() {
+                    return new SessionStats(0, 0.0, 0L, Long.MAX_VALUE);
+                }
+                
+                @Override
+                public SessionStats add(Transaction value, SessionStats accumulator) {
+                    return new SessionStats(
+                        accumulator.count + 1,
+                        accumulator.totalAmount + value.getAmount(),
+                        Math.max(accumulator.maxTimestamp, value.getTimestamp()),
+                        Math.min(accumulator.minTimestamp, value.getTimestamp())
+                    );
+                }
+                
+                @Override
+                public SessionStats getResult(SessionStats accumulator) {
+                    return accumulator;
+                }
+                
+                @Override
+                public SessionStats merge(SessionStats a, SessionStats b) {
+                    return new SessionStats(
+                        a.count + b.count,
+                        a.totalAmount + b.totalAmount,
+                        Math.max(a.maxTimestamp, b.maxTimestamp),
+                        Math.min(a.minTimestamp, b.minTimestamp)
+                    );
+                }
+            })
+            .print();
+    }
+    
+    /**
+     * Example 4: Global Window with Custom Trigger - Process all events with custom logic
+     */
+    public static void globalWindowExample(DataStream<Transaction> transactions) {
+        transactions
+            .keyBy(Transaction::getUserId)
+            .window(GlobalWindows.create())
+            // Custom trigger: Fire every 100 events or every 1 minute
+            .trigger(new Trigger<Transaction, TimeWindow>() {
+                private final long maxCount = 100;
+                private final long maxTime = 60000; // 1 minute
+                
+                @Override
+                public TriggerResult onElement(Transaction element, 
+                                             long timestamp, 
+                                             TimeWindow window, 
+                                             TriggerContext ctx) {
+                    // Count-based trigger
+                    ValueState<Long> countState = ctx.getPartitionedState(
+                        new ValueStateDescriptor<>("count", Long.class));
+                    Long count = countState.value();
+                    if (count == null) count = 0L;
+                    count++;
+                    countState.update(count);
+                    
+                    if (count >= maxCount) {
+                        countState.clear();
+                        return TriggerResult.FIRE;
+                    }
+                    
+                    // Time-based trigger
+                    ctx.registerEventTimeTimer(window.maxTimestamp());
+                    
+                    return TriggerResult.CONTINUE;
+                }
+                
+                @Override
+                public TriggerResult onEventTime(long time, 
+                                                TimeWindow window, 
+                                                TriggerContext ctx) {
+                    return TriggerResult.FIRE;
+                }
+                
+                @Override
+                public TriggerResult onProcessingTime(long time, 
+                                                     TimeWindow window, 
+                                                     TriggerContext ctx) {
+                    return TriggerResult.CONTINUE;
+                }
+                
+                @Override
+                public void clear(TimeWindow window, TriggerContext ctx) {
+                    ctx.getPartitionedState(
+                        new ValueStateDescriptor<>("count", Long.class)).clear();
+                }
+            })
+            .aggregate(new CountAggregator())
+            .print();
+    }
+    
+    // Helper classes
+    static class AvgAccumulator {
+        long sum;
+        int count;
+        
+        AvgAccumulator(long sum, int count) {
+            this.sum = sum;
+            this.count = count;
+        }
+    }
+    
+    static class SessionStats {
+        int count;
+        double totalAmount;
+        long maxTimestamp;
+        long minTimestamp;
+        
+        SessionStats(int count, double totalAmount, long maxTimestamp, long minTimestamp) {
+            this.count = count;
+            this.totalAmount = totalAmount;
+            this.maxTimestamp = maxTimestamp;
+            this.minTimestamp = minTimestamp;
+        }
     }
 }
 ```

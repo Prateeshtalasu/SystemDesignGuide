@@ -817,7 +817,188 @@ This seems reasonable for a service handling 100M URLs/day.
 
 ---
 
-## 1️⃣1️⃣ One Clean Mental Summary
+## 1️⃣1️⃣ Additional Practice Problems
+
+### Practice Problem 1: Video Streaming Service
+
+**Scenario**: Design a video streaming service like YouTube.
+
+**Given**:
+- 1 billion users
+- 5% are active daily
+- Active users watch 2 hours/day on average
+- Average bitrate: 5 Mbps (1080p)
+- Videos are cached in CDN
+
+**Estimate**:
+1. Peak concurrent viewers
+2. Total bandwidth needed
+3. CDN storage for popular videos
+
+**Solution**:
+```
+1. Peak concurrent viewers:
+   - Daily active: 1B × 0.05 = 50M users
+   - Peak is 3x average: 50M × 3 = 150M concurrent
+   - But watching is spread: assume 20% at peak = 30M concurrent
+
+2. Total bandwidth:
+   - 30M × 5 Mbps = 150 Tbps peak
+   - CDN handles 80%: 120 Tbps from CDN
+   - Origin handles 20%: 30 Tbps from origin
+   - Need multiple CDN providers + edge locations
+
+3. CDN storage:
+   - Top 10% of videos get 80% of views
+   - Assume 100M videos total
+   - Top 10M videos × 500 MB average = 5 PB
+   - With replication (3x): 15 PB CDN storage
+```
+
+### Practice Problem 2: E-commerce Checkout System
+
+**Scenario**: Estimate capacity for Black Friday sale.
+
+**Given**:
+- 10 million registered users
+- 20% participate in sale
+- Peak hour: 3x average traffic
+- Average checkout: 2 minutes
+- Each checkout: 10 database queries
+
+**Estimate**:
+1. Peak checkout requests per second
+2. Database QPS needed
+3. Number of checkout servers
+
+**Solution**:
+```
+1. Peak checkout RPS:
+   - Participants: 10M × 0.2 = 2M users
+   - Peak hour: 2M / 3600 seconds = 556 RPS average
+   - Peak: 556 × 3 = 1,668 RPS
+
+2. Database QPS:
+   - 1,668 RPS × 10 queries = 16,680 QPS
+   - With 2x headroom: 33,360 QPS
+   - Need read replicas: 33,360 / 10,000 = 4 replicas
+
+3. Checkout servers:
+   - Each server handles 500 RPS
+   - 1,668 / 500 = 4 servers
+   - With 2x redundancy: 8 servers
+```
+
+### Practice Problem 3: Real-time Analytics Dashboard
+
+**Scenario**: Real-time analytics for ad platform.
+
+**Given**:
+- 1 billion ad impressions/day
+- 100 metrics per impression
+- Each metric: 50 bytes
+- Data retention: 7 days
+- Real-time queries: 1,000 QPS
+
+**Estimate**:
+1. Write throughput
+2. Storage needed
+3. Query capacity
+
+**Solution**:
+```
+1. Write throughput:
+   - 1B impressions / 100,000 seconds = 10,000 impressions/sec
+   - 10,000 × 100 metrics × 50 bytes = 50 MB/sec writes
+   - Need time-series DB (InfluxDB, TimescaleDB)
+
+2. Storage:
+   - Daily: 1B × 100 × 50 bytes = 5 TB/day
+   - 7 days: 35 TB
+   - With compression (3x): 12 TB
+   - With replication (3x): 36 TB total
+
+3. Query capacity:
+   - 1,000 QPS × 10ms avg query = 10 concurrent queries
+   - TimescaleDB handles 10K+ QPS easily
+   - Need 2-3 instances for redundancy
+```
+
+### Practice Problem 4: Social Media Feed Generation
+
+**Scenario**: Instagram-like feed generation.
+
+**Given**:
+- 500 million users
+- 30% active daily
+- Active users check feed 5 times/day
+- Feed generation: 100 database queries
+- Cache hit rate: 80%
+
+**Estimate**:
+1. Feed generation requests per second
+2. Database QPS (after caching)
+3. Cache size needed
+
+**Solution**:
+```
+1. Feed generation RPS:
+   - Daily active: 500M × 0.3 = 150M users
+   - Daily requests: 150M × 5 = 750M requests/day
+   - Average RPS: 750M / 100,000 = 7,500 RPS
+   - Peak: 7,500 × 5 = 37,500 RPS
+
+2. Database QPS:
+   - Cache hit: 80%, miss: 20%
+   - Cache misses: 37,500 × 0.2 = 7,500 RPS
+   - DB queries: 7,500 × 100 = 750,000 QPS
+   - Need sharding: 750K / 50K per shard = 15 shards
+
+3. Cache size:
+   - 150M users × 5 feeds/day × 50 KB = 37.5 TB/day
+   - Cache top 20%: 7.5 TB
+   - With replication: 22.5 TB Redis cluster
+```
+
+### Practice Problem 5: IoT Device Data Collection
+
+**Scenario**: Smart home device telemetry.
+
+**Given**:
+- 50 million devices
+- Each device sends data every 5 minutes
+- Each message: 1 KB
+- Data retention: 30 days
+- Real-time alerting: 0.1% of messages trigger alerts
+
+**Estimate**:
+1. Message throughput
+2. Storage needed
+3. Alert processing capacity
+
+**Solution**:
+```
+1. Message throughput:
+   - 50M devices / (5 min × 60) = 166,667 messages/sec
+   - 166,667 × 1 KB = 167 MB/sec
+   - Need message queue (Kafka): 167 MB/sec × 3 replication = 500 MB/sec
+
+2. Storage:
+   - Daily: 50M × 288 messages × 1 KB = 14.4 TB/day
+   - 30 days: 432 TB
+   - With compression (2x): 216 TB
+   - Need distributed storage (HDFS, S3)
+
+3. Alert processing:
+   - Alerts: 166,667 × 0.001 = 167 alerts/sec
+   - Each alert: 10ms processing
+   - Need: 167 × 0.01 = 2 concurrent processors
+   - With 10x headroom: 20 processors
+```
+
+---
+
+## 1️⃣2️⃣ One Clean Mental Summary
 
 Back-of-envelope calculations are quick, rough estimates that help you validate system designs before building them. The goal is not precision but avoiding order-of-magnitude errors. Memorize key numbers (seconds in a day ≈ 100,000, 1 GB = 10^9 bytes, typical server handles 10,000 RPS), break problems into smaller pieces, and always sanity-check your results. In interviews, showing your estimation process demonstrates engineering maturity and helps justify your design decisions. Start with traffic, then storage, then bandwidth, then servers. Always account for peak traffic (3-10x average), metadata overhead, and growth over time.
 

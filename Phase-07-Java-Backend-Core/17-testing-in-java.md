@@ -755,6 +755,558 @@ class IntegrationTest {
 }
 ```
 
+### Comprehensive Integration Test Examples
+
+#### Example 1: Payment Service Integration Test
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+@AutoConfigureMockMvc
+class PaymentServiceIntegrationTest {
+    
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
+        .withDatabaseName("payment_test")
+        .withInitScript("schema.sql");
+    
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7")
+        .withExposedPorts(6379);
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @Autowired
+    private PaymentRepository paymentRepository;
+    
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.redis.host", redis::getHost);
+        registry.add("spring.redis.port", () -> redis.getMappedPort(6379));
+    }
+    
+    @BeforeEach
+    void setUp() {
+        paymentRepository.deleteAll();
+        redisTemplate.getConnectionFactory().getConnection().flushAll();
+    }
+    
+    @Test
+    void shouldProcessPaymentSuccessfully() throws Exception {
+        // Given
+        String idempotencyKey = UUID.randomUUID().toString();
+        PaymentRequest request = new PaymentRequest(
+            "user-123",
+            BigDecimal.valueOf(100.00),
+            "card-456"
+        );
+        
+        // When
+        mockMvc.perform(post("/api/payments")
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("SUCCESS"))
+            .andExpect(jsonPath("$.amount").value(100.00));
+        
+        // Then - Verify database
+        List<Payment> payments = paymentRepository.findAll();
+        assertEquals(1, payments.size());
+        assertEquals("user-123", payments.get(0).getUserId());
+        
+        // Then - Verify idempotency key cached
+        String cached = redisTemplate.opsForValue().get("idempotency:" + idempotencyKey);
+        assertNotNull(cached);
+    }
+    
+    @Test
+    void shouldHandleDuplicatePaymentRequest() throws Exception {
+        // Given - First payment
+        String idempotencyKey = UUID.randomUUID().toString();
+        PaymentRequest request = new PaymentRequest(
+            "user-123",
+            BigDecimal.valueOf(100.00),
+            "card-456"
+        );
+        
+        // First request
+        MvcResult firstResult = mockMvc.perform(post("/api/payments")
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn();
+        
+        String firstPaymentId = JsonPath.read(
+            firstResult.getResponse().getContentAsString(), 
+            "$.paymentId"
+        );
+        
+        // When - Duplicate request with same idempotency key
+        MvcResult secondResult = mockMvc.perform(post("/api/payments")
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn();
+        
+        // Then - Should return same payment ID
+        String secondPaymentId = JsonPath.read(
+            secondResult.getResponse().getContentAsString(), 
+            "$.paymentId"
+        );
+        assertEquals(firstPaymentId, secondPaymentId);
+        
+        // Then - Should only have one payment in database
+        assertEquals(1, paymentRepository.count());
+    }
+    
+    @Test
+    void shouldHandleConcurrentPaymentRequests() throws Exception {
+        // Given
+        String idempotencyKey = UUID.randomUUID().toString();
+        PaymentRequest request = new PaymentRequest(
+            "user-123",
+            BigDecimal.valueOf(100.00),
+            "card-456"
+        );
+        
+        // When - 10 concurrent requests with same idempotency key
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        List<Future<MvcResult>> futures = new ArrayList<>();
+        
+        for (int i = 0; i < 10; i++) {
+            futures.add(executor.submit(() -> {
+                return mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                    .andReturn();
+            }));
+        }
+        
+        // Then - All should succeed
+        Set<String> paymentIds = new HashSet<>();
+        for (Future<MvcResult> future : futures) {
+            MvcResult result = future.get(5, TimeUnit.SECONDS);
+            assertEquals(200, result.getResponse().getStatus());
+            String paymentId = JsonPath.read(
+                result.getResponse().getContentAsString(), 
+                "$.paymentId"
+            );
+            paymentIds.add(paymentId);
+        }
+        
+        // Then - Should have only one unique payment ID
+        assertEquals(1, paymentIds.size());
+        
+        // Then - Should have only one payment in database
+        assertEquals(1, paymentRepository.count());
+        
+        executor.shutdown();
+    }
+}
+```
+
+#### Example 2: Order Service with External API Integration Test
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class OrderServiceIntegrationTest {
+    
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    
+    @Container
+    static GenericContainer<?> wiremock = new GenericContainer<>("wiremock/wiremock:latest")
+        .withExposedPorts(8080);
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("payment.service.url", 
+            () -> "http://localhost:" + wiremock.getMappedPort(8080));
+    }
+    
+    @Test
+    void shouldCreateOrderWithPayment() {
+        // Given - WireMock stub for payment service
+        WireMock.configureFor("localhost", wiremock.getMappedPort(8080));
+        stubFor(post("/api/payments")
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("""
+                    {
+                        "paymentId": "pay-123",
+                        "status": "SUCCESS"
+                    }
+                    """)));
+        
+        // When
+        OrderRequest request = new OrderRequest(
+            "user-1",
+            List.of(new OrderItem("product-1", 2, BigDecimal.valueOf(50.00)))
+        );
+        Order order = orderService.createOrder(request);
+        
+        // Then
+        assertNotNull(order.getId());
+        assertEquals("user-1", order.getUserId());
+        assertEquals("pay-123", order.getPaymentId());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        
+        // Verify WireMock was called
+        verify(postRequestedFor(urlEqualTo("/api/payments")));
+    }
+    
+    @Test
+    void shouldHandlePaymentServiceFailure() {
+        // Given - WireMock stub returning error
+        WireMock.configureFor("localhost", wiremock.getMappedPort(8080));
+        stubFor(post("/api/payments")
+            .willReturn(aResponse()
+                .withStatus(500)
+                .withBody("Payment service unavailable")));
+        
+        // When/Then
+        OrderRequest request = new OrderRequest(
+            "user-1",
+            List.of(new OrderItem("product-1", 2, BigDecimal.valueOf(50.00)))
+        );
+        
+        assertThrows(PaymentServiceException.class, () -> {
+            orderService.createOrder(request);
+        });
+        
+        // Then - Order should be in PENDING state
+        List<Order> orders = orderRepository.findAll();
+        assertEquals(1, orders.size());
+        assertEquals(OrderStatus.PENDING, orders.get(0).getStatus());
+    }
+}
+```
+
+#### Example 3: Kafka Integration Test
+
+```java
+@SpringBootTest
+@Testcontainers
+class OrderEventIntegrationTest {
+    
+    @Container
+    static KafkaContainer kafka = new KafkaContainer(
+        DockerImageName.parse("confluentinc/cp-kafka:7.4.0"));
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @Autowired
+    private KafkaTemplate<String, Object> kafkaTemplate;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+    }
+    
+    @Test
+    void shouldPublishOrderCreatedEvent() throws Exception {
+        // Given
+        OrderRequest request = new OrderRequest(
+            "user-1",
+            List.of(new OrderItem("product-1", 1, BigDecimal.valueOf(100.00)))
+        );
+        
+        // When
+        Order order = orderService.createOrder(request);
+        
+        // Then - Verify event was published
+        Consumer<String, OrderCreatedEvent> consumer = createConsumer("order-events");
+        ConsumerRecord<String, OrderCreatedEvent> record = consumer.poll(Duration.ofSeconds(5))
+            .iterator().next();
+        
+        assertNotNull(record);
+        assertEquals(order.getId(), record.value().getOrderId());
+        assertEquals("user-1", record.value().getUserId());
+        
+        consumer.close();
+    }
+    
+    @Test
+    void shouldProcessOrderCancelledEvent() {
+        // Given - Order exists
+        Order order = orderService.createOrder(new OrderRequest("user-1", List.of()));
+        
+        // When - Publish cancellation event
+        OrderCancelledEvent event = new OrderCancelledEvent(order.getId(), "User requested");
+        kafkaTemplate.send("order-events", order.getId(), event);
+        
+        // Wait for processing
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            Order updated = orderService.getOrder(order.getId());
+            return updated.getStatus() == OrderStatus.CANCELLED;
+        });
+        
+        // Then
+        Order updated = orderService.getOrder(order.getId());
+        assertEquals(OrderStatus.CANCELLED, updated.getStatus());
+    }
+    
+    private Consumer<String, OrderCreatedEvent> createConsumer(String topic) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        
+        Consumer<String, OrderCreatedEvent> consumer = new KafkaConsumer<>(props);
+        consumer.subscribe(Collections.singletonList(topic));
+        return consumer;
+    }
+}
+```
+
+#### Example 4: Database Transaction Integration Test
+
+```java
+@SpringBootTest
+@Testcontainers
+@Transactional
+class OrderServiceTransactionTest {
+    
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @Autowired
+    private InventoryRepository inventoryRepository;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+    }
+    
+    @Test
+    @Transactional
+    void shouldRollbackOnInventoryFailure() {
+        // Given
+        OrderRequest request = new OrderRequest(
+            "user-1",
+            List.of(new OrderItem("product-1", 100, BigDecimal.valueOf(10.00))) // 100 items
+        );
+        
+        // Set up inventory with only 50 items
+        Inventory inventory = new Inventory("product-1", 50);
+        inventoryRepository.save(inventory);
+        
+        // When/Then - Should fail and rollback
+        assertThrows(InsufficientInventoryException.class, () -> {
+            orderService.createOrder(request);
+        });
+        
+        // Then - Order should not be created
+        assertEquals(0, orderRepository.count());
+        
+        // Then - Inventory should not be updated
+        Inventory updated = inventoryRepository.findById("product-1").orElseThrow();
+        assertEquals(50, updated.getQuantity());
+    }
+    
+    @Test
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void shouldCommitInSeparateTransaction() {
+        // Given
+        OrderRequest request = new OrderRequest(
+            "user-1",
+            List.of(new OrderItem("product-1", 1, BigDecimal.valueOf(10.00)))
+        );
+        
+        // When
+        Order order = orderService.createOrderInNewTransaction(request);
+        
+        // Then - Order is committed even if outer transaction rolls back
+        assertNotNull(order.getId());
+        assertTrue(orderRepository.existsById(order.getId()));
+    }
+}
+```
+
+#### Example 5: REST API Integration Test with Security
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
+@Testcontainers
+class SecureApiIntegrationTest {
+    
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private JwtTokenProvider tokenProvider;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    }
+    
+    @Test
+    void shouldRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/users/me"))
+            .andExpect(status().isUnauthorized());
+    }
+    
+    @Test
+    void shouldAccessWithValidToken() throws Exception {
+        // Given - Create user and generate token
+        User user = new User("alice", "alice@example.com");
+        userRepository.save(user);
+        
+        String token = tokenProvider.generateToken(user.getId());
+        
+        // When/Then
+        mockMvc.perform(get("/api/users/me")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(user.getId()))
+            .andExpect(jsonPath("$.email").value("alice@example.com"));
+    }
+    
+    @Test
+    void shouldRejectExpiredToken() throws Exception {
+        // Given - Generate expired token
+        String expiredToken = tokenProvider.generateExpiredToken("user-1");
+        
+        // When/Then
+        mockMvc.perform(get("/api/users/me")
+                .header("Authorization", "Bearer " + expiredToken))
+            .andExpect(status().isUnauthorized());
+    }
+    
+    @Test
+    void shouldEnforceRoleBasedAccess() throws Exception {
+        // Given - Regular user token
+        User regularUser = new User("bob", "bob@example.com", Role.USER);
+        userRepository.save(regularUser);
+        String userToken = tokenProvider.generateToken(regularUser.getId());
+        
+        // When/Then - Should not access admin endpoint
+        mockMvc.perform(delete("/api/admin/users/user-123")
+                .header("Authorization", "Bearer " + userToken))
+            .andExpect(status().isForbidden());
+        
+        // Given - Admin user token
+        User adminUser = new User("admin", "admin@example.com", Role.ADMIN);
+        userRepository.save(adminUser);
+        String adminToken = tokenProvider.generateToken(adminUser.getId());
+        
+        // When/Then - Should access admin endpoint
+        mockMvc.perform(delete("/api/admin/users/user-123")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+    }
+}
+```
+
+#### Example 6: Performance Integration Test
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class PerformanceIntegrationTest {
+    
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    }
+    
+    @Test
+    void shouldHandleConcurrentOrders() throws Exception {
+        int numberOfThreads = 50;
+        int ordersPerThread = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
+        CountDownLatch latch = new CountDownLatch(numberOfThreads);
+        List<Future<Order>> futures = new ArrayList<>();
+        
+        long startTime = System.currentTimeMillis();
+        
+        // When - Create orders concurrently
+        for (int i = 0; i < numberOfThreads; i++) {
+            final int threadId = i;
+            futures.add(executor.submit(() -> {
+                try {
+                    for (int j = 0; j < ordersPerThread; j++) {
+                        OrderRequest request = new OrderRequest(
+                            "user-" + threadId,
+                            List.of(new OrderItem("product-1", 1, BigDecimal.TEN))
+                        );
+                        orderService.createOrder(request);
+                    }
+                    return null;
+                } finally {
+                    latch.countDown();
+                }
+            }));
+        }
+        
+        // Wait for all threads
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        
+        // Then - Verify all orders created
+        long totalOrders = orderService.count();
+        assertEquals(numberOfThreads * ordersPerThread, totalOrders);
+        
+        // Then - Performance check
+        double ordersPerSecond = (totalOrders * 1000.0) / duration;
+        assertTrue(ordersPerSecond > 100, 
+            "Should process at least 100 orders/second, got " + ordersPerSecond);
+        
+        executor.shutdown();
+    }
+}
+```
+
 ---
 
 ## 6️⃣ Test-Driven Development (TDD)

@@ -348,6 +348,154 @@ Writes: 1,000 × (1.2)^5 = 2,488/second
 
 ---
 
+## Cost Estimation (Detailed)
+
+### Compute Costs (AWS)
+
+| Component | Instance Type | Count | vCPU | RAM | Monthly Cost per Instance | Total Monthly Cost |
+|-----------|--------------|-------|------|-----|---------------------------|-------------------|
+| Configuration Service | c6i.2xlarge | 40 | 8 | 16 GB | $200 | $8,000 |
+| Update Propagation Service | c6i.xlarge | 20 | 4 | 8 GB | $150 | $3,000 |
+| WebSocket Service | c6i.xlarge | 20 | 4 | 8 GB | $150 | $3,000 |
+| **Compute Total** | | **80** | | | | **$14,000** |
+
+**Rationale:**
+- Configuration Service: High CPU for read/write operations, needs 8 vCPU per instance
+- Update Propagation: Moderate CPU for push notifications, 4 vCPU sufficient
+- WebSocket Service: Moderate CPU for connection management, 4 vCPU sufficient
+
+### Database Costs
+
+**PostgreSQL (RDS):**
+```
+Primary: db.r6i.2xlarge (8 vCPU, 64 GB RAM) × 3 replicas = $4,500/month
+Storage: 4.2 GB × $0.10/GB/month = $0.42/month
+Backup: 4.2 GB × $0.05/GB/month = $0.21/month
+Total PostgreSQL: $4,500.63/month
+```
+
+**Redis (ElastiCache):**
+```
+Cache nodes: cache.r6g.xlarge (4 vCPU, 13.07 GB) × 3 nodes = $1,200/month
+Storage: 420 MB × $0.05/GB/month = $0.02/month
+Total Redis: $1,200.02/month
+```
+
+**Database Total: $5,700.65/month**
+
+### Storage Costs
+
+| Type | Size | Monthly Cost per GB | Total Monthly Cost |
+|------|------|---------------------|---------------------|
+| PostgreSQL EBS (gp3) | 4.2 GB | $0.10 | $0.42 |
+| PostgreSQL Backups | 4.2 GB | $0.05 | $0.21 |
+| Redis Memory | 420 MB | $0.05 | $0.02 |
+| **Storage Total** | | | **$0.65** |
+
+### Network Costs
+
+**Data Transfer:**
+```
+Internal traffic: 200K reads/sec × 1 KB = 200 MB/sec = 1.6 Gbps
+Cross-AZ traffic: 50% of internal = 0.8 Gbps
+Cross-AZ cost: 0.8 Gbps × $0.01/GB = ~$2,500/month
+
+External API traffic: Minimal (internal service)
+Network Total: ~$2,500/month
+```
+
+### Load Balancer Costs
+
+**Application Load Balancer (ALB):**
+```
+ALB instances: 2 (multi-AZ) × $22.50/month = $45/month
+LCU (Load Balancer Capacity Units): ~$50/month (200K requests/sec)
+Total ALB: $95/month
+```
+
+### Monitoring & Logging Costs
+
+**CloudWatch:**
+```
+Metrics: 80 servers × $0.30/month = $24/month
+Logs: 10 GB/month × $0.50/GB = $5/month
+Alarms: 50 alarms × $0.10/month = $5/month
+Total Monitoring: $34/month
+```
+
+### Total Monthly Cost Breakdown
+
+| Category | Monthly Cost | Percentage |
+|----------|--------------|------------|
+| Compute (Servers) | $14,000 | 62.5% |
+| Database (PostgreSQL + Redis) | $5,700.65 | 25.5% |
+| Network (Data Transfer) | $2,500 | 11.2% |
+| Load Balancer | $95 | 0.4% |
+| Storage | $0.65 | <0.1% |
+| Monitoring | $34 | 0.2% |
+| **Total Monthly** | **$22,330.30** | **100%** |
+
+### Annual Cost
+
+```
+Monthly: $22,330.30
+Annual: $22,330.30 × 12 = $267,963.60/year
+```
+
+### Cost Optimization Strategies
+
+1. **Reserved Instances (1-year):**
+   - Compute: $14,000 × 0.6 (40% discount) = $8,400/month
+   - Savings: $5,600/month
+
+2. **Spot Instances (for non-critical services):**
+   - Update Propagation: 50% spot = $1,500 × 0.3 = $450/month
+   - Savings: $1,050/month
+
+3. **Database Optimization:**
+   - Use smaller instances for read replicas
+   - Savings: ~$1,000/month
+
+4. **Network Optimization:**
+   - Co-locate services in same AZ where possible
+   - Savings: ~$500/month
+
+**Optimized Monthly Cost: ~$14,280/month**
+**Optimized Annual Cost: ~$171,360/year**
+
+### Cost Comparison with Managed Services
+
+**AWS AppConfig (Managed Service):**
+```
+Configuration reads: 200K/sec × 86,400 sec/day × 30 days = 518.4B reads/month
+AppConfig pricing: $0.001 per 1,000 reads = $518,400/month
+Total: ~$518,400/month (much higher than self-hosted)
+```
+
+**Self-Hosted Advantage:**
+- 23x cheaper than managed service
+- More control over infrastructure
+- Custom features and optimizations
+
+### Cost per Service
+
+```
+Total monthly cost: $22,330.30
+Number of services: 10,000
+Cost per service: $22,330.30 / 10,000 = $2.23/service/month
+```
+
+### Cost per Configuration Read
+
+```
+Total monthly cost: $22,330.30
+Reads per month: 200,000/sec × 86,400 sec/day × 30 days = 518.4 billion reads
+Cost per read: $22,330.30 / 518,400,000,000 = $0.000000043/read
+Cost per 1M reads: $0.043/1M reads
+```
+
+---
+
 ## Key Takeaways
 
 1. **Read-Heavy System**: 1000:1 read/write ratio

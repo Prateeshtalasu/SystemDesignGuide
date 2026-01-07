@@ -323,6 +323,25 @@ public class CashDispenser implements CashOutputDevice { }
 - Can swap hardware implementations
 - Supports different ATM configurations
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes for Account operations and concrete ATM dependency for the following reasons:
+
+1. **Single Domain Model**: The system has a clear domain model (Account types, hardware devices). Account operations (read, withdraw, deposit) are core behaviors, not separate concerns requiring segregation in the interview context.
+
+2. **Single Hardware Configuration**: The system models a single, well-defined ATM hardware configuration. There's no requirement for multiple hardware vendor implementations in the interview context.
+
+3. **Core Focus**: LLD interviews focus on transaction processing, ATM state machine, and balance management. Adding interface abstractions shifts focus away from these core concepts.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract Account interfaces (Readable, Withdrawable, Depositable) and Hardware interfaces (DisplayDevice, InputDevice, CashOutputDevice) for:
+   - Testability (mock devices and accounts in unit tests)
+   - Hardware vendor flexibility (swap implementations)
+   - Interface segregation (clients only depend on what they need)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on transaction flow and ATM state management
+- **Production Scope**: Interfaces provide testability and hardware vendor flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -332,8 +351,8 @@ public class CashDispenser implements CashOutputDevice { }
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Card handles authentication, Account manages balance, Transaction executes operations, CashDispenser handles cash, ATMController coordinates. Transaction class separation by type is excellent SRP. | N/A | - |
 | **OCP** | PASS | System is open for extension (new transaction types, account types) without modifying existing code. Template method pattern in Transaction and inheritance enable this. | N/A | - |
 | **LSP** | PASS | All Transaction subclasses properly implement the template method contract. All Account subclasses are substitutable. No violations. | N/A | - |
-| **ISP** | WEAK | Could benefit from interface segregation for Account (Readable, Withdrawable, Depositable) and hardware (CashHandler, CashAcceptor). Currently using concrete classes or abstract classes. | Extract interfaces: Account interfaces, Hardware interfaces | More files/interfaces, but increases flexibility and testability |
-| **DIP** | WEAK | ATMController depends on concrete ATM. Should depend on abstractions (DisplayDevice, InputDevice, CashOutputDevice interfaces). Hardware abstractions mentioned but not fully implemented. | Extract hardware interfaces, use constructor injection in controller | More setup/configuration, but improves testability and hardware vendor flexibility |
+| **ISP** | ACCEPTABLE (LLD Scope) | Could benefit from interface segregation for Account (Readable, Withdrawable, Depositable) and hardware (CashHandler, CashAcceptor). For LLD interview scope, using concrete classes is acceptable as it focuses on core ATM transaction logic. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context. In production, we would extract Account and Hardware interfaces for flexibility and testability. | Interview: Simpler, focuses on core LLD skills. Production: More files/interfaces, but increases flexibility and testability |
+| **DIP** | ACCEPTABLE (LLD Scope) | ATMController depends on concrete ATM. For LLD interview scope, this is acceptable as it focuses on core transaction processing. In production, we would depend on abstractions (DisplayDevice, InputDevice, CashOutputDevice interfaces). | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More setup/configuration, but improves testability and hardware vendor flexibility |
 
 ---
 

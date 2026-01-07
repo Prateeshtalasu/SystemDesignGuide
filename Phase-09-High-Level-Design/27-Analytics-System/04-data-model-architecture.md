@@ -499,6 +499,218 @@ flowchart TB
          └─────────────────┘
 ```
 
+### Data Pipeline Flow: Real-Time vs Batch Processing
+
+```mermaid
+flowchart TD
+    Events["Events Ingested<br/>1M events/sec"]
+    
+    Events --> Kafka["Kafka<br/>Buffer & Replay"]
+    
+    Kafka --> StreamPath["REAL-TIME PATH"]
+    Kafka --> BatchPath["BATCH PATH"]
+    
+    subgraph StreamPath["Real-Time Processing"]
+        StreamProcessor["Stream Processor<br/>(Apache Flink)"]
+        StreamProcessor --> RealTimeAgg["Real-Time Aggregates<br/>(Redis)"]
+        RealTimeAgg --> RealTimeAPI["Real-Time API<br/>(< 1 second latency)"]
+    end
+    
+    subgraph BatchPath["Batch Processing"]
+        BatchProcessor["Batch Processor<br/>(Apache Spark)"]
+        BatchProcessor --> ObjectStorage["Object Storage<br/>(S3 - Parquet)"]
+        ObjectStorage --> DataWarehouse["Data Warehouse<br/>(Snowflake/BigQuery)"]
+        DataWarehouse --> BatchAPI["Batch API<br/>(< 1 hour latency)"]
+    end
+    
+    RealTimeAPI --> UseCase1["Use Cases:<br/>- Live dashboards<br/>- Real-time alerts<br/>- Current metrics"]
+    BatchAPI --> UseCase2["Use Cases:<br/>- Historical analysis<br/>- Complex queries<br/>- Data science"]
+    
+    style StreamPath fill:#e1f5ff
+    style BatchPath fill:#fff4e1
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DATA PIPELINE FLOW                                    │
+│                                                                          │
+│  Events Ingested (1M events/sec)                                        │
+│       │                                                                  │
+│       ▼                                                                  │
+│  ┌─────────┐                                                            │
+│  │  Kafka  │  Buffer & Replay                                           │
+│  └────┬────┘                                                            │
+│       │                                                                  │
+│       ├──────────────────────┬──────────────────────┐                  │
+│       │                      │                      │                  │
+│       ▼                      ▼                      ▼                  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐               │
+│  │   REAL-TIME │    │    BATCH    │    │   HYBRID    │               │
+│  │    PATH     │    │    PATH     │    │    PATH     │               │
+│  └─────────────┘    └─────────────┘    └─────────────┘               │
+│       │                      │                      │                  │
+│       ▼                      ▼                      ▼                  │
+│  Stream Processor      Batch Processor      Hybrid Processor          │
+│  (Apache Flink)        (Apache Spark)        (Kafka Streams)          │
+│       │                      │                      │                  │
+│       ▼                      ▼                      ▼                  │
+│  Redis Aggregates      S3 (Parquet)         Redis + S3                │
+│       │                      │                      │                  │
+│       ▼                      ▼                      ▼                  │
+│  Real-Time API         Data Warehouse       Multi-tier API            │
+│  (< 1 sec)             (< 1 hour)            (Variable latency)       │
+│       │                      │                      │                  │
+│       ▼                      ▼                      ▼                  │
+│  Live Dashboards       Historical Analysis   Flexible Queries         │
+│  Real-time Alerts      Complex Queries                                 │
+│  Current Metrics       Data Science                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+
+### Real-Time vs Batch Processing Trade-offs
+
+```mermaid
+flowchart LR
+    subgraph RealTime["REAL-TIME PROCESSING"]
+        RT1["Latency: < 1 second"]
+        RT2["Use Cases:<br/>- Live dashboards<br/>- Real-time alerts<br/>- Current metrics"]
+        RT3["Technology:<br/>- Apache Flink<br/>- Kafka Streams<br/>- Redis"]
+        RT4["Cost: Higher<br/>(Always-on processing)"]
+        RT5["Complexity: Higher<br/>(State management)"]
+    end
+    
+    subgraph Batch["BATCH PROCESSING"]
+        B1["Latency: < 1 hour"]
+        B2["Use Cases:<br/>- Historical analysis<br/>- Complex queries<br/>- Data science"]
+        B3["Technology:<br/>- Apache Spark<br/>- Hadoop<br/>- Data Warehouse"]
+        B4["Cost: Lower<br/>(Scheduled jobs)"]
+        B5["Complexity: Lower<br/>(Stateless processing)"]
+    end
+    
+    RealTime --> Tradeoff["TRADE-OFFS"]
+    Batch --> Tradeoff
+    
+    Tradeoff --> Decision["Choose Real-Time for:<br/>- Low latency requirements<br/>- Current state queries<br/>- Real-time monitoring<br/><br/>Choose Batch for:<br/>- Historical analysis<br/>- Complex aggregations<br/>- Cost optimization"]
+    
+    style RealTime fill:#e1f5ff
+    style Batch fill:#fff4e1
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│              REAL-TIME vs BATCH PROCESSING TRADE-OFFS                  │
+│                                                                          │
+│  ┌──────────────────────┐      ┌──────────────────────┐                │
+│  │  REAL-TIME PROCESSING │      │  BATCH PROCESSING   │                │
+│  ├──────────────────────┤      ├──────────────────────┤                │
+│  │ Latency: < 1 second  │      │ Latency: < 1 hour    │                │
+│  │                      │      │                      │                │
+│  │ Use Cases:           │      │ Use Cases:           │                │
+│  │ - Live dashboards    │      │ - Historical analysis│                │
+│  │ - Real-time alerts   │      │ - Complex queries    │                │
+│  │ - Current metrics    │      │ - Data science       │                │
+│  │                      │      │                      │                │
+│  │ Technology:          │      │ Technology:          │                │
+│  │ - Apache Flink       │      │ - Apache Spark       │                │
+│  │ - Kafka Streams      │      │ - Hadoop             │                │
+│  │ - Redis              │      │ - Data Warehouse     │                │
+│  │                      │      │                      │                │
+│  │ Cost: Higher         │      │ Cost: Lower          │                │
+│  │ (Always-on)          │      │ (Scheduled jobs)     │                │
+│  │                      │      │                      │                │
+│  │ Complexity: Higher   │      │ Complexity: Lower     │                │
+│  │ (State management)   │      │ (Stateless)           │                │
+│  └──────────┬───────────┘      └──────────┬───────────┘                │
+│             │                              │                            │
+│             └──────────────┬───────────────┘                            │
+│                            ▼                                            │
+│                    ┌───────────────┐                                    │
+│                    │   TRADE-OFFS  │                                    │
+│                    └───────┬───────┘                                    │
+│                            ▼                                            │
+│          Choose Real-Time for:        Choose Batch for:                │
+│          - Low latency requirements   - Historical analysis            │
+│          - Current state queries      - Complex aggregations           │
+│          - Real-time monitoring       - Cost optimization              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+
+### Event Processing Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Ingestion
+    participant Kafka
+    participant Stream
+    participant Batch
+    participant Redis
+    participant S3
+    participant Warehouse
+    participant API
+    
+    Client->>Ingestion: Send Event (1M/sec)
+    Ingestion->>Kafka: Publish Event
+    Ingestion->>Redis: Check Dedupe
+    Ingestion-->>Client: 200 OK
+    
+    Note over Kafka: Buffer Events
+    
+    par Real-Time Path
+        Kafka->>Stream: Consume Events
+        Stream->>Stream: Aggregate (1 min windows)
+        Stream->>Redis: Store Aggregates
+        Redis->>API: Serve Real-Time Queries
+    and Batch Path
+        Kafka->>Batch: Consume Events (hourly)
+        Batch->>S3: Write Parquet Files
+        S3->>Warehouse: Load Data
+        Warehouse->>API: Serve Batch Queries
+    end
+    
+    API->>Client: Return Results
+```
+
+<details>
+<summary>ASCII diagram (reference)</summary>
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    EVENT PROCESSING FLOW                                │
+│                                                                          │
+│  Client → Ingestion → Kafka → [Stream | Batch] → [Redis | S3] → API    │
+│                                                                          │
+│  Step 1: Client sends event (1M/sec)                                    │
+│  Step 2: Ingestion validates and publishes to Kafka                     │
+│  Step 3: Ingestion checks Redis for duplicates                          │
+│  Step 4: Ingestion returns 200 OK                                       │
+│                                                                          │
+│  Step 5a (Real-Time):                                                   │
+│    - Kafka → Stream Processor (Flink)                                   │
+│    - Stream aggregates in 1-minute windows                             │
+│    - Stream stores aggregates in Redis                                 │
+│    - API serves real-time queries from Redis                           │
+│                                                                          │
+│  Step 5b (Batch):                                                       │
+│    - Kafka → Batch Processor (Spark) - hourly                          │
+│    - Batch writes Parquet files to S3                                   │
+│    - Data Warehouse loads from S3                                      │
+│    - API serves batch queries from Warehouse                           │
+│                                                                          │
+│  Step 6: API returns results to client                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+</details>
+```
+
 ---
 
 ## Component Details

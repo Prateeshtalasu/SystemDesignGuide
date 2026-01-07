@@ -134,6 +134,555 @@ if (count > 100) {
 }
 ```
 
+### Detailed Mitigation Techniques by Attack Type
+
+#### SYN Flood Mitigation
+
+**Attack Description**: 
+- Attacker sends many TCP SYN packets but never completes the handshake
+- Server holds connections in "half-open" state, exhausting connection table
+- Legitimate users can't establish new connections
+
+**Mitigation Techniques**:
+
+1. **SYN Cookies**:
+   - Server doesn't allocate connection state until handshake completes
+   - Encodes connection info in SYN-ACK sequence number
+   - Only allocates resources when legitimate ACK received
+   - **Configuration** (Linux):
+   ```bash
+   # Enable SYN cookies
+   echo 1 > /proc/sys/net/ipv4/tcp_syncookies
+   
+   # Reduce SYN-RECEIVED timeout
+   echo 3 > /proc/sys/net/ipv4/tcp_synack_retries
+   ```
+
+2. **Connection Rate Limiting**:
+   - Limit new connections per IP per second
+   - Drop excess SYN packets before processing
+   - **Implementation**:
+   ```java
+   // Limit 10 new connections per IP per second
+   String key = "syn_limit:" + ip;
+   long count = redis.incr(key);
+   if (count == 1) redis.expire(key, 1);
+   if (count > 10) {
+       dropConnection(); // Drop SYN packet
+   }
+   ```
+
+3. **TCP Stack Hardening**:
+   - Increase connection table size
+   - Reduce SYN-RECEIVED timeout
+   - Enable SYN flood protection
+   - **Configuration**:
+   ```bash
+   # Increase connection table
+   echo 262144 > /proc/sys/net/core/somaxconn
+   
+   # Reduce SYN timeout
+   echo 1 > /proc/sys/net/ipv4/tcp_syn_retries
+   ```
+
+4. **Load Balancer Protection**:
+   - AWS ELB/ALB: Built-in SYN flood protection
+   - CloudFlare: Automatic SYN flood mitigation
+   - F5 BIG-IP: SYN cookie protection enabled by default
+
+#### UDP Flood Mitigation
+
+**Attack Description**:
+- Attacker sends UDP packets to random ports
+- Server responds with ICMP "port unreachable" messages
+- Network bandwidth exhausted by response traffic
+
+**Mitigation Techniques**:
+
+1. **UDP Rate Limiting**:
+   - Limit UDP packets per source IP
+   - Drop excess packets at firewall/load balancer
+   - **Implementation**:
+   ```java
+   // Limit 100 UDP packets per IP per second
+   String key = "udp_limit:" + ip;
+   long count = redis.incr(key);
+   if (count == 1) redis.expire(key, 1);
+   if (count > 100) {
+       dropPacket();
+   }
+   ```
+
+2. **Firewall Rules**:
+   - Block UDP from unknown sources
+   - Whitelist only necessary UDP services (DNS, NTP)
+   - **Example** (iptables):
+   ```bash
+   # Allow DNS (port 53) from specific sources only
+   iptables -A INPUT -p udp --dport 53 -s 8.8.8.8 -j ACCEPT
+   iptables -A INPUT -p udp --dport 53 -j DROP
+   ```
+
+3. **Cloud Provider Protection**:
+   - AWS Shield: Automatic UDP flood mitigation
+   - CloudFlare: UDP flood protection enabled
+   - Azure DDoS Protection: Network-level UDP filtering
+
+4. **Application-Level Filtering**:
+   - Only accept UDP from whitelisted IPs
+   - Validate UDP packet structure
+   - Rate limit at application layer
+
+#### HTTP Flood Mitigation
+
+**Attack Description**:
+- Legitimate-looking HTTP requests overwhelm application
+- Hard to distinguish from real traffic
+- Exhausts application server resources
+
+**Mitigation Techniques**:
+
+1. **Request Rate Limiting**:
+   - Limit requests per IP/user
+   - Use sliding window or token bucket algorithm
+   - **Implementation**:
+   ```java
+   // Token bucket rate limiting
+   public class TokenBucketRateLimiter {
+       private final RedisTemplate<String, String> redis;
+       private final int capacity = 100; // tokens
+       private final int refillRate = 10; // tokens per second
+       
+       public boolean allowRequest(String ip) {
+           String key = "token_bucket:" + ip;
+           long tokens = redis.opsForValue().increment(key);
+           
+           if (tokens == 1) {
+               redis.expire(key, Duration.ofSeconds(10));
+           }
+           
+           if (tokens > capacity) {
+               // Refill tokens based on time passed
+               long elapsed = getElapsedSeconds(key);
+               long refill = elapsed * refillRate;
+               tokens = Math.min(capacity, tokens - capacity + refill);
+               redis.opsForValue().set(key, String.valueOf(tokens));
+           }
+           
+           return tokens > 0;
+       }
+   }
+   ```
+
+2. **Behavioral Analysis**:
+   - Detect unusual request patterns
+   - Monitor request-to-response ratio
+   - Track user journey patterns
+   - **Implementation**:
+   ```java
+   // Detect bot-like behavior
+   public boolean isBot(String ip, HttpServletRequest request) {
+       // Check 1: No cookies/session
+       if (request.getCookies() == null || request.getCookies().length == 0) {
+           return true;
+       }
+       
+       // Check 2: Missing referrer
+       if (request.getHeader("Referer") == null && !isEntryPoint(request)) {
+           return true;
+       }
+       
+       // Check 3: Unusual user agent
+       String userAgent = request.getHeader("User-Agent");
+       if (isKnownBotUserAgent(userAgent)) {
+           return true;
+       }
+       
+       // Check 4: High request rate with low success rate
+       double successRate = getSuccessRate(ip);
+       long requestRate = getRequestRate(ip);
+       if (requestRate > 50 && successRate < 0.1) {
+           return true;
+       }
+       
+       return false;
+   }
+   ```
+
+3. **Challenge-Response (CAPTCHA)**:
+   - Require CAPTCHA for suspicious traffic
+   - JavaScript challenge (CloudFlare)
+   - Proof of work challenges
+   - **Implementation**:
+   ```java
+   @RestController
+   public class ProtectedController {
+       
+       @Autowired
+       private ChallengeService challengeService;
+       
+       @GetMapping("/api/data")
+       public ResponseEntity<?> getData(HttpServletRequest request) {
+           String ip = getClientIP(request);
+           
+           // Check if challenge required
+           if (challengeService.requiresChallenge(ip)) {
+               return ResponseEntity.status(429)
+                   .body(Map.of("challenge_required", true, 
+                               "challenge_token", challengeService.generateChallenge(ip)));
+           }
+           
+           // Verify challenge if provided
+           String challengeToken = request.getHeader("X-Challenge-Token");
+           if (challengeToken != null && !challengeService.verifyChallenge(challengeToken)) {
+               return ResponseEntity.status(403).build();
+           }
+           
+           return ResponseEntity.ok(getData());
+       }
+   }
+   ```
+
+4. **WAF Rules**:
+   - Block known attack patterns
+   - Rate limit by IP, user, endpoint
+   - Geographic filtering
+   - **AWS WAF Example**:
+   ```json
+   {
+     "Name": "RateLimitRule",
+     "Priority": 1,
+     "Statement": {
+       "RateBasedStatement": {
+         "Limit": 2000,
+         "AggregateKeyType": "IP"
+       }
+     },
+     "Action": {
+       "Block": {}
+     }
+   }
+   ```
+
+5. **Request Validation**:
+   - Strict input validation
+   - Reject malformed requests early
+   - Size limits on request body
+   - **Implementation**:
+   ```java
+   @Component
+   public class RequestValidationFilter implements Filter {
+       
+       private static final int MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
+       
+       @Override
+       public void doFilter(ServletRequest request, ServletResponse response, 
+                           FilterChain chain) throws IOException, ServletException {
+           HttpServletRequest httpRequest = (HttpServletRequest) request;
+           
+           // Check request size
+           if (httpRequest.getContentLength() > MAX_REQUEST_SIZE) {
+               ((HttpServletResponse) response).setStatus(413);
+               return;
+           }
+           
+           // Validate headers
+           if (!isValidRequest(httpRequest)) {
+               ((HttpServletResponse) response).setStatus(400);
+               return;
+           }
+           
+           chain.doFilter(request, response);
+       }
+   }
+   ```
+
+#### Slowloris Attack Mitigation
+
+**Attack Description**:
+- Attacker sends HTTP request headers slowly
+- Keeps connections open indefinitely
+- Exhausts server connection pool
+
+**Mitigation Techniques**:
+
+1. **Connection Timeouts**:
+   - Set strict timeouts for connection establishment
+   - Close idle connections
+   - **Configuration** (Nginx):
+   ```nginx
+   # Timeout for reading client request header
+   client_header_timeout 10s;
+   
+   # Timeout for reading client request body
+   client_body_timeout 10s;
+   
+   # Timeout for keep-alive connections
+   keepalive_timeout 65s;
+   ```
+
+2. **Connection Limits**:
+   - Limit concurrent connections per IP
+   - Limit total connections
+   - **Configuration** (Nginx):
+   ```nginx
+   # Limit connections per IP
+   limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+   limit_conn conn_limit_per_ip 10;
+   
+   # Limit total connections
+   limit_conn_zone $server_name zone=conn_limit_total:10m;
+   limit_conn conn_limit_total 1000;
+   ```
+
+3. **Request Timeouts**:
+   - Timeout incomplete requests
+   - **Implementation**:
+   ```java
+   @Component
+   public class SlowRequestFilter implements Filter {
+       
+       private static final long MAX_REQUEST_TIME = 30000; // 30 seconds
+       
+       @Override
+       public void doFilter(ServletRequest request, ServletResponse response, 
+                           FilterChain chain) throws IOException, ServletException {
+           long startTime = System.currentTimeMillis();
+           
+           try {
+               chain.doFilter(request, response);
+           } finally {
+               long duration = System.currentTimeMillis() - startTime;
+               if (duration > MAX_REQUEST_TIME) {
+                   String ip = getClientIP((HttpServletRequest) request);
+                   log.warn("Slow request detected from {}: {}ms", ip, duration);
+                   markAsSuspicious(ip);
+               }
+           }
+       }
+   }
+   ```
+
+4. **Load Balancer Protection**:
+   - AWS ALB: Built-in connection timeout (60s default)
+   - CloudFlare: Automatic Slowloris protection
+   - F5 BIG-IP: Connection timeout and rate limiting
+
+#### DNS Amplification Attack Mitigation
+
+**Attack Description**:
+- Attacker spoofs victim's IP address
+- Sends DNS queries to open DNS resolvers
+- DNS responses are much larger than queries (amplification)
+- Victim's network overwhelmed by DNS responses
+
+**Mitigation Techniques**:
+
+1. **Source IP Validation (BCP38)**:
+   - Prevent IP spoofing at network edge
+   - Drop packets with spoofed source IPs
+   - **Implementation**: Configure routers to drop spoofed packets
+
+2. **DNS Rate Limiting**:
+   - Limit DNS queries per source IP
+   - **Implementation** (BIND):
+   ```
+   rate-limit {
+       responses-per-second 10;
+       errors-per-second 5;
+   };
+   ```
+
+3. **Response Rate Limiting (RRL)**:
+   - Limit DNS responses per source IP
+   - Prevents amplification
+   - **Configuration** (BIND):
+   ```
+   response-policy {
+       zone "rpz";
+   };
+   ```
+
+4. **Close Open Resolvers**:
+   - Don't allow recursive queries from internet
+   - Only allow queries from trusted sources
+   - **Configuration** (BIND):
+   ```
+   options {
+       allow-recursion { 10.0.0.0/8; 192.168.0.0/16; };
+   };
+   ```
+
+5. **Cloud Provider Protection**:
+   - AWS Route 53: Built-in DDoS protection
+   - CloudFlare DNS: Automatic amplification protection
+   - Google Cloud DNS: Rate limiting enabled
+
+#### Application-Layer Slow POST (RUDY) Mitigation
+
+**Attack Description**:
+- Attacker sends POST request with slow body
+- Keeps connection open while sending data slowly
+- Exhausts server connection pool
+
+**Mitigation Techniques**:
+
+1. **Request Body Timeout**:
+   - Timeout slow request body transmission
+   - **Configuration** (Nginx):
+   ```nginx
+   # Timeout for reading request body
+   client_body_timeout 10s;
+   
+   # Maximum request body size
+   client_max_body_size 10m;
+   ```
+
+2. **Chunked Transfer Encoding Limits**:
+   - Limit chunk size
+   - Timeout between chunks
+   - **Implementation**:
+   ```java
+   @Component
+   public class ChunkedRequestFilter implements Filter {
+       
+       private static final long MAX_CHUNK_INTERVAL = 5000; // 5 seconds
+       
+       @Override
+       public void doFilter(ServletRequest request, ServletResponse response, 
+                           FilterChain chain) throws IOException, ServletException {
+           HttpServletRequest httpRequest = (HttpServletRequest) request;
+           
+           if ("chunked".equalsIgnoreCase(httpRequest.getHeader("Transfer-Encoding"))) {
+               // Monitor chunk arrival times
+               long lastChunkTime = System.currentTimeMillis();
+               // If gap between chunks > threshold, close connection
+           }
+           
+           chain.doFilter(request, response);
+       }
+   }
+   ```
+
+3. **Connection Pool Management**:
+   - Limit concurrent connections
+   - Close idle connections aggressively
+   - **Configuration** (Tomcat):
+   ```xml
+   <Connector port="8080"
+              maxThreads="200"
+              connectionTimeout="20000"
+              keepAliveTimeout="5000"
+              maxConnections="10000" />
+   ```
+
+#### Credential Stuffing Attack Mitigation
+
+**Attack Description**:
+- Attacker uses stolen credentials to attempt logins
+- Many login attempts from different IPs
+- Appears as legitimate traffic
+
+**Mitigation Techniques**:
+
+1. **Account-Level Rate Limiting**:
+   - Limit login attempts per account
+   - Lock account after failed attempts
+   - **Implementation**:
+   ```java
+   @Service
+   public class LoginProtectionService {
+       
+       private static final int MAX_ATTEMPTS = 5;
+       private static final long LOCKOUT_DURATION = 3600; // 1 hour
+       
+       public boolean canAttemptLogin(String username) {
+           String key = "login_attempts:" + username;
+           long attempts = redis.opsForValue().increment(key);
+           
+           if (attempts == 1) {
+               redis.expire(key, Duration.ofSeconds(LOCKOUT_DURATION));
+           }
+           
+           if (attempts > MAX_ATTEMPTS) {
+               lockAccount(username);
+               return false;
+           }
+           
+           return true;
+       }
+       
+       public void recordFailedLogin(String username) {
+           String key = "login_attempts:" + username;
+           redis.opsForValue().increment(key);
+       }
+       
+       public void recordSuccessfulLogin(String username) {
+           String key = "login_attempts:" + username;
+           redis.delete(key);
+       }
+   }
+   ```
+
+2. **IP-Based Rate Limiting**:
+   - Limit login attempts per IP
+   - Block IPs with high failure rate
+   - **Implementation**:
+   ```java
+   public boolean isIPAllowed(String ip) {
+       String key = "login_ip:" + ip;
+       long attempts = redis.opsForValue().increment(key);
+       
+       if (attempts == 1) {
+           redis.expire(key, Duration.ofMinutes(15));
+       }
+       
+       // Allow 10 login attempts per IP per 15 minutes
+       return attempts <= 10;
+   }
+   ```
+
+3. **CAPTCHA After Failed Attempts**:
+   - Require CAPTCHA after N failed attempts
+   - **Implementation**:
+   ```java
+   public boolean requiresCaptcha(String username, String ip) {
+       long userAttempts = getFailedAttempts(username);
+       long ipAttempts = getFailedAttempts(ip);
+       
+       return userAttempts >= 3 || ipAttempts >= 10;
+   }
+   ```
+
+4. **Device Fingerprinting**:
+   - Track devices used for login
+   - Require additional verification for new devices
+   - **Implementation**:
+   ```java
+   public String generateDeviceFingerprint(HttpServletRequest request) {
+       String userAgent = request.getHeader("User-Agent");
+       String acceptLanguage = request.getHeader("Accept-Language");
+       String acceptEncoding = request.getHeader("Accept-Encoding");
+       
+       String fingerprint = userAgent + "|" + acceptLanguage + "|" + acceptEncoding;
+       return DigestUtils.sha256Hex(fingerprint);
+   }
+   ```
+
+5. **Behavioral Analysis**:
+   - Detect unusual login patterns
+   - Monitor login success rate per IP
+   - **Implementation**:
+   ```java
+   public boolean isSuspiciousLoginPattern(String ip) {
+       double successRate = getLoginSuccessRate(ip);
+       long totalAttempts = getTotalLoginAttempts(ip);
+       
+       // Suspicious if: many attempts with low success rate
+       return totalAttempts > 50 && successRate < 0.1;
+   }
+   ```
+
 #### 2. IP Whitelisting/Blacklisting
 
 **IP Whitelisting**: Only allow traffic from known good IPs

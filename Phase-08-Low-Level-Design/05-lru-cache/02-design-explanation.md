@@ -629,6 +629,101 @@ public class MeteredLRUCache<K, V> extends LRUCache<K, V> {
 7. **Add TTL support** - Time-to-live expiration for cache entries
 8. **Add cache warming** - Pre-populate cache with frequently accessed items
 
+**Detailed Cache Warming Implementation:**
+
+```java
+// Strategy 1: Eager Warming (Startup)
+public class LRUCacheWithWarming<K, V> extends LRUCache<K, V> {
+    private final CacheWarmer<K, V> warmer;
+    
+    public LRUCacheWithWarming(int capacity, CacheWarmer<K, V> warmer) {
+        super(capacity);
+        this.warmer = warmer;
+        warmCache();
+    }
+    
+    private void warmCache() {
+        Map<K, V> warmData = warmer.getWarmData();
+        for (Map.Entry<K, V> entry : warmData.entrySet()) {
+            if (size() < getCapacity()) {
+                put(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+    
+    public interface CacheWarmer<K, V> {
+        Map<K, V> getWarmData();
+    }
+}
+
+// Strategy 2: Lazy Warming (Background)
+public class LRUCacheWithLazyWarming<K, V> extends LRUCache<K, V> {
+    private final ScheduledExecutorService scheduler;
+    private final CacheWarmer<K, V> warmer;
+    
+    public LRUCacheWithLazyWarming(int capacity, CacheWarmer<K, V> warmer) {
+        super(capacity);
+        this.warmer = warmer;
+        this.scheduler = Executors.newScheduledThreadPool(1);
+        // Start warming 5 seconds after startup
+        scheduler.schedule(this::warmCacheInBackground, 5, TimeUnit.SECONDS);
+    }
+    
+    private void warmCacheInBackground() {
+        scheduler.execute(() -> {
+            Map<K, V> warmData = warmer.getWarmData();
+            for (Map.Entry<K, V> entry : warmData.entrySet()) {
+                if (size() < getCapacity()) {
+                    put(entry.getKey(), entry.getValue());
+                }
+            }
+        });
+    }
+}
+
+// Hit Rate Optimization with Metrics
+public class LRUCacheWithMetrics<K, V> extends LRUCache<K, V> {
+    private final AtomicLong hits = new AtomicLong(0);
+    private final AtomicLong misses = new AtomicLong(0);
+    
+    @Override
+    public V get(K key) {
+        V value = super.get(key);
+        if (value != null) {
+            hits.incrementAndGet();
+        } else {
+            misses.incrementAndGet();
+        }
+        return value;
+    }
+    
+    public double getHitRate() {
+        long total = hits.get() + misses.get();
+        return total > 0 ? (double) hits.get() / total : 0.0;
+    }
+    
+    public double getHitRatePercentage() {
+        return getHitRate() * 100.0;
+    }
+}
+
+// Real-world example: E-commerce product cache
+CacheWarmer<String, Product> warmer = () -> {
+    // Warm top 1000 products by sales + recent views
+    List<Product> topProducts = productRepository.findTopProducts(1000);
+    return topProducts.stream()
+        .collect(Collectors.toMap(Product::getId, p -> p));
+};
+LRUCache<String, Product> cache = new LRUCacheWithWarming<>(10000, warmer);
+```
+
+**Best Practices:**
+1. Identify hot data using analytics (top products, active users)
+2. Warm gradually in batches (100 items at a time)
+3. Monitor hit rate and adjust warming strategy
+4. Refresh warm data periodically (every hour)
+5. Handle warming failures gracefully (don't block cache operations)
+
 ---
 
 ### Q5: How would you optimize for very large capacities (millions of entries)?

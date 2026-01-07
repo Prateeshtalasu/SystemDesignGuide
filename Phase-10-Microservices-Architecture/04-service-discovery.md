@@ -896,33 +896,596 @@ public class PaymentServiceHealthIndicator implements HealthIndicator {
 
 ---
 
+### Manual Service Discovery Client Implementation
+
+For scenarios where you can't use Spring Cloud abstractions (e.g., non-Spring applications, custom requirements), here's how to implement a service discovery client manually:
+
+#### Manual Eureka Client Implementation
+
+```java
+// Manual Eureka Client - Direct HTTP API calls
+@Service
+public class ManualEurekaClient {
+    
+    private final String eurekaServerUrl;
+    private final RestTemplate restTemplate;
+    private final Map<String, List<ServiceInstance>> serviceCache = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    
+    public ManualEurekaClient(@Value("${eureka.server.url}") String eurekaServerUrl) {
+        this.eurekaServerUrl = eurekaServerUrl;
+        this.restTemplate = new RestTemplate();
+        
+        // Refresh cache every 30 seconds
+        scheduler.scheduleAtFixedRate(this::refreshAllServices, 0, 30, TimeUnit.SECONDS);
+    }
+    
+    /**
+     * Get all instances of a service
+     */
+    public List<ServiceInstance> getInstances(String serviceName) {
+        // Return cached instances if available
+        List<ServiceInstance> cached = serviceCache.get(serviceName);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+        
+        // If cache miss, fetch immediately
+        return fetchInstances(serviceName);
+    }
+    
+    /**
+     * Fetch instances from Eureka REST API
+     */
+    private List<ServiceInstance> fetchInstances(String serviceName) {
+        try {
+            // Eureka REST API: GET /eureka/apps/{serviceName}
+            String url = eurekaServerUrl + "/eureka/apps/" + serviceName.toUpperCase();
+            
+            ResponseEntity<EurekaApplicationResponse> response = restTemplate.getForEntity(
+                url,
+                EurekaApplicationResponse.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                List<ServiceInstance> instances = parseInstances(response.getBody());
+                
+                // Filter only UP instances
+                List<ServiceInstance> healthyInstances = instances.stream()
+                    .filter(instance -> "UP".equals(instance.getStatus()))
+                    .collect(Collectors.toList());
+                
+                // Update cache
+                serviceCache.put(serviceName, healthyInstances);
+                
+                return healthyInstances;
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch instances from Eureka", e);
+            // Return stale cache if available
+            return serviceCache.getOrDefault(serviceName, Collections.emptyList());
+        }
+        
+        return Collections.emptyList();
+    }
+    
+    /**
+     * Parse Eureka response to ServiceInstance objects
+     */
+    private List<ServiceInstance> parseInstances(EurekaApplicationResponse response) {
+        List<ServiceInstance> instances = new ArrayList<>();
+        
+        if (response.getApplication() != null) {
+            for (EurekaInstance instance : response.getApplication().getInstance()) {
+                ServiceInstance serviceInstance = new ServiceInstance(
+                    instance.getInstanceId(),
+                    instance.getHostName(),
+                    instance.getPort().get("$"),
+                    instance.getStatus(),
+                    instance.getMetadata()
+                );
+                instances.add(serviceInstance);
+            }
+        }
+        
+        return instances;
+    }
+    
+    /**
+     * Refresh all cached services
+     */
+    private void refreshAllServices() {
+        for (String serviceName : new ArrayList<>(serviceCache.keySet())) {
+            fetchInstances(serviceName);
+        }
+    }
+    
+    /**
+     * Get a single instance using load balancing strategy
+     */
+    public ServiceInstance getInstance(String serviceName, LoadBalanceStrategy strategy) {
+        List<ServiceInstance> instances = getInstances(serviceName);
+        
+        if (instances.isEmpty()) {
+            throw new ServiceNotFoundException("No instances found for service: " + serviceName);
+        }
+        
+        return strategy.select(instances);
+    }
+}
+
+// Service Instance POJO
+@Data
+class ServiceInstance {
+    private final String instanceId;
+    private final String host;
+    private final int port;
+    private final String status;
+    private final Map<String, String> metadata;
+    
+    public String getUrl() {
+        return "http://" + host + ":" + port;
+    }
+}
+
+// Load Balancing Strategies
+interface LoadBalanceStrategy {
+    ServiceInstance select(List<ServiceInstance> instances);
+}
+
+class RoundRobinStrategy implements LoadBalanceStrategy {
+    private final Map<String, AtomicInteger> counters = new ConcurrentHashMap<>();
+    
+    @Override
+    public ServiceInstance select(List<ServiceInstance> instances) {
+        AtomicInteger counter = counters.computeIfAbsent(
+            instances.get(0).getUrl(),
+            k -> new AtomicInteger(0)
+        );
+        int index = counter.getAndIncrement() % instances.size();
+        return instances.get(index);
+    }
+}
+
+class RandomStrategy implements LoadBalanceStrategy {
+    private final Random random = new Random();
+    
+    @Override
+    public ServiceInstance select(List<ServiceInstance> instances) {
+        return instances.get(random.nextInt(instances.size()));
+    }
+}
+
+class ZoneAwareStrategy implements LoadBalanceStrategy {
+    private final String currentZone;
+    
+    public ZoneAwareStrategy(String currentZone) {
+        this.currentZone = currentZone;
+    }
+    
+    @Override
+    public ServiceInstance select(List<ServiceInstance> instances) {
+        // Prefer instances in same zone
+        List<ServiceInstance> sameZone = instances.stream()
+            .filter(instance -> currentZone.equals(instance.getMetadata().get("zone")))
+            .collect(Collectors.toList());
+        
+        if (!sameZone.isEmpty()) {
+            return sameZone.get(new Random().nextInt(sameZone.size()));
+        }
+        
+        // Fallback to any instance
+        return instances.get(new Random().nextInt(instances.size()));
+    }
+}
+
+// Usage Example
+@Service
+public class PaymentServiceClient {
+    
+    @Autowired
+    private ManualEurekaClient eurekaClient;
+    
+    private final LoadBalanceStrategy loadBalancer = new RoundRobinStrategy();
+    
+    public PaymentResult processPayment(Order order) {
+        // Get service instance
+        ServiceInstance instance = eurekaClient.getInstance(
+            "payment-service",
+            loadBalancer
+        );
+        
+        // Make HTTP call
+        RestTemplate restTemplate = new RestTemplate();
+        return restTemplate.postForObject(
+            instance.getUrl() + "/api/payments",
+            order,
+            PaymentResult.class
+        );
+    }
+}
+```
+
+#### Manual Consul Client Implementation
+
+```java
+// Manual Consul Client - Direct HTTP API calls
+@Service
+public class ManualConsulClient {
+    
+    private final String consulServerUrl;
+    private final RestTemplate restTemplate;
+    private final Map<String, List<ServiceInstance>> serviceCache = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    
+    public ManualConsulClient(@Value("${consul.server.url}") String consulServerUrl) {
+        this.consulServerUrl = consulServerUrl;
+        this.restTemplate = new RestTemplate();
+        
+        // Refresh cache every 10 seconds (Consul supports faster updates)
+        scheduler.scheduleAtFixedRate(this::refreshAllServices, 0, 10, TimeUnit.SECONDS);
+    }
+    
+    /**
+     * Get healthy instances from Consul
+     */
+    public List<ServiceInstance> getInstances(String serviceName) {
+        List<ServiceInstance> cached = serviceCache.get(serviceName);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+        
+        return fetchInstances(serviceName);
+    }
+    
+    /**
+     * Fetch instances from Consul Health API
+     */
+    private List<ServiceInstance> fetchInstances(String serviceName) {
+        try {
+            // Consul Health API: GET /v1/health/service/{serviceName}?passing=true
+            String url = consulServerUrl + "/v1/health/service/" + serviceName + "?passing=true";
+            
+            ResponseEntity<ConsulServiceResponse[]> response = restTemplate.getForEntity(
+                url,
+                ConsulServiceResponse[].class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                List<ServiceInstance> instances = Arrays.stream(response.getBody())
+                    .map(this::parseConsulResponse)
+                    .collect(Collectors.toList());
+                
+                serviceCache.put(serviceName, instances);
+                return instances;
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch instances from Consul", e);
+            return serviceCache.getOrDefault(serviceName, Collections.emptyList());
+        }
+        
+        return Collections.emptyList();
+    }
+    
+    /**
+     * Parse Consul response to ServiceInstance
+     */
+    private ServiceInstance parseConsulResponse(ConsulServiceResponse response) {
+        ConsulService service = response.getService();
+        return new ServiceInstance(
+            service.getId(),
+            service.getAddress(),
+            service.getPort(),
+            "passing",  // Only passing health checks are returned
+            service.getMeta()
+        );
+    }
+    
+    private void refreshAllServices() {
+        for (String serviceName : new ArrayList<>(serviceCache.keySet())) {
+            fetchInstances(serviceName);
+        }
+    }
+}
+
+// Consul Response DTOs
+@Data
+class ConsulServiceResponse {
+    private ConsulService Service;
+    private List<ConsulCheck> Checks;
+}
+
+@Data
+class ConsulService {
+    private String ID;
+    private String Service;
+    private String Address;
+    private Integer Port;
+    private Map<String, String> Meta;
+}
+
+@Data
+class ConsulCheck {
+    private String Status;  // "passing", "warning", "critical"
+}
+```
+
+#### Advanced: Service Discovery with Circuit Breaker
+
+```java
+// Service Discovery with Circuit Breaker pattern
+@Service
+public class ResilientServiceDiscoveryClient {
+    
+    @Autowired
+    private ManualEurekaClient eurekaClient;
+    
+    private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
+    
+    public ServiceInstance getInstanceWithCircuitBreaker(String serviceName) {
+        CircuitBreaker circuitBreaker = circuitBreakers.computeIfAbsent(
+            serviceName,
+            k -> new CircuitBreaker(5, 60000)  // 5 failures, 60s timeout
+        );
+        
+        if (circuitBreaker.isOpen()) {
+            // Circuit is open, return cached instance or throw exception
+            throw new CircuitBreakerOpenException("Service discovery circuit breaker is open for: " + serviceName);
+        }
+        
+        try {
+            List<ServiceInstance> instances = eurekaClient.getInstances(serviceName);
+            
+            if (instances.isEmpty()) {
+                circuitBreaker.recordFailure();
+                throw new ServiceNotFoundException("No instances available");
+            }
+            
+            circuitBreaker.recordSuccess();
+            return instances.get(0);
+            
+        } catch (Exception e) {
+            circuitBreaker.recordFailure();
+            throw e;
+        }
+    }
+}
+
+// Simple Circuit Breaker Implementation
+class CircuitBreaker {
+    private final int failureThreshold;
+    private final long timeoutMs;
+    private int failureCount = 0;
+    private long lastFailureTime = 0;
+    private State state = State.CLOSED;
+    
+    enum State { CLOSED, OPEN, HALF_OPEN }
+    
+    public CircuitBreaker(int failureThreshold, long timeoutMs) {
+        this.failureThreshold = failureThreshold;
+        this.timeoutMs = timeoutMs;
+    }
+    
+    public boolean isOpen() {
+        if (state == State.OPEN) {
+            if (System.currentTimeMillis() - lastFailureTime > timeoutMs) {
+                state = State.HALF_OPEN;  // Try again
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    public void recordSuccess() {
+        failureCount = 0;
+        state = State.CLOSED;
+    }
+    
+    public void recordFailure() {
+        failureCount++;
+        lastFailureTime = System.currentTimeMillis();
+        
+        if (failureCount >= failureThreshold) {
+            state = State.OPEN;
+        }
+    }
+}
+```
+
+---
+
 ## 7️⃣ Tradeoffs, Pitfalls, and Common Mistakes
 
 ### Tradeoffs: Client-Side vs Server-Side Discovery
 
-**Client-Side Discovery (Eureka, Consul):**
+The choice between client-side and server-side discovery is one of the most important architectural decisions in microservices. Each approach has significant trade-offs that impact performance, complexity, and operational overhead.
 
-**Advantages:**
-- Direct communication (no extra hop)
-- Client controls load balancing
-- Can implement advanced routing (zone awareness, etc.)
+#### Detailed Comparison
 
-**Disadvantages:**
-- Requires client library per language
-- Client complexity (caching, load balancing logic)
-- Registry becomes single point of query
+| Aspect | Client-Side Discovery | Server-Side Discovery |
+|--------|----------------------|----------------------|
+| **Performance** | Direct connection (lower latency) | Extra hop through proxy (higher latency) |
+| **Client Complexity** | High (library, caching, load balancing) | Low (just DNS resolution) |
+| **Language Support** | Requires library per language | Works with any language (DNS) |
+| **Load Balancing Control** | Full control (custom algorithms) | Limited (platform-provided) |
+| **Registry Load** | High (every client queries) | Low (proxy queries, clients don't) |
+| **Operational Overhead** | Manage client libraries, updates | Platform-managed, transparent |
+| **Failure Isolation** | Client handles failures | Platform handles failures |
+| **Advanced Features** | Easy to add (zone awareness, etc.) | Limited by platform capabilities |
+| **Vendor Lock-in** | Low (can switch registries) | High (platform-specific) |
+| **Debugging** | More complex (client-side logic) | Simpler (platform handles it) |
 
-**Server-Side Discovery (Kubernetes):**
+#### Client-Side Discovery: Deep Dive
 
-**Advantages:**
-- Simple client (just DNS)
-- Platform handles complexity
-- Works with any language
+**When to Choose Client-Side Discovery:**
 
-**Disadvantages:**
-- Extra hop through service proxy
-- Less control over routing
-- Platform-specific
+1. **Performance-Critical Systems**
+   - Latency-sensitive applications (trading systems, real-time gaming)
+   - Direct connection eliminates proxy overhead (typically 1-5ms saved per request)
+   - Example: High-frequency trading where every millisecond matters
+
+2. **Multi-Language Environments**
+   - When you need fine-grained control across different languages
+   - Can implement language-specific optimizations
+   - Example: Java services using Eureka, Python services using Consul
+
+3. **Advanced Routing Requirements**
+   - Zone-aware routing (prefer same availability zone)
+   - Custom load balancing algorithms (weighted, least connections)
+   - A/B testing and canary deployments
+   - Example: Route 80% traffic to v1, 20% to v2 based on user attributes
+
+4. **Legacy System Integration**
+   - When you can't modify the platform
+   - Need to integrate with existing infrastructure
+   - Example: Integrating microservices with existing Eureka infrastructure
+
+**Trade-offs in Detail:**
+
+**Performance Advantage:**
+```
+Client-Side: Client → Service (1 hop, ~2ms latency)
+Server-Side: Client → Proxy → Service (2 hops, ~4ms latency)
+
+At 100,000 QPS:
+- Client-side: 200 seconds of latency per second
+- Server-side: 400 seconds of latency per second
+- Difference: 200 seconds = 20% more latency overhead
+```
+
+**Complexity Cost:**
+- Client must implement: caching, refresh logic, load balancing, health checking
+- Each language needs a library (Java, Python, Go, Node.js, etc.)
+- Library updates require application deployments
+- Example: Eureka client library update requires redeploying all services
+
+**Registry Load:**
+```
+100 services × 10 instances = 1,000 service instances
+1,000 client applications × 30-second refresh = 33 queries/second per service
+Total: 33,000 queries/second to registry
+
+Mitigation: Client-side caching reduces to ~100 queries/second
+```
+
+#### Server-Side Discovery: Deep Dive
+
+**When to Choose Server-Side Discovery:**
+
+1. **Kubernetes/Container Platforms**
+   - Native platform support (Kubernetes Services)
+   - No additional infrastructure needed
+   - Example: All services running in Kubernetes
+
+2. **Polyglot Teams**
+   - Teams using many different languages
+   - Don't want to maintain libraries for each
+   - Example: Startup with Java, Python, Go, and Node.js services
+
+3. **Simplified Operations**
+   - Platform team manages discovery
+   - Application teams focus on business logic
+   - Example: Platform team manages Kubernetes, app teams just deploy
+
+4. **Rapid Development**
+   - Faster onboarding (no library setup)
+   - Less code to maintain
+   - Example: New team members can start immediately
+
+**Trade-offs in Detail:**
+
+**Latency Overhead:**
+```
+Server-Side: Client → kube-proxy → Service Pod
+- kube-proxy adds ~1-2ms latency
+- For high-throughput systems, this accumulates
+- Example: 1M QPS × 2ms = 2,000 seconds of latency overhead
+```
+
+**Limited Control:**
+- Can't implement custom load balancing (stuck with round-robin, least connections)
+- Can't do zone-aware routing easily
+- Can't implement advanced features (circuit breaking, retries) at discovery level
+- Example: Need to route to same-AZ instances, but kube-proxy doesn't support it
+
+**Platform Lock-in:**
+- Tied to Kubernetes (or AWS ECS, etc.)
+- Harder to migrate to different platform
+- Example: Moving from Kubernetes to bare metal requires rewriting discovery
+
+#### Decision Framework
+
+**Choose Client-Side Discovery if:**
+- ✅ Latency is critical (< 10ms p99 requirement)
+- ✅ You need advanced routing (zone awareness, custom algorithms)
+- ✅ You have a homogeneous language stack (mostly Java, mostly Go, etc.)
+- ✅ You have platform team to manage registry infrastructure
+- ✅ You need fine-grained control over service-to-service communication
+
+**Choose Server-Side Discovery if:**
+- ✅ You're on Kubernetes/container platform
+- ✅ You have polyglot services (many languages)
+- ✅ You want minimal client complexity
+- ✅ You want platform-managed discovery
+- ✅ You're okay with slightly higher latency
+- ✅ You want faster development velocity
+
+#### Hybrid Approach
+
+Many organizations use both:
+
+```
+External Services (Client-Side):
+- Service mesh (Istio) with client-side discovery
+- Advanced routing and observability
+
+Internal Services (Server-Side):
+- Kubernetes Services for simplicity
+- DNS-based discovery
+
+Example:
+- Payment service (critical, low latency) → Client-side with Istio
+- Analytics service (less critical) → Server-side with Kubernetes DNS
+```
+
+#### Real-World Examples
+
+**Netflix (Client-Side):**
+- Uses Eureka for client-side discovery
+- 1000+ microservices
+- Needs zone awareness (prefer same AWS region)
+- Custom load balancing (weighted by instance health)
+- Trade-off: Complex client libraries, but performance and control worth it
+
+**Uber (Client-Side):**
+- Uses Consul for client-side discovery
+- Multi-datacenter setup
+- Needs datacenter-aware routing
+- Custom health checking logic
+- Trade-off: Operational complexity, but needed for global scale
+
+**Startup on Kubernetes (Server-Side):**
+- Uses Kubernetes Services
+- Small team, many languages
+- Wants simplicity over performance
+- Trade-off: Slightly higher latency, but much simpler operations
+
+#### Migration Considerations
+
+**From Server-Side to Client-Side:**
+- Add client libraries to all services
+- Deploy and configure registry (Eureka, Consul)
+- Update service code to use discovery client
+- Test thoroughly (different failure modes)
+- Timeline: 2-3 months for 50 services
+
+**From Client-Side to Server-Side:**
+- Move to Kubernetes or similar platform
+- Remove client libraries
+- Update service code to use DNS
+- Simpler migration, but platform lock-in
+- Timeline: 1-2 months for 50 services
 
 ### Common Pitfalls
 

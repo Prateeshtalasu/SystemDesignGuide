@@ -1109,7 +1109,492 @@ echo "  - truststore.p12 (Trust store with CA certs)"
 | Hardcoded passwords      | Secrets in code                  | Use secrets management      |
 | No monitoring            | Don't know when certs expire     | Alert on expiration         |
 
-### Certificate Rotation Challenge
+### Certificate Management and Rotation
+
+#### Certificate Lifecycle Management
+
+**Certificate Lifecycle Stages**:
+
+1. **Issuance**: Certificate created and signed by CA
+2. **Active**: Certificate in use, valid and trusted
+3. **Renewal Period**: Certificate approaching expiration, new cert issued
+4. **Rotation**: Old cert replaced with new cert
+5. **Expiration**: Certificate no longer valid
+6. **Revocation**: Certificate invalidated before expiration (compromise)
+
+**Certificate Validity Periods**:
+
+| Certificate Type         | Typical Validity | Rationale                                         |
+| ------------------------ | ---------------- | ------------------------------------------------- |
+| Root CA                  | 10-20 years      | Rarely rotated, maximum security                  |
+| Intermediate CA          | 2-5 years        | Balance between security and operational overhead |
+| Service Certificates     | 1-24 hours       | Short-lived for security, auto-rotated            |
+| Long-lived Service Certs | 30-90 days       | When auto-rotation not available                  |
+
+#### Certificate Rotation Strategies
+
+**Strategy 1: Gradual Rotation with Overlap (Recommended)**
+
+This is the safest approach for rotating CA certificates:
+
+```
+Phase 1: Prepare New CA (Week 1-2)
+├── Generate new intermediate CA
+├── Sign with root CA
+└── Add new CA to all trust stores (but don't use yet)
+
+Phase 2: Dual Trust Period (Week 3-4)
+├── Both old and new CAs in trust stores
+├── Issue new certificates signed by new CA
+└── Services can accept certs from either CA
+
+Phase 3: Gradual Service Rotation (Week 5-8)
+├── Rotate services one by one to new certificates
+├── Monitor for connection failures
+└── Rollback capability if issues arise
+
+Phase 4: Cleanup (Week 9-10)
+├── All services using new CA
+├── Remove old CA from trust stores
+└── Revoke old intermediate CA certificate
+```
+
+**Implementation Example**:
+
+```java
+@Service
+public class CertificateRotationService {
+
+    @Autowired
+    private CertificateStore certificateStore;
+
+    @Autowired
+    private TrustStoreManager trustStoreManager;
+
+    /**
+     * Rotate certificate with zero downtime.
+     *
+     * Strategy:
+     * 1. Generate new certificate (before old expires)
+     * 2. Load both old and new certificates
+     * 3. Use new certificate for new connections
+     * 4. Keep old certificate for existing connections
+     * 5. After grace period, remove old certificate
+     */
+    public void rotateCertificate(String serviceName) {
+        // Step 1: Generate new certificate (30 days before expiration)
+        Certificate newCert = generateNewCertificate(serviceName);
+
+        // Step 2: Add new CA to trust store (if CA changed)
+        if (newCert.getIssuerCA() != getCurrentCA()) {
+            trustStoreManager.addCA(newCert.getIssuerCA());
+        }
+
+        // Step 3: Load new certificate alongside old
+        certificateStore.addCertificate(serviceName, newCert);
+
+        // Step 4: Hot reload SSL context
+        reloadSSLContext(serviceName, newCert);
+
+        // Step 5: Monitor for issues
+        monitorConnectionHealth(serviceName);
+
+        // Step 6: After grace period (e.g., 7 days), remove old cert
+        scheduleOldCertRemoval(serviceName, Duration.ofDays(7));
+    }
+
+    private void reloadSSLContext(String serviceName, Certificate newCert) {
+        // Reload SSL context without restarting service
+        SSLContext sslContext = createSSLContext(newCert);
+        updateHttpClientSSLContext(serviceName, sslContext);
+    }
+}
+```
+
+**Strategy 2: Blue-Green Rotation**
+
+For services that can't hot-reload certificates:
+
+```
+Environment A (Blue):
+├── Services using old certificates
+└── All traffic routed to Blue
+
+Environment B (Green):
+├── Services using new certificates
+└── New CA in trust stores
+
+Switch:
+├── Gradually route traffic from Blue to Green
+├── Monitor for failures
+└── Rollback to Blue if issues
+```
+
+**Strategy 3: Canary Rotation**
+
+Rotate a small subset first:
+
+```
+1. Rotate 5% of services (canary)
+2. Monitor for 24-48 hours
+3. If successful, rotate 25% more
+4. Continue until 100% rotated
+```
+
+#### Automated Certificate Rotation
+
+**Using HashiCorp Vault PKI**:
+
+```java
+@Service
+public class VaultCertificateRotationService {
+
+    @Autowired
+    private VaultTemplate vaultTemplate;
+
+    /**
+     * Automatically rotate certificates using Vault.
+     * Vault issues short-lived certificates and handles renewal.
+     */
+    @Scheduled(fixedRate = 3600000) // Every hour
+    public void rotateCertificates() {
+        List<Service> services = getServicesRequiringRotation();
+
+        for (Service service : services) {
+            try {
+                // Request new certificate from Vault
+                VaultResponseSupport<CertificateData> response = vaultTemplate.write(
+                    "pki/issue/service",
+                    Map.of(
+                        "common_name", service.getName(),
+                        "ttl", "24h",
+                        "alt_names", service.getAltNames()
+                    )
+                );
+
+                CertificateData certData = response.getData();
+
+                // Update certificate in service
+                updateServiceCertificate(service, certData);
+
+                log.info("Rotated certificate for service: {}", service.getName());
+            } catch (Exception e) {
+                log.error("Failed to rotate certificate for service: {}",
+                         service.getName(), e);
+                alertOnRotationFailure(service);
+            }
+        }
+    }
+
+    private boolean needsRotation(Service service) {
+        Certificate currentCert = service.getCertificate();
+        long daysUntilExpiration = ChronoUnit.DAYS.between(
+            LocalDate.now(),
+            currentCert.getNotAfter().toInstant()
+                .atZone(ZoneId.systemDefault()).toLocalDate()
+        );
+
+        // Rotate if expires within 7 days
+        return daysUntilExpiration < 7;
+    }
+}
+```
+
+**Using SPIRE (SPIFFE Runtime Environment)**:
+
+```yaml
+# SPIRE Server Configuration
+spire:
+  server:
+    ca_ttl: 24h # CA certificate validity
+    default_svid_ttl: 1h # Service certificate validity
+
+  agent:
+    # Agent automatically renews certificates
+    sync_interval: 30s
+    rotation_interval: 1h
+```
+
+**SPIRE automatically handles**:
+
+- Certificate issuance based on workload identity
+- Automatic renewal before expiration
+- Certificate distribution to workloads
+- No service restart required
+
+#### Certificate Monitoring and Alerting
+
+**Key Metrics to Monitor**:
+
+1. **Certificate Expiration**:
+
+   ```java
+   @Component
+   public class CertificateExpirationMonitor {
+
+       @Scheduled(fixedRate = 3600000) // Every hour
+       public void checkExpirations() {
+           List<Certificate> certificates = getAllCertificates();
+
+           for (Certificate cert : certificates) {
+               long daysUntilExpiration = getDaysUntilExpiration(cert);
+
+               if (daysUntilExpiration < 7) {
+                   alertService.sendAlert(
+                       AlertLevel.WARNING,
+                       "Certificate expiring soon: " + cert.getSubject(),
+                       "Expires in " + daysUntilExpiration + " days"
+                   );
+               }
+
+               if (daysUntilExpiration < 1) {
+                   alertService.sendAlert(
+                       AlertLevel.CRITICAL,
+                       "Certificate expiring TODAY: " + cert.getSubject(),
+                       "Immediate action required"
+                   );
+               }
+           }
+       }
+   }
+   ```
+
+2. **TLS Handshake Failures**:
+
+   ```java
+   @Component
+   public class TLSHandshakeMonitor {
+
+       @EventListener
+       public void onHandshakeFailure(HandshakeFailureEvent event) {
+           // Track handshake failures
+           metrics.incrementCounter("tls.handshake.failures",
+               "service", event.getServiceName(),
+               "reason", event.getFailureReason());
+
+           // Alert if failure rate is high
+           if (getFailureRate(event.getServiceName()) > 0.1) {
+               alertService.sendAlert(
+                   AlertLevel.WARNING,
+                   "High TLS handshake failure rate: " + event.getServiceName(),
+                   "Failure rate: " + getFailureRate(event.getServiceName())
+               );
+           }
+       }
+   }
+   ```
+
+3. **Certificate Rotation Status**:
+
+   ```java
+   @RestController
+   @RequestMapping("/api/certificates")
+   public class CertificateStatusController {
+
+       @GetMapping("/status")
+       public Map<String, Object> getCertificateStatus() {
+           return Map.of(
+               "totalCertificates", getTotalCertificates(),
+               "expiringSoon", getExpiringSoonCount(),
+               "expired", getExpiredCount(),
+               "rotationInProgress", getRotationInProgressCount(),
+               "lastRotation", getLastRotationTime()
+           );
+       }
+
+       @GetMapping("/{serviceName}/details")
+       public CertificateDetails getCertificateDetails(@PathVariable String serviceName) {
+           Certificate cert = getCertificate(serviceName);
+           return CertificateDetails.builder()
+               .subject(cert.getSubject())
+               .issuer(cert.getIssuer())
+               .validFrom(cert.getNotBefore())
+               .validTo(cert.getNotAfter())
+               .daysUntilExpiration(getDaysUntilExpiration(cert))
+               .serialNumber(cert.getSerialNumber())
+               .fingerprint(cert.getFingerprint())
+               .build();
+       }
+   }
+   ```
+
+#### Certificate Revocation Management
+
+**When to Revoke Certificates**:
+
+1. **Compromise**: Private key exposed
+2. **Service Decommission**: Service no longer exists
+3. **Policy Violation**: Certificate issued incorrectly
+4. **CA Compromise**: Intermediate CA compromised
+
+**Revocation Methods**:
+
+1. **Certificate Revocation List (CRL)**:
+
+   ```java
+   @Service
+   public class CRLService {
+
+       /**
+        * Check if certificate is revoked via CRL.
+        */
+       public boolean isRevoked(X509Certificate cert) {
+           try {
+               // Download CRL from CA
+               URL crlUrl = new URL(getCRLDistributionPoint(cert));
+               X509CRL crl = (X509CRL) CertificateFactory.getInstance("X.509")
+                   .generateCRL(crlUrl.openStream());
+
+               // Check if certificate is in CRL
+               return crl.isRevoked(cert);
+           } catch (Exception e) {
+               log.error("Failed to check CRL", e);
+               // Fail open or closed based on security policy
+               return false; // Fail open (less secure but more available)
+           }
+       }
+   }
+   ```
+
+2. **OCSP (Online Certificate Status Protocol)**:
+
+   ```java
+   @Service
+   public class OCSPService {
+
+       /**
+        * Check certificate status via OCSP.
+        * Faster than CRL for single certificate checks.
+        */
+       public CertificateStatus checkStatus(X509Certificate cert) {
+           try {
+               // Get OCSP URL from certificate
+               String ocspUrl = getOCSPUrl(cert);
+
+               // Create OCSP request
+               OCSPReq request = createOCSPRequest(cert);
+
+               // Send request to OCSP responder
+               OCSPResp response = sendOCSPRequest(ocspUrl, request);
+
+               // Parse response
+               return parseOCSPResponse(response);
+           } catch (Exception e) {
+               log.error("OCSP check failed", e);
+               return CertificateStatus.UNKNOWN;
+           }
+       }
+   }
+   ```
+
+3. **OCSP Stapling** (Performance Optimization):
+
+   ```java
+   /**
+    * OCSP Stapling: Server includes OCSP response in TLS handshake.
+    * Reduces OCSP queries and improves performance.
+    */
+   @Configuration
+   public class OCSPStaplingConfig {
+
+       @Bean
+       public WebServerFactoryCustomizer<TomcatServletWebServerFactory>
+               ocspStaplingCustomizer() {
+           return factory -> {
+               factory.addConnectorCustomizers(connector -> {
+                   // Enable OCSP stapling
+                   ProtocolHandler handler = connector.getProtocolHandler();
+                   if (handler instanceof AbstractHttp11Protocol) {
+                       ((AbstractHttp11Protocol<?>) handler)
+                           .setUseServerCipherSuitesOrder(true);
+                   }
+               });
+           };
+       }
+   }
+   ```
+
+#### Certificate Storage and Security
+
+**Best Practices for Certificate Storage**:
+
+1. **Use Secrets Management**:
+
+   ```java
+   // ❌ BAD: Hardcoded or in config files
+   ssl:
+     key-store-password: "myPassword123"
+
+   // ✅ GOOD: From secrets manager
+   ssl:
+     key-store-password: ${VAULT_SECRET:ssl/keystore-password}
+   ```
+
+2. **Encrypt at Rest**:
+
+   ```java
+   @Service
+   public class EncryptedCertificateStore {
+
+       @Autowired
+       private EncryptionService encryptionService;
+
+       public void storeCertificate(String serviceName, Certificate cert) {
+           // Encrypt certificate before storage
+           byte[] encrypted = encryptionService.encrypt(
+               cert.getEncoded(),
+               getEncryptionKey()
+           );
+
+           // Store encrypted certificate
+           certificateRepository.save(serviceName, encrypted);
+       }
+
+       public Certificate retrieveCertificate(String serviceName) {
+           byte[] encrypted = certificateRepository.get(serviceName);
+           byte[] decrypted = encryptionService.decrypt(
+               encrypted,
+               getEncryptionKey()
+           );
+
+           return parseCertificate(decrypted);
+       }
+   }
+   ```
+
+3. **Limit Access**:
+
+   ```java
+   // Use IAM roles/service accounts with least privilege
+   // Only certificate management service can access certificates
+   @PreAuthorize("hasRole('CERT_MANAGER')")
+   public void rotateCertificate(String serviceName) {
+       // ...
+   }
+   ```
+
+4. **Audit Logging**:
+
+   ```java
+   @Service
+   public class CertificateAuditService {
+
+       public void logCertificateOperation(
+               String operation,
+               String serviceName,
+               String user) {
+           auditLog.info(
+               "Certificate operation: {} | Service: {} | User: {} | Time: {}",
+               operation,
+               serviceName,
+               user,
+               Instant.now()
+           );
+       }
+   }
+   ```
+
+#### Certificate Rotation Challenge
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -1141,6 +1626,35 @@ echo "  - truststore.p12 (Trust store with CA certs)"
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Certificate Rotation Checklist
+
+**Before Rotation**:
+
+- [ ] Identify all certificates that need rotation
+- [ ] Verify current certificate expiration dates
+- [ ] Test rotation process in staging environment
+- [ ] Prepare rollback plan
+- [ ] Notify stakeholders
+- [ ] Schedule maintenance window (if needed)
+
+**During Rotation**:
+
+- [ ] Generate new certificates
+- [ ] Update trust stores (if CA changed)
+- [ ] Deploy new certificates gradually
+- [ ] Monitor connection health
+- [ ] Verify no handshake failures
+- [ ] Check service logs for errors
+
+**After Rotation**:
+
+- [ ] Verify all services using new certificates
+- [ ] Remove old certificates
+- [ ] Update documentation
+- [ ] Revoke old certificates (if applicable)
+- [ ] Review rotation metrics
+- [ ] Document lessons learned
 
 ### Performance Overhead
 

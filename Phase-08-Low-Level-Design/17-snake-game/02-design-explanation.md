@@ -133,6 +133,25 @@ public class SnakeGame {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of interfaces for the following reasons:
+
+1. **Simple Game Model**: The system has a simple, well-defined game model (snake game) with single implementations for food spawning and collision detection. Additional interfaces don't add value for demonstrating core LLD skills.
+
+2. **Core Focus**: LLD interviews focus on game loop, snake movement algorithms, and collision detection logic. Adding interface abstractions shifts focus away from these core concepts.
+
+3. **Single Implementation**: There's no requirement for multiple food spawn or collision detection strategies in the interview context. The abstraction doesn't provide value for demonstrating LLD skills.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `FoodSpawner` and `CollisionDetector` interfaces for:
+   - Testability (mock spawners and detectors in unit tests)
+   - Flexibility (swap strategies for different game modes)
+   - Dependency injection (easier configuration)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on game loop and movement algorithms
+- **Production Scope**: Interfaces provide testability and strategy flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -143,7 +162,7 @@ public class SnakeGame {
 | **OCP** | PASS | System is open for extension (new board types, food spawners, collision detectors) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All board implementations and collision detectors properly implement their contracts. They are substitutable. | N/A | - |
 | **ISP** | PASS | Interfaces are minimal and focused. Movable and Collidable are well-segregated. No unused methods. | N/A | - |
-| **DIP** | WEAK | SnakeGame depends on concrete classes. Could depend on FoodSpawner and CollisionDetector interfaces. Mentioned in DIP section but not fully implemented. | Extract FoodSpawner and CollisionDetector interfaces | More abstraction layers, but improves testability and flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | SnakeGame depends on concrete classes. For LLD interview scope, this is acceptable as it focuses on core game loop and collision detection algorithms. In production, we would depend on FoodSpawner and CollisionDetector interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and flexibility |
 
 ---
 

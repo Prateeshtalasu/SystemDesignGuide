@@ -16,7 +16,7 @@
 Each problem gets:
 - `01-problem-solution.md` - Complete code
 - `02-design-explanation.md` - SOLID principles, design decisions
-- `03-code-walkthrough.md` - Line-by-line teaching
+- `03-simulation-testing.md` - Simulation, testing strategies, edge cases
 
 ---
 

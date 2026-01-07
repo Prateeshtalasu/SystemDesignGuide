@@ -408,79 +408,424 @@ flowchart TD
 
 ### Step 2: Growth Forecasting
 
+#### Forecasting Methods
+
+**1. Linear Growth Model**:
+- Assumes constant growth rate
+- Good for stable, predictable growth
+- Formula: `Future = Current × (1 + growth_rate)^time`
+
+**2. Exponential Growth Model**:
+- Accounts for accelerating growth
+- Good for viral products, rapid scaling
+- Formula: `Future = Current × e^(growth_rate × time)`
+
+**3. Seasonal Adjustment**:
+- Accounts for periodic patterns (daily, weekly, monthly)
+- Good for e-commerce (holidays), SaaS (month-end)
+- Formula: `Adjusted = Base × Seasonal_Factor`
+
+**4. Moving Average**:
+- Smooths out short-term fluctuations
+- Good for noisy data
+- Formula: `MA = (Value1 + Value2 + ... + ValueN) / N`
+
+**5. ARIMA (AutoRegressive Integrated Moving Average)**:
+- Advanced time series forecasting
+- Accounts for trends, seasonality, and noise
+- Requires statistical expertise
+
 ```java
-// Capacity forecasting service
+// Comprehensive capacity forecasting service
 @Service
 public class CapacityForecastService {
     
     @Autowired
     private MetricsRepository metricsRepository;
     
+    @Autowired
+    private BusinessEventRepository eventRepository;
+    
+    /**
+     * Multi-method forecasting with confidence intervals.
+     */
     public CapacityForecast forecast(String resourceType, int monthsAhead) {
-        // Get historical data
+        // Get historical data (at least 12 months for seasonality)
         List<MetricDataPoint> history = metricsRepository
-            .getMonthlyMetrics(resourceType, 12);  // Last 12 months
+            .getMonthlyMetrics(resourceType, 24);  // Last 24 months
         
-        // Calculate growth rate
-        double growthRate = calculateGrowthRate(history);
+        // Get planned business events
+        List<BusinessEvent> events = eventRepository
+            .getUpcomingEvents(monthsAhead);
         
-        // Current utilization
-        double currentUtilization = history.get(history.size() - 1).getValue();
+        // Method 1: Linear growth forecast
+        ForecastResult linearForecast = linearGrowthForecast(history, monthsAhead);
         
-        // Project future utilization
-        List<ForecastPoint> projections = new ArrayList<>();
-        double utilization = currentUtilization;
+        // Method 2: Exponential growth forecast
+        ForecastResult exponentialForecast = exponentialGrowthForecast(history, monthsAhead);
         
-        for (int month = 1; month <= monthsAhead; month++) {
-            utilization = utilization * (1 + growthRate);
-            projections.add(new ForecastPoint(month, utilization));
-        }
+        // Method 3: Seasonal forecast
+        ForecastResult seasonalForecast = seasonalForecast(history, monthsAhead);
         
-        // Find when we hit 80% threshold
-        int monthsToThreshold = projections.stream()
-            .filter(p -> p.getUtilization() >= 80)
-            .findFirst()
-            .map(ForecastPoint::getMonth)
-            .orElse(-1);
+        // Method 4: Moving average forecast
+        ForecastResult movingAvgForecast = movingAverageForecast(history, monthsAhead);
+        
+        // Combine forecasts (ensemble method)
+        ForecastResult combinedForecast = combineForecasts(
+            linearForecast, exponentialForecast, seasonalForecast, movingAvgForecast
+        );
+        
+        // Apply business event adjustments
+        ForecastResult adjustedForecast = applyBusinessEvents(
+            combinedForecast, events
+        );
+        
+        // Calculate confidence intervals
+        ConfidenceInterval confidence = calculateConfidenceInterval(
+            adjustedForecast, history
+        );
+        
+        // Find when we hit thresholds
+        int monthsTo70Percent = findMonthsToThreshold(adjustedForecast, 70);
+        int monthsTo85Percent = findMonthsToThreshold(adjustedForecast, 85);
         
         return CapacityForecast.builder()
             .resourceType(resourceType)
-            .currentUtilization(currentUtilization)
-            .growthRate(growthRate)
-            .projections(projections)
-            .monthsToThreshold(monthsToThreshold)
-            .recommendation(generateRecommendation(monthsToThreshold))
+            .currentUtilization(history.get(history.size() - 1).getValue())
+            .forecast(adjustedForecast)
+            .confidenceInterval(confidence)
+            .monthsTo70Percent(monthsTo70Percent)
+            .monthsTo85Percent(monthsTo85Percent)
+            .recommendation(generateRecommendation(monthsTo70Percent, monthsTo85Percent))
+            .forecastAccuracy(calculateForecastAccuracy(history))
             .build();
     }
     
-    private double calculateGrowthRate(List<MetricDataPoint> history) {
-        // Simple linear regression for growth rate
-        // In production, use more sophisticated models
+    /**
+     * Linear growth forecast: assumes constant growth rate.
+     */
+    private ForecastResult linearGrowthForecast(
+            List<MetricDataPoint> history, int monthsAhead) {
+        
+        // Calculate compound monthly growth rate (CMGR)
         double firstValue = history.get(0).getValue();
         double lastValue = history.get(history.size() - 1).getValue();
         int months = history.size();
         
-        return Math.pow(lastValue / firstValue, 1.0 / months) - 1;
+        double cmgr = Math.pow(lastValue / firstValue, 1.0 / months) - 1;
+        
+        // Project forward
+        List<ForecastPoint> projections = new ArrayList<>();
+        double utilization = lastValue;
+        
+        for (int month = 1; month <= monthsAhead; month++) {
+            utilization = utilization * (1 + cmgr);
+            projections.add(new ForecastPoint(month, utilization));
+        }
+        
+        return ForecastResult.builder()
+            .method("Linear Growth")
+            .growthRate(cmgr)
+            .projections(projections)
+            .build();
     }
     
-    private String generateRecommendation(int monthsToThreshold) {
-        if (monthsToThreshold < 0) {
-            return "No scaling needed in forecast period";
-        } else if (monthsToThreshold <= 1) {
-            return "CRITICAL: Scale immediately";
-        } else if (monthsToThreshold <= 3) {
-            return "WARNING: Begin scaling planning";
-        } else {
-            return "Monitor: Scale in " + monthsToThreshold + " months";
+    /**
+     * Exponential growth forecast: accounts for accelerating growth.
+     */
+    private ForecastResult exponentialGrowthForecast(
+            List<MetricDataPoint> history, int monthsAhead) {
+        
+        // Fit exponential curve: y = a * e^(b * x)
+        // Using least squares regression
+        ExponentialFit fit = fitExponentialCurve(history);
+        
+        List<ForecastPoint> projections = new ArrayList<>();
+        double lastMonth = history.size();
+        
+        for (int month = 1; month <= monthsAhead; month++) {
+            double utilization = fit.getA() * Math.exp(fit.getB() * (lastMonth + month));
+            projections.add(new ForecastPoint(month, utilization));
         }
+        
+        return ForecastResult.builder()
+            .method("Exponential Growth")
+            .growthRate(fit.getB())
+            .projections(projections)
+            .build();
+    }
+    
+    /**
+     * Seasonal forecast: accounts for periodic patterns.
+     */
+    private ForecastResult seasonalForecast(
+            List<MetricDataPoint> history, int monthsAhead) {
+        
+        // Detect seasonality (daily, weekly, monthly patterns)
+        SeasonalityPattern pattern = detectSeasonality(history);
+        
+        // Calculate base trend (remove seasonality)
+        List<Double> deseasonalized = removeSeasonality(history, pattern);
+        
+        // Forecast base trend
+        double trendGrowthRate = calculateTrendGrowthRate(deseasonalized);
+        
+        // Apply seasonal factors to forecast
+        List<ForecastPoint> projections = new ArrayList<>();
+        double baseValue = history.get(history.size() - 1).getValue();
+        
+        for (int month = 1; month <= monthsAhead; month++) {
+            // Base trend
+            double trendValue = baseValue * Math.pow(1 + trendGrowthRate, month);
+            
+            // Apply seasonal factor
+            double seasonalFactor = pattern.getFactorForMonth(month);
+            double utilization = trendValue * seasonalFactor;
+            
+            projections.add(new ForecastPoint(month, utilization));
+        }
+        
+        return ForecastResult.builder()
+            .method("Seasonal Adjusted")
+            .growthRate(trendGrowthRate)
+            .projections(projections)
+            .seasonality(pattern)
+            .build();
+    }
+    
+    /**
+     * Moving average forecast: smooths out fluctuations.
+     */
+    private ForecastResult movingAverageForecast(
+            List<MetricDataPoint> history, int monthsAhead) {
+        
+        int windowSize = 3; // 3-month moving average
+        List<Double> movingAverages = calculateMovingAverage(history, windowSize);
+        
+        // Calculate average change
+        double avgChange = calculateAverageChange(movingAverages);
+        
+        // Project forward
+        List<ForecastPoint> projections = new ArrayList<>();
+        double lastMA = movingAverages.get(movingAverages.size() - 1);
+        
+        for (int month = 1; month <= monthsAhead; month++) {
+            double utilization = lastMA + (avgChange * month);
+            projections.add(new ForecastPoint(month, utilization));
+        }
+        
+        return ForecastResult.builder()
+            .method("Moving Average")
+            .growthRate(avgChange / lastMA)
+            .projections(projections)
+            .build();
+    }
+    
+    /**
+     * Combine multiple forecasts (ensemble method).
+     * Weighted average based on historical accuracy.
+     */
+    private ForecastResult combineForecasts(
+            ForecastResult... forecasts) {
+        
+        // Calculate weights based on historical accuracy
+        Map<String, Double> weights = calculateForecastWeights(forecasts);
+        
+        // Weighted average of projections
+        int maxMonths = Arrays.stream(forecasts)
+            .mapToInt(f -> f.getProjections().size())
+            .max()
+            .orElse(12);
+        
+        List<ForecastPoint> combined = new ArrayList<>();
+        
+        for (int month = 1; month <= maxMonths; month++) {
+            double weightedSum = 0.0;
+            double totalWeight = 0.0;
+            
+            for (ForecastResult forecast : forecasts) {
+                if (month <= forecast.getProjections().size()) {
+                    double weight = weights.get(forecast.getMethod());
+                    double value = forecast.getProjections().get(month - 1).getUtilization();
+                    weightedSum += weight * value;
+                    totalWeight += weight;
+                }
+            }
+            
+            double utilization = totalWeight > 0 ? weightedSum / totalWeight : 0;
+            combined.add(new ForecastPoint(month, utilization));
+        }
+        
+        return ForecastResult.builder()
+            .method("Ensemble")
+            .projections(combined)
+            .build();
+    }
+    
+    /**
+     * Apply business events to forecast.
+     * Events like product launches, marketing campaigns, holidays.
+     */
+    private ForecastResult applyBusinessEvents(
+            ForecastResult forecast, List<BusinessEvent> events) {
+        
+        List<ForecastPoint> adjusted = new ArrayList<>(forecast.getProjections());
+        
+        for (BusinessEvent event : events) {
+            int eventMonth = event.getMonthsFromNow();
+            if (eventMonth > 0 && eventMonth <= adjusted.size()) {
+                ForecastPoint point = adjusted.get(eventMonth - 1);
+                
+                // Apply event impact
+                double impact = event.getExpectedTrafficIncrease();
+                double newUtilization = point.getUtilization() * (1 + impact);
+                
+                adjusted.set(eventMonth - 1, 
+                    new ForecastPoint(eventMonth, newUtilization));
+                
+                // Apply ripple effect to subsequent months
+                for (int i = eventMonth; i < adjusted.size(); i++) {
+                    ForecastPoint subsequent = adjusted.get(i);
+                    double ripple = impact * Math.exp(-0.1 * (i - eventMonth)); // Decay
+                    double adjustedUtil = subsequent.getUtilization() * (1 + ripple);
+                    adjusted.set(i, new ForecastPoint(i + 1, adjustedUtil));
+                }
+            }
+        }
+        
+        return ForecastResult.builder()
+            .method(forecast.getMethod() + " (Event Adjusted)")
+            .projections(adjusted)
+            .build();
+    }
+    
+    /**
+     * Calculate confidence intervals using historical forecast errors.
+     */
+    private ConfidenceInterval calculateConfidenceInterval(
+            ForecastResult forecast, List<MetricDataPoint> history) {
+        
+        // Calculate historical forecast errors
+        List<Double> errors = calculateHistoricalErrors(history);
+        
+        // Calculate standard error
+        double meanError = errors.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double variance = errors.stream()
+            .mapToDouble(e -> Math.pow(e - meanError, 2))
+            .average()
+            .orElse(0);
+        double stdError = Math.sqrt(variance);
+        
+        // 95% confidence interval (±2 standard errors)
+        double margin = 2 * stdError;
+        
+        List<ForecastPoint> lower = forecast.getProjections().stream()
+            .map(p -> new ForecastPoint(p.getMonth(), 
+                Math.max(0, p.getUtilization() - margin)))
+            .collect(Collectors.toList());
+        
+        List<ForecastPoint> upper = forecast.getProjections().stream()
+            .map(p -> new ForecastPoint(p.getMonth(), 
+                p.getUtilization() + margin))
+            .collect(Collectors.toList());
+        
+        return ConfidenceInterval.builder()
+            .lowerBound(lower)
+            .upperBound(upper)
+            .confidenceLevel(0.95)
+            .build();
+    }
+    
+    private int findMonthsToThreshold(ForecastResult forecast, double threshold) {
+        return forecast.getProjections().stream()
+            .filter(p -> p.getUtilization() >= threshold)
+            .findFirst()
+            .map(ForecastPoint::getMonth)
+            .orElse(-1);
+    }
+    
+    private String generateRecommendation(int monthsTo70, int monthsTo85) {
+        if (monthsTo85 > 0 && monthsTo85 <= 1) {
+            return "CRITICAL: Scale immediately - will hit 85% within 1 month";
+        } else if (monthsTo70 > 0 && monthsTo70 <= 1) {
+            return "URGENT: Begin scaling planning - will hit 70% within 1 month";
+        } else if (monthsTo70 > 0 && monthsTo70 <= 3) {
+            return "WARNING: Start scaling preparation - will hit 70% in " + monthsTo70 + " months";
+        } else if (monthsTo70 > 0) {
+            return "MONITOR: Plan scaling for " + monthsTo70 + " months from now";
+        } else {
+            return "HEALTHY: No scaling needed in forecast period";
+        }
+    }
+    
+    /**
+     * Calculate forecast accuracy by comparing past forecasts to actuals.
+     */
+    private double calculateForecastAccuracy(List<MetricDataPoint> history) {
+        // Compare past 6-month forecasts to actuals
+        // Return MAPE (Mean Absolute Percentage Error)
+        // Lower is better, typically < 10% is good
+        
+        // Implementation would compare stored forecasts to actuals
+        // For now, return placeholder
+        return 8.5; // 8.5% MAPE
     }
 }
 ```
 
+#### Forecasting Best Practices
+
+**1. Use Multiple Methods**:
+- Different methods work better for different patterns
+- Combine methods (ensemble) for better accuracy
+- Compare methods and use the best for your data
+
+**2. Account for Business Events**:
+- Product launches
+- Marketing campaigns
+- Seasonal events (holidays, sales)
+- Industry events
+
+**3. Maintain Forecast Accuracy**:
+- Track forecast vs actual
+- Adjust models based on accuracy
+- Use machine learning for complex patterns
+
+**4. Update Forecasts Regularly**:
+- Monthly reviews
+- Adjust based on recent trends
+- Re-forecast when significant changes occur
+
 ### Step 3: Auto-Scaling Configuration
 
+#### Auto-Scaling Trigger Types
+
+**1. Resource-Based Triggers**:
+- CPU utilization
+- Memory utilization
+- Disk I/O
+- Network bandwidth
+
+**2. Request-Based Triggers**:
+- Requests per second
+- Queue length
+- Response time
+- Error rate
+
+**3. Custom Metric Triggers**:
+- Business metrics (orders per second)
+- Application-specific metrics
+- Composite metrics
+
+**4. Scheduled Triggers**:
+- Known traffic patterns (daily, weekly)
+- Planned events (Black Friday, product launches)
+- Business hours scaling
+
+#### Advanced Auto-Scaling Configuration
+
 ```yaml
-# Kubernetes Horizontal Pod Autoscaler
+# Kubernetes Horizontal Pod Autoscaler with multiple triggers
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -493,18 +838,21 @@ spec:
   minReplicas: 3
   maxReplicas: 50
   metrics:
+  # Trigger 1: CPU utilization
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
         averageUtilization: 70
+  # Trigger 2: Memory utilization
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
         averageUtilization: 80
+  # Trigger 3: Requests per second
   - type: Pods
     pods:
       metric:
@@ -512,24 +860,262 @@ spec:
       target:
         type: AverageValue
         averageValue: "1000"
+  # Trigger 4: Response time (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: p95_response_time_ms
+      target:
+        type: AverageValue
+        averageValue: "200"  # Scale if p95 > 200ms
+  # Trigger 5: Error rate (custom metric)
+  - type: Pods
+    pods:
+      metric:
+        name: error_rate_percent
+      target:
+        type: AverageValue
+        averageValue: "1"  # Scale if error rate > 1%
+  # Trigger 6: Queue length (custom metric)
+  - type: Object
+    object:
+      metric:
+        name: queue_length
+      target:
+        type: Value
+        value: "100"  # Scale if queue > 100
+      describedObject:
+        apiVersion: v1
+        kind: Service
+        name: payment-service
   behavior:
     scaleDown:
-      stabilizationWindowSeconds: 300
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
       policies:
       - type: Percent
-        value: 10
+        value: 10  # Scale down max 10% at a time
         periodSeconds: 60
+      - type: Pods
+        value: 1  # Or scale down 1 pod at a time
+        periodSeconds: 60
+      selectPolicy: Min  # Use most conservative policy
     scaleUp:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 0  # Scale up immediately
       policies:
       - type: Percent
-        value: 100
+        value: 100  # Can double capacity
         periodSeconds: 15
       - type: Pods
-        value: 4
+        value: 4  # Or add 4 pods at once
         periodSeconds: 15
-      selectPolicy: Max
+      selectPolicy: Max  # Use most aggressive policy
 ```
+
+#### Auto-Scaling Trigger Strategies
+
+**Strategy 1: Predictive Scaling**:
+```java
+@Service
+public class PredictiveScalingService {
+    
+    @Autowired
+    private CapacityForecastService forecastService;
+    
+    /**
+     * Scale proactively based on forecast, not just current metrics.
+     */
+    public void predictiveScale(String serviceName) {
+        // Get forecast for next hour
+        CapacityForecast forecast = forecastService.forecast(serviceName, 1);
+        
+        // If forecast shows > 70% utilization in next hour
+        if (forecast.getProjections().get(0).getUtilization() > 70) {
+            // Scale up proactively
+            scaleUp(serviceName, calculateRequiredReplicas(forecast));
+        }
+    }
+}
+```
+
+**Strategy 2: Multi-Metric Scaling**:
+```java
+@Service
+public class MultiMetricScalingService {
+    
+    /**
+     * Scale based on multiple metrics with priority.
+     */
+    public ScalingDecision evaluateScaling(String serviceName) {
+        MetricsSnapshot metrics = getCurrentMetrics(serviceName);
+        
+        // Priority 1: Error rate (critical)
+        if (metrics.getErrorRate() > 2.0) {
+            return ScalingDecision.scaleUp(
+                "High error rate: " + metrics.getErrorRate() + "%"
+            );
+        }
+        
+        // Priority 2: Response time (user experience)
+        if (metrics.getP95ResponseTime() > 500) {
+            return ScalingDecision.scaleUp(
+                "High response time: " + metrics.getP95ResponseTime() + "ms"
+            );
+        }
+        
+        // Priority 3: CPU/Memory (resource constraints)
+        if (metrics.getCpuUtilization() > 80 || metrics.getMemoryUtilization() > 85) {
+            return ScalingDecision.scaleUp(
+                "High resource utilization"
+            );
+        }
+        
+        // Priority 4: Request rate (throughput)
+        if (metrics.getRequestsPerSecond() > getCapacityThreshold(serviceName)) {
+            return ScalingDecision.scaleUp(
+                "High request rate: " + metrics.getRequestsPerSecond() + " req/s"
+            );
+        }
+        
+        // Scale down if all metrics are low
+        if (metrics.getCpuUtilization() < 30 && 
+            metrics.getMemoryUtilization() < 40 &&
+            metrics.getRequestsPerSecond() < getCapacityThreshold(serviceName) * 0.5) {
+            return ScalingDecision.scaleDown("Low utilization");
+        }
+        
+        return ScalingDecision.noAction();
+    }
+}
+```
+
+**Strategy 3: Scheduled Scaling**:
+```java
+@Service
+public class ScheduledScalingService {
+    
+    /**
+     * Scale based on known patterns and events.
+     */
+    @Scheduled(cron = "0 0 * * * *")  // Every hour
+    public void scheduledScale() {
+        int hour = LocalDateTime.now().getHour();
+        String serviceName = "payment-service";
+        
+        // Business hours: 9 AM - 5 PM
+        if (hour >= 9 && hour < 17) {
+            scaleTo(serviceName, 20);  // Higher capacity during business hours
+        } else {
+            scaleTo(serviceName, 5);   // Lower capacity off-hours
+        }
+    }
+    
+    /**
+     * Scale for known events (Black Friday, product launches).
+     */
+    @Scheduled(cron = "0 0 0 * * *")  // Daily at midnight
+    public void checkUpcomingEvents() {
+        List<BusinessEvent> events = eventRepository.getEventsForToday();
+        
+        for (BusinessEvent event : events) {
+            if (event.getType() == EventType.HIGH_TRAFFIC) {
+                // Scale up 2 hours before event
+                LocalDateTime scaleTime = event.getStartTime().minusHours(2);
+                scheduleScale(event.getServiceName(), 
+                    event.getExpectedReplicas(), scaleTime);
+            }
+        }
+    }
+}
+```
+
+**Strategy 4: Queue-Based Scaling**:
+```java
+@Service
+public class QueueBasedScalingService {
+    
+    /**
+     * Scale based on queue length (for async processing).
+     */
+    @Scheduled(fixedRate = 30000)  // Every 30 seconds
+    public void scaleBasedOnQueue() {
+        String queueName = "order-processing-queue";
+        long queueLength = messageQueue.getQueueLength(queueName);
+        long processingRate = getProcessingRate(queueName);  // Messages/second
+        
+        // Calculate how long to process current queue
+        double processingTimeSeconds = queueLength / (double) processingRate;
+        
+        // If queue will take > 5 minutes to process, scale up
+        if (processingTimeSeconds > 300) {
+            int additionalReplicas = (int) Math.ceil(
+                (processingTimeSeconds - 300) / 60  // 1 replica per minute
+            );
+            scaleUp("order-processor", additionalReplicas);
+        }
+        
+        // If queue is empty and we have extra capacity, scale down
+        if (queueLength == 0 && getCurrentReplicas("order-processor") > getMinReplicas()) {
+            scaleDown("order-processor", 1);
+        }
+    }
+}
+```
+
+**Strategy 5: Cost-Aware Scaling**:
+```java
+@Service
+public class CostAwareScalingService {
+    
+    /**
+     * Scale considering cost constraints.
+     */
+    public ScalingDecision costAwareScale(String serviceName) {
+        MetricsSnapshot metrics = getCurrentMetrics(serviceName);
+        double currentCost = calculateCurrentCost(serviceName);
+        double budgetLimit = getBudgetLimit(serviceName);
+        
+        // If over budget, be more conservative
+        if (currentCost > budgetLimit * 0.9) {
+            // Only scale if critical (error rate or response time)
+            if (metrics.getErrorRate() > 5.0 || 
+                metrics.getP95ResponseTime() > 1000) {
+                return ScalingDecision.scaleUp("Critical: Over budget but must scale");
+            }
+            return ScalingDecision.noAction("Near budget limit");
+        }
+        
+        // Normal scaling logic
+        return evaluateScaling(serviceName);
+    }
+}
+```
+
+#### Auto-Scaling Best Practices
+
+**1. Set Appropriate Thresholds**:
+- CPU: 70-80% (allows headroom for spikes)
+- Memory: 80-85% (higher threshold, less volatile)
+- Response time: Based on SLA (e.g., p95 < 200ms)
+- Error rate: < 1% (scale up if > 1%)
+
+**2. Use Stabilization Windows**:
+- Scale up: 0-30 seconds (respond quickly)
+- Scale down: 5-15 minutes (avoid thrashing)
+
+**3. Combine Multiple Metrics**:
+- Don't rely on single metric
+- Use AND/OR logic appropriately
+- Prioritize user-facing metrics (response time, error rate)
+
+**4. Test Scaling Behavior**:
+- Load test to verify scaling triggers
+- Test scale-up and scale-down
+- Verify no thrashing (rapid up/down cycles)
+
+**5. Monitor Scaling Effectiveness**:
+- Track scaling decisions
+- Measure time to scale
+- Verify capacity matches demand
 
 ```hcl
 # AWS Auto Scaling Group

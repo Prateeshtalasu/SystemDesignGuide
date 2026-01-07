@@ -181,6 +181,27 @@ public class RentalService {
 }
 ```
 
+**Why We Use Concrete Domain Entities in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete domain entities (`Vehicle`, `Reservation`) instead of repository interfaces for the following reasons:
+
+1. **Domain vs Infrastructure**: `Vehicle` and `Reservation` are core domain objects representing business concepts, not infrastructure concerns. The repository pattern is an infrastructure pattern that doesn't demonstrate core LLD skills.
+
+2. **Focus on Business Logic**: LLD interviews focus on rental business logic, state transitions, and pricing calculations. Adding repository abstractions shifts focus away from these core concepts.
+
+3. **In-Memory Context**: In LLD interviews, we typically work with in-memory data structures. Repository interfaces are more relevant when dealing with persistent storage, which is often out of scope for LLD.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `VehicleRepository` and `ReservationRepository` interfaces for:
+   - Testability (mock repositories in unit tests)
+   - Data access flexibility (swap database implementations)
+   - Separation of concerns (domain logic vs data access)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete domain entities focus on business logic and state management
+- **Production Scope**: Repository interfaces provide testability and data access flexibility
+
+Note: We do use the `PricingStrategy` interface (good DIP!), showing we understand when interfaces add value.
+
 ---
 
 ## SOLID Principles Check
@@ -191,7 +212,7 @@ public class RentalService {
 | **OCP** | PASS | System is open for extension (new vehicle types, pricing strategies) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All PricingStrategy implementations properly implement the PricingStrategy interface contract. They are substitutable. | N/A | - |
 | **ISP** | PASS | PricingStrategy interface is minimal and focused. Clients only depend on what they need. No unused methods. | N/A | - |
-| **DIP** | WEAK | RentalService depends on PricingStrategy interface (good!), but depends on concrete Vehicle and Reservation classes. Could benefit from VehicleRepository and ReservationRepository interfaces. | Extract VehicleRepository and ReservationRepository interfaces | More abstraction layers, but improves testability and data access flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | RentalService depends on PricingStrategy interface (good DIP!), but depends on concrete Vehicle and Reservation classes. For LLD interview scope, this is acceptable as it focuses on core rental logic. In production, we would use VehicleRepository and ReservationRepository interfaces. | See "Why We Use Concrete Domain Entities" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and data access flexibility |
 
 ---
 

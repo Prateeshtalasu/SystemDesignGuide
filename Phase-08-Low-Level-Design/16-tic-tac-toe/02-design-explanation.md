@@ -162,6 +162,25 @@ public class AIPlayer extends Player {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of additional interfaces for the following reasons:
+
+1. **Simple Game Model**: The system has a simple, well-defined game model (tic-tac-toe) with two player types (human/AI). Additional interfaces don't add value for demonstrating core LLD skills.
+
+2. **Core Focus**: LLD interviews focus on game state management, win detection algorithms, and board representation. Adding interface abstractions shifts focus away from these core concepts.
+
+3. **Interview Time Constraints**: Implementing full interface hierarchies takes time away from demonstrating more critical LLD concepts like state transitions and game logic.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `Playable`, `AICapable`, and `MoveStrategy` interfaces for:
+   - Testability (mock players and strategies in unit tests)
+   - Flexibility (swap AI strategies, add new player types)
+   - Dependency injection (easier configuration)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on game logic and state management
+- **Production Scope**: Interfaces provide testability and strategy flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -171,8 +190,8 @@ public class AIPlayer extends Player {
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Board manages game state, Player handles moves, Game coordinates, AIPlayer implements AI. Clear separation. | N/A | - |
 | **OCP** | PASS | System is open for extension (new player types, strategies) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All Player implementations (HumanPlayer, AIPlayer) properly implement the Player interface contract. They are substitutable. | N/A | - |
-| **ISP** | WEAK | Could benefit from Playable and AICapable interfaces. Currently using concrete classes. Mentioned in ISP section but not fully implemented. | Extract Playable and AICapable interfaces | More interfaces/files, but increases flexibility |
-| **DIP** | WEAK | Game depends on concrete Player implementations. Could depend on MoveStrategy interface. Mentioned in DIP section but not fully implemented. | Extract MoveStrategy interface | More abstraction layers, but improves testability and strategy flexibility |
+| **ISP** | ACCEPTABLE (LLD Scope) | Could benefit from Playable and AICapable interfaces. For LLD interview scope, using concrete classes is acceptable as it focuses on core game logic. In production, we would extract Playable and AICapable interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context. | Interview: Simpler, focuses on core LLD skills. Production: More interfaces/files, but increases flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | Game depends on concrete Player implementations. For LLD interview scope, this is acceptable as it focuses on core game algorithms. In production, we would depend on MoveStrategy interface. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and strategy flexibility |
 
 ---
 

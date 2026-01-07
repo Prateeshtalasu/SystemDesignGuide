@@ -276,7 +276,38 @@ Request 3: Cache hit (5ms)
 - Product launches: Pre-load new product data
 - Scheduled jobs: Pre-load trending content
 
-#### 3. Cache Invalidation
+#### 3. Cache Invalidation Strategies
+
+**Cache Invalidation Methods**:
+
+1. **Time-Based Expiration (TTL)**:
+   - Set expiration time when caching
+   - Cache automatically expires
+   - Simple but may serve stale data temporarily
+   - Best for: Data that changes infrequently
+
+2. **Event-Based Invalidation**:
+   - Invalidate cache when data changes
+   - Immediate freshness guarantee
+   - Requires event system
+   - Best for: Data that must be fresh
+
+3. **Version-Based Invalidation**:
+   - Include version in cache key
+   - Update version when data changes
+   - Old versions naturally expire
+   - Best for: Frequently changing data
+
+4. **Tag-Based Invalidation**:
+   - Tag cached items with categories
+   - Invalidate all items with a tag
+   - Efficient for related content
+   - Best for: Content with relationships
+
+5. **Manual Purging**:
+   - Admin-triggered cache clearing
+   - For emergencies or maintenance
+   - Best for: Administrative operations
 
 **News sites**: Invalidate cache on content updates
 - Article published: Invalidate homepage cache
@@ -632,6 +663,399 @@ public class TaggedCacheService {
     }
 }
 ```
+
+#### Example 7: Event-Based Cache Invalidation
+
+**Using message queue for distributed invalidation**:
+```java
+@Service
+public class EventBasedCacheInvalidationService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private MessageQueue messageQueue;
+    
+    /**
+     * Invalidate cache when product is updated.
+     * Publishes invalidation event for distributed systems.
+     */
+    @EventListener
+    public void onProductUpdated(ProductUpdatedEvent event) {
+        Product product = event.getProduct();
+        
+        // Invalidate local cache
+        invalidateProductCache(product.getId());
+        
+        // Publish invalidation event for other services
+        CacheInvalidationEvent invalidationEvent = CacheInvalidationEvent.builder()
+            .cacheKey("product:" + product.getId())
+            .cacheTags(Arrays.asList(
+                "category:" + product.getCategoryId(),
+                "brand:" + product.getBrandId()
+            ))
+            .timestamp(Instant.now())
+            .build();
+        
+        messageQueue.publish("cache.invalidate", invalidationEvent);
+    }
+    
+    /**
+     * Listen for cache invalidation events from other services.
+     */
+    @RabbitListener(queues = "cache.invalidate")
+    public void handleCacheInvalidation(CacheInvalidationEvent event) {
+        // Invalidate by key
+        if (event.getCacheKey() != null) {
+            redisTemplate.delete(event.getCacheKey());
+        }
+        
+        // Invalidate by tags
+        if (event.getCacheTags() != null) {
+            for (String tag : event.getCacheTags()) {
+                invalidateByTag(tag);
+            }
+        }
+    }
+    
+    private void invalidateProductCache(Long productId) {
+        String key = "product:" + productId;
+        redisTemplate.delete(key);
+        
+        // Also invalidate related caches
+        invalidateRelatedCaches(productId);
+    }
+    
+    private void invalidateRelatedCaches(Long productId) {
+        // Invalidate product list caches
+        redisTemplate.delete("products:list:*");
+        
+        // Invalidate category caches
+        // (Would need to look up product's category)
+    }
+}
+```
+
+#### Example 8: Version-Based Cache Invalidation
+
+**Using version numbers in cache keys**:
+```java
+@Service
+public class VersionBasedCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private VersionService versionService;
+    
+    /**
+     * Cache with version in key.
+     * When data changes, version increments, old cache naturally expires.
+     */
+    public Product getProduct(Long id) {
+        // Get current version
+        Long version = versionService.getProductVersion(id);
+        
+        // Cache key includes version
+        String cacheKey = "product:" + id + ":v" + version;
+        
+        // Try cache
+        Product product = (Product) redisTemplate.opsForValue().get(cacheKey);
+        if (product != null) {
+            return product;
+        }
+        
+        // Cache miss: Load from database
+        product = productRepository.findById(id)
+            .orElseThrow(() -> new ProductNotFoundException(id));
+        
+        // Cache with TTL
+        redisTemplate.opsForValue().set(cacheKey, product, Duration.ofHours(24));
+        
+        return product;
+    }
+    
+    /**
+     * Update product and increment version.
+     * Old cache keys become invalid (different version).
+     */
+    public Product updateProduct(Product product) {
+        // Update in database
+        Product updated = productRepository.save(product);
+        
+        // Increment version
+        Long newVersion = versionService.incrementProductVersion(product.getId());
+        
+        // New cache key will be used on next request
+        // Old cache key (with old version) will naturally expire
+        
+        return updated;
+    }
+}
+```
+
+#### Example 9: Write-Through Cache Invalidation
+
+**Update cache and database simultaneously**:
+```java
+@Service
+public class WriteThroughCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Product> redisTemplate;
+    
+    /**
+     * Write-through: Update cache and database together.
+     * Ensures cache is always fresh.
+     */
+    public Product updateProduct(Product product) {
+        // Update database first
+        Product updated = productRepository.save(product);
+        
+        // Update cache immediately
+        String cacheKey = "product:" + updated.getId();
+        redisTemplate.opsForValue().set(cacheKey, updated, Duration.ofHours(1));
+        
+        // Invalidate related caches
+        invalidateRelatedCaches(updated);
+        
+        return updated;
+    }
+    
+    /**
+     * Write-behind: Update cache first, async update database.
+     * Better performance but risk of data loss.
+     */
+    @Async
+    public CompletableFuture<Product> updateProductAsync(Product product) {
+        // Update cache immediately
+        String cacheKey = "product:" + product.getId();
+        redisTemplate.opsForValue().set(cacheKey, product, Duration.ofHours(1));
+        
+        // Queue database update
+        return CompletableFuture.supplyAsync(() -> {
+            return productRepository.save(product);
+        });
+    }
+}
+```
+
+#### Example 10: Hierarchical Cache Invalidation
+
+**Invalidate parent and child caches**:
+```java
+@Service
+public class HierarchicalCacheInvalidationService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * Invalidate cache hierarchy.
+     * Example: Category -> Products -> Product Details
+     */
+    public void invalidateCategory(Long categoryId) {
+        // Invalidate category cache
+        redisTemplate.delete("category:" + categoryId);
+        
+        // Invalidate all products in category
+        List<Long> productIds = productRepository.findByCategoryId(categoryId);
+        for (Long productId : productIds) {
+            invalidateProduct(productId);
+        }
+        
+        // Invalidate category list
+        redisTemplate.delete("categories:list");
+    }
+    
+    public void invalidateProduct(Long productId) {
+        // Invalidate product cache
+        redisTemplate.delete("product:" + productId);
+        
+        // Invalidate product details
+        redisTemplate.delete("product:" + productId + ":details");
+        
+        // Invalidate product recommendations
+        redisTemplate.delete("product:" + productId + ":recommendations");
+        
+        // Invalidate product list caches
+        redisTemplate.delete("products:list:*");
+    }
+}
+```
+
+#### Example 11: Probabilistic Cache Invalidation
+
+**Invalidate cache with probability to reduce stampede**:
+```java
+@Service
+public class ProbabilisticCacheInvalidationService {
+    
+    @Autowired
+    private RedisTemplate<String, Product> redisTemplate;
+    
+    private final Random random = new Random();
+    
+    /**
+     * Probabilistic early expiration.
+     * Reduces cache stampede by spreading expiration times.
+     */
+    public Product getProduct(Long id) {
+        String cacheKey = "product:" + id;
+        
+        // Try cache
+        Product product = redisTemplate.opsForValue().get(cacheKey);
+        if (product != null) {
+            // Check if should expire early (probabilistic)
+            Long ttl = redisTemplate.getExpire(cacheKey);
+            if (ttl != null && ttl > 0 && shouldExpireEarly(ttl)) {
+                // Expire early with probability
+                redisTemplate.expire(cacheKey, Duration.ofSeconds(ttl / 2));
+            }
+            return product;
+        }
+        
+        // Cache miss: Load from database
+        product = productRepository.findById(id)
+            .orElseThrow(() -> new ProductNotFoundException(id));
+        
+        // Cache with random TTL (spread expiration)
+        long baseTtl = 3600; // 1 hour
+        long randomOffset = random.nextInt(600); // 0-10 minutes
+        redisTemplate.opsForValue().set(
+            cacheKey, 
+            product, 
+            Duration.ofSeconds(baseTtl + randomOffset)
+        );
+        
+        return product;
+    }
+    
+    /**
+     * Probability of early expiration increases as TTL decreases.
+     */
+    private boolean shouldExpireEarly(long ttl) {
+        // Higher probability when TTL is low
+        double probability = 1.0 - (ttl / 3600.0); // 0% at start, 100% at end
+        return random.nextDouble() < probability;
+    }
+}
+```
+
+#### Example 12: Cache Invalidation with Database Triggers
+
+**Invalidate cache when database changes**:
+```java
+@Service
+public class DatabaseTriggerCacheInvalidationService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    /**
+     * Set up database trigger to publish cache invalidation events.
+     * Database -> Trigger -> Message Queue -> Cache Invalidation
+     */
+    @PostConstruct
+    public void setupDatabaseTriggers() {
+        // Create database trigger (PostgreSQL example)
+        String triggerSql = """
+            CREATE OR REPLACE FUNCTION notify_cache_invalidation()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                PERFORM pg_notify('cache_invalidation', 
+                    json_build_object(
+                        'table', TG_TABLE_NAME,
+                        'operation', TG_OP,
+                        'id', NEW.id
+                    )::text
+                );
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            
+            CREATE TRIGGER product_cache_invalidation
+            AFTER INSERT OR UPDATE OR DELETE ON products
+            FOR EACH ROW EXECUTE FUNCTION notify_cache_invalidation();
+            """;
+        
+        jdbcTemplate.execute(triggerSql);
+        
+        // Listen for notifications
+        listenForDatabaseNotifications();
+    }
+    
+    private void listenForDatabaseNotifications() {
+        // Use PostgreSQL LISTEN/NOTIFY or similar mechanism
+        // When database changes, trigger cache invalidation
+    }
+    
+    /**
+     * Handle database notification.
+     */
+    public void handleDatabaseNotification(String payload) {
+        // Parse notification
+        JsonNode notification = parseJson(payload);
+        String table = notification.get("table").asText();
+        String operation = notification.get("operation").asText();
+        Long id = notification.get("id").asLong();
+        
+        // Invalidate cache based on table and operation
+        switch (table) {
+            case "products":
+                if ("DELETE".equals(operation)) {
+                    redisTemplate.delete("product:" + id);
+                } else {
+                    // Update: Invalidate and let next request refresh
+                    redisTemplate.delete("product:" + id);
+                    redisTemplate.delete("products:list:*");
+                }
+                break;
+            case "categories":
+                invalidateCategory(id);
+                break;
+        }
+    }
+}
+```
+
+#### Cache Invalidation Best Practices
+
+**1. Choose the Right Strategy**:
+- **Time-based (TTL)**: For data that changes predictably
+- **Event-based**: For data that must be fresh immediately
+- **Version-based**: For frequently changing data
+- **Tag-based**: For related content
+
+**2. Invalidate Related Caches**:
+- When product updates, invalidate product, category, and list caches
+- Use cache tags to track relationships
+- Invalidate hierarchically (parent → children)
+
+**3. Handle Distributed Systems**:
+- Use message queues for cross-service invalidation
+- Use Redis pub/sub for distributed cache invalidation
+- Consider eventual consistency vs immediate invalidation
+
+**4. Prevent Cache Stampede**:
+- Use probabilistic early expiration
+- Add jitter to TTLs
+- Use distributed locks for cache warming
+
+**5. Monitor Invalidation**:
+- Track invalidation frequency
+- Monitor cache hit rates after invalidation
+- Alert on excessive invalidations (may indicate issues)
+
+**6. Batch Invalidations**:
+- Group related invalidations
+- Use pipelines for bulk operations
+- Avoid invalidating one-by-one
 
 ## 7️⃣ Tradeoffs, pitfalls, and common mistakes
 

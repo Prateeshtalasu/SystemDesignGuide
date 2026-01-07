@@ -150,6 +150,25 @@ public class BookingService {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of repository interfaces for the following reasons:
+
+1. **In-Memory Data Structures**: The system operates on in-memory data structures (seats, bookings). Repository interfaces are more relevant for persistent storage, which is often out of scope for LLD.
+
+2. **Core LLD Focus**: LLD interviews focus on booking algorithms, seat locking logic, and concurrency control. Adding repository abstractions shifts focus away from these core concepts.
+
+3. **Single Implementation**: There's no requirement for multiple data access implementations in the interview context. The abstraction doesn't provide value for demonstrating LLD skills.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `SeatRepository` and `BookingRepository` interfaces for:
+   - Testability (mock repositories in unit tests)
+   - Data access flexibility (swap database implementations)
+   - Separation of concerns (business logic vs data access)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on algorithms and concurrency control
+- **Production Scope**: Repository interfaces provide testability and data access flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -159,8 +178,8 @@ public class BookingService {
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Seat represents physical seat, ShowSeat tracks status, SeatLock manages locks, Booking stores booking details, BookingService coordinates. Clear separation. | N/A | - |
 | **OCP** | PASS | System is open for extension (new seat types, pricing strategies) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All SeatType enums and PricingStrategy implementations properly implement their contracts. They are substitutable. | N/A | - |
-| **ISP** | WEAK | Could benefit from Lockable and Bookable interfaces. Currently using concrete classes. Mentioned in ISP section but not fully implemented. | Extract Lockable and Bookable interfaces | More interfaces/files, but increases flexibility |
-| **DIP** | WEAK | BookingService depends on concrete classes. Could depend on SeatRepository and BookingRepository interfaces. Mentioned in DIP section but not fully implemented. | Extract SeatRepository and BookingRepository interfaces | More abstraction layers, but improves testability |
+| **ISP** | ACCEPTABLE (LLD Scope) | Could benefit from Lockable and Bookable interfaces. For LLD interview scope, using concrete classes is acceptable as it focuses on core booking algorithms. In production, we would extract Lockable and Bookable interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context. | Interview: Simpler, focuses on core LLD skills. Production: More interfaces/files, but increases flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | BookingService depends on concrete classes. For LLD interview scope, this is acceptable as it focuses on core booking logic. In production, we would depend on SeatRepository and BookingRepository interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability |
 
 ---
 

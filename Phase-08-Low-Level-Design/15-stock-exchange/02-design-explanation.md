@@ -138,6 +138,25 @@ public class StockExchange {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of repository interfaces for the following reasons:
+
+1. **In-Memory Order Books**: The system operates on in-memory order books and trade logs. Repository interfaces are more relevant for persistent storage, which is often out of scope for LLD.
+
+2. **Core Algorithm Focus**: LLD interviews focus on order matching algorithms and trade execution logic. Adding repository abstractions shifts focus away from these core concepts.
+
+3. **Single Implementation**: There's no requirement for multiple data access implementations in the interview context. The abstraction doesn't provide value for demonstrating LLD skills.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `OrderRepository` and `TradeRepository` interfaces for:
+   - Testability (mock repositories in unit tests)
+   - Data access flexibility (swap database implementations)
+   - Separation of concerns (matching logic vs data access)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on matching algorithms and trade execution
+- **Production Scope**: Repository interfaces provide testability and data access flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -148,7 +167,7 @@ public class StockExchange {
 | **OCP** | PASS | System is open for extension (new order types, matching strategies) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All order types properly implement the Order contract. They are substitutable in the order book. | N/A | - |
 | **ISP** | PASS | Order interface is minimal and focused. Clients only depend on what they need. No unused methods. | N/A | - |
-| **DIP** | WEAK | StockExchange depends on concrete classes. Could depend on OrderRepository and TradeRepository interfaces. Mentioned in DIP section but not fully implemented. | Extract OrderRepository and TradeRepository interfaces | More abstraction layers, but improves testability and data access flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | StockExchange depends on concrete classes. For LLD interview scope, this is acceptable as it focuses on core order matching algorithms. In production, we would depend on OrderRepository and TradeRepository interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and data access flexibility |
 
 ---
 
@@ -286,7 +305,13 @@ public class OrderBook {
 
 ---
 
-## Price-Time Priority Algorithm
+## Order Matching Algorithms
+
+### Price-Time Priority Algorithm
+
+**Definition:** Orders are matched first by price (best price wins), then by time (earliest order at same price wins).
+
+**How It Works:**
 
 ```
 Matching Algorithm:
@@ -310,6 +335,300 @@ Matching Algorithm:
    - Price = resting order's price (maker's price)
    - Quantity = min(incoming_qty, resting_qty)
 ```
+
+**Example: Price-Time Priority Matching**
+
+```java
+// Order Book State:
+// ASKS (Sell Orders):
+//   $150.10 - Order A (100 shares, timestamp: 10:00:00)
+//   $150.10 - Order B (50 shares, timestamp: 10:00:05)
+//   $150.20 - Order C (200 shares, timestamp: 10:00:10)
+
+// Incoming BUY order: $150.15, 150 shares, timestamp: 10:00:15
+
+// Matching Process:
+// 1. Best ASK price: $150.10
+// 2. At $150.10, oldest order first: Order A (10:00:00)
+// 3. Match 100 shares with Order A at $150.10
+// 4. Remaining 50 shares match with Order B at $150.10
+// 5. Order B fully filled, Order A partially filled
+
+// Result:
+// - Trade 1: 100 shares @ $150.10 (with Order A)
+// - Trade 2: 50 shares @ $150.10 (with Order B)
+// - Incoming order: 0 shares remaining (fully filled)
+```
+
+**Implementation:**
+
+```java
+public class PriceTimePriorityMatcher implements MatchingStrategy {
+    
+    public List<Trade> match(Order incomingOrder, OrderBook orderBook) {
+        List<Trade> trades = new ArrayList<>();
+        
+        if (incomingOrder.getSide() == OrderSide.BUY) {
+            // Match against ASKS (sell orders)
+            TreeMap<BigDecimal, PriceLevel> asks = orderBook.getAsks();
+            
+            while (incomingOrder.hasRemainingQuantity() && !asks.isEmpty()) {
+                BigDecimal bestAskPrice = asks.firstKey();
+                
+                // Check if price crosses
+                if (incomingOrder.getPrice().compareTo(bestAskPrice) < 0) {
+                    break; // No more matches possible
+                }
+                
+                PriceLevel bestLevel = asks.get(bestAskPrice);
+                
+                // Match with oldest order first (FIFO)
+                while (!bestLevel.isEmpty() && incomingOrder.hasRemainingQuantity()) {
+                    Order restingOrder = bestLevel.getFirstOrder();
+                    
+                    int matchQty = Math.min(
+                        incomingOrder.getRemainingQuantity(),
+                        restingOrder.getRemainingQuantity()
+                    );
+                    
+                    // Execute trade at resting order's price
+                    Trade trade = new Trade(
+                        incomingOrder.getSymbol(),
+                        incomingOrder,
+                        restingOrder,
+                        bestAskPrice,  // Maker's price
+                        matchQty
+                    );
+                    trades.add(trade);
+                    
+                    // Update quantities
+                    incomingOrder.fill(matchQty);
+                    restingOrder.fill(matchQty);
+                    
+                    // Remove if fully filled
+                    if (restingOrder.isFullyFilled()) {
+                        bestLevel.removeOrder(restingOrder);
+                    }
+                }
+                
+                // Remove price level if empty
+                if (bestLevel.isEmpty()) {
+                    asks.remove(bestAskPrice);
+                }
+            }
+        } else {
+            // Similar logic for SELL orders matching against BIDS
+            // Match against highest bid price first, then FIFO
+        }
+        
+        return trades;
+    }
+}
+```
+
+**Use Cases:**
+- Stock exchanges (NYSE, NASDAQ)
+- Most equity markets
+- Standard matching for retail trading
+
+**Pros:**
+- Fair: First-come-first-served at same price
+- Predictable: Clear matching rules
+- Simple: Easy to understand and implement
+
+**Cons:**
+- Large orders may not get filled completely
+- Can favor small orders over large ones
+
+---
+
+### Pro-Rata Matching Algorithm
+
+**Definition:** Orders at the same price are matched proportionally based on their quantities, rather than time priority.
+
+**How It Works:**
+
+```
+Matching Algorithm:
+
+1. Collect all orders at best price
+2. Calculate total quantity at that price
+3. Match incoming order proportionally:
+   - Each resting order gets: (resting_qty / total_qty) × incoming_qty
+4. Round down to avoid over-allocation
+5. Remaining quantity allocated by time priority
+```
+
+**Example: Pro-Rata Matching**
+
+```java
+// Order Book State:
+// ASKS (Sell Orders) at $150.10:
+//   Order A: 100 shares
+//   Order B: 200 shares
+//   Order C: 100 shares
+//   Total: 400 shares
+
+// Incoming BUY order: 200 shares
+
+// Pro-Rata Calculation:
+// Order A: (100/400) × 200 = 50 shares
+// Order B: (200/400) × 200 = 100 shares
+// Order C: (100/400) × 200 = 50 shares
+// Total: 200 shares (fully allocated)
+
+// Result:
+// - Trade 1: 50 shares @ $150.10 (with Order A)
+// - Trade 2: 100 shares @ $150.10 (with Order B)
+// - Trade 3: 50 shares @ $150.10 (with Order C)
+```
+
+**Implementation:**
+
+```java
+public class ProRataMatcher implements MatchingStrategy {
+    
+    public List<Trade> match(Order incomingOrder, OrderBook orderBook) {
+        List<Trade> trades = new ArrayList<>();
+        
+        if (incomingOrder.getSide() == OrderSide.BUY) {
+            TreeMap<BigDecimal, PriceLevel> asks = orderBook.getAsks();
+            
+            while (incomingOrder.hasRemainingQuantity() && !asks.isEmpty()) {
+                BigDecimal bestAskPrice = asks.firstKey();
+                
+                if (incomingOrder.getPrice().compareTo(bestAskPrice) < 0) {
+                    break;
+                }
+                
+                PriceLevel bestLevel = asks.get(bestAskPrice);
+                List<Order> ordersAtPrice = bestLevel.getAllOrders();
+                
+                // Calculate total quantity at this price
+                int totalQty = ordersAtPrice.stream()
+                    .mapToInt(Order::getRemainingQuantity)
+                    .sum();
+                
+                int incomingQty = incomingOrder.getRemainingQuantity();
+                
+                // Pro-rata allocation
+                Map<Order, Integer> allocations = new HashMap<>();
+                int allocatedTotal = 0;
+                
+                for (Order restingOrder : ordersAtPrice) {
+                    int restingQty = restingOrder.getRemainingQuantity();
+                    // Proportional allocation
+                    int allocated = (int) ((long) restingQty * incomingQty / totalQty);
+                    allocations.put(restingOrder, allocated);
+                    allocatedTotal += allocated;
+                }
+                
+                // Handle rounding: allocate remaining by time priority
+                int remaining = incomingQty - allocatedTotal;
+                if (remaining > 0) {
+                    // Allocate remaining to oldest orders first
+                    ordersAtPrice.sort(Comparator.comparing(Order::getTimestamp));
+                    for (Order order : ordersAtPrice) {
+                        if (remaining <= 0) break;
+                        int currentAlloc = allocations.get(order);
+                        int maxPossible = order.getRemainingQuantity() - currentAlloc;
+                        int additional = Math.min(remaining, maxPossible);
+                        allocations.put(order, currentAlloc + additional);
+                        remaining -= additional;
+                    }
+                }
+                
+                // Execute trades
+                for (Map.Entry<Order, Integer> entry : allocations.entrySet()) {
+                    Order restingOrder = entry.getKey();
+                    int matchQty = entry.getValue();
+                    
+                    if (matchQty > 0) {
+                        Trade trade = new Trade(
+                            incomingOrder.getSymbol(),
+                            incomingOrder,
+                            restingOrder,
+                            bestAskPrice,
+                            matchQty
+                        );
+                        trades.add(trade);
+                        
+                        incomingOrder.fill(matchQty);
+                        restingOrder.fill(matchQty);
+                        
+                        if (restingOrder.isFullyFilled()) {
+                            bestLevel.removeOrder(restingOrder);
+                        }
+                    }
+                }
+                
+                if (bestLevel.isEmpty()) {
+                    asks.remove(bestAskPrice);
+                }
+            }
+        }
+        
+        return trades;
+    }
+}
+```
+
+**Use Cases:**
+- Futures exchanges
+- Options markets
+- Markets with large institutional orders
+
+**Pros:**
+- Fair for large orders: All orders at same price get proportional fill
+- Reduces order splitting: Large orders don't need to split into many small orders
+
+**Cons:**
+- More complex: Requires careful rounding handling
+- Less predictable: Fill quantity depends on other orders at same price
+
+---
+
+### Time-Slicing Algorithm
+
+**Definition:** Orders are matched in time slices (e.g., every 100ms), with all orders in a slice matched simultaneously.
+
+**How It Works:**
+
+```
+1. Collect all orders in time window (e.g., 100ms)
+2. Group by price level
+3. Match all orders at same price simultaneously
+4. Pro-rata within price level
+5. Time priority between price levels
+```
+
+**Use Cases:**
+- High-frequency trading markets
+- Markets requiring batch processing
+
+**Pros:**
+- Reduces latency advantage: All orders in slice treated equally
+- Fair for high-frequency traders
+
+**Cons:**
+- Adds latency: Must wait for time slice
+- More complex: Requires time window management
+
+---
+
+### Algorithm Comparison
+
+| Algorithm | Priority | Use Case | Complexity |
+|-----------|----------|----------|------------|
+| **Price-Time** | Price → Time | Stock exchanges, retail trading | Simple |
+| **Pro-Rata** | Price → Quantity proportion | Futures, options, large orders | Medium |
+| **Time-Slicing** | Time slice → Price → Pro-rata | High-frequency trading | Complex |
+
+**Choosing an Algorithm:**
+
+- **Price-Time Priority**: Default choice for most markets, simple and fair
+- **Pro-Rata**: Use when large orders need proportional fills
+- **Time-Slicing**: Use in high-frequency trading to reduce latency advantages
 
 ---
 

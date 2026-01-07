@@ -505,6 +505,509 @@ class UserContext {
 }
 ```
 
+### Step 5: Advanced LaunchDarkly Java SDK Examples
+
+#### Example 1: Flag Evaluation with Detailed Configuration
+
+```java
+@Configuration
+public class LaunchDarklyAdvancedConfig {
+
+    @Value("${launchdarkly.sdk-key}")
+    private String sdkKey;
+
+    @Bean
+    public LDClient ldClient() {
+        LDConfig config = new LDConfig.Builder()
+            // HTTP configuration
+            .http(Components.httpConfiguration()
+                .connectTimeout(Duration.ofSeconds(5))
+                .socketTimeout(Duration.ofSeconds(5))
+                .proxyHost("proxy.example.com")
+                .proxyPort(8080))
+            
+            // Event configuration
+            .events(Components.sendEvents()
+                .capacity(10000)  // Max events in queue
+                .flushInterval(Duration.ofSeconds(5))
+                .allAttributesPrivate(false))
+            
+            // Caching configuration
+            .dataStore(Components.inMemoryDataStore()
+                .cacheTime(Duration.ofMinutes(5)))
+            
+            // Logging
+            .logging(Components.logging()
+                .level(LogLevel.INFO)
+                .slf4j())
+            
+            // Offline mode (for testing)
+            .offline(false)
+            
+            .build();
+
+        return new LDClient(sdkKey, config);
+    }
+}
+```
+
+#### Example 2: Local vs Remote Flag Evaluation
+
+**Remote Evaluation (Default):**
+```java
+@Service
+public class RemoteEvaluationService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        // SDK calls LaunchDarkly API for flag value
+        // Pros: Always up-to-date, supports complex targeting
+        // Cons: Network latency, requires internet connection
+        LDUser user = new LDUser.Builder(userId).build();
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+**Local Evaluation (Polling):**
+```java
+@Service
+public class LocalEvaluationService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        // SDK evaluates flag locally using cached rules
+        // Pros: Fast (no network call), works offline
+        // Cons: May be slightly stale (until next poll)
+        
+        // Enable local evaluation in config
+        LDConfig config = new LDConfig.Builder()
+            .usePolling()  // Poll for flag updates
+            .pollInterval(Duration.ofSeconds(30))
+            .build();
+        
+        LDUser user = new LDUser.Builder(userId).build();
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+**Streaming (Real-time updates):**
+```java
+@Configuration
+public class StreamingConfig {
+    
+    @Bean
+    public LDClient ldClient() {
+        LDConfig config = new LDConfig.Builder()
+            .stream()  // Use streaming (SSE) for real-time updates
+            .build();
+        
+        return new LDClient(sdkKey, config);
+    }
+}
+```
+
+#### Example 3: Flag Evaluation Strategies
+
+**Strategy 1: Percentage Rollout with Consistent Hashing**
+
+```java
+@Service
+public class PercentageRolloutService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        // LaunchDarkly automatically handles consistent hashing
+        // Same user always gets same result
+        LDUser user = new LDUser.Builder(userId).build();
+        
+        // Flag configured in LaunchDarkly dashboard:
+        // - 25% of users: enabled
+        // - Consistent hashing ensures same user always gets same result
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+**Strategy 2: User Targeting (Allowlist/Blocklist)**
+
+```java
+@Service
+public class UserTargetingService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, String userId, String email) {
+        LDUser user = new LDUser.Builder(userId)
+            .email(email)
+            .build();
+        
+        // Flag configured in LaunchDarkly:
+        // - Individual targeting: userId in allowlist
+        // - Email domain targeting: @company.com
+        // - Custom attribute targeting: subscriptionTier = "premium"
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+**Strategy 3: A/B Testing with Variants**
+
+```java
+@Service
+public class ABTestingService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public String getButtonColor(String userId) {
+        LDUser user = new LDUser.Builder(userId).build();
+        
+        // Flag configured with variants:
+        // - "red": 50% of users
+        // - "blue": 30% of users
+        // - "green": 20% of users
+        String variant = ldClient.stringVariation("button-color", user, "red");
+        
+        // Track which variant user got
+        trackVariantAssignment(userId, "button-color", variant);
+        
+        return variant;
+    }
+    
+    public void trackConversion(String userId, String flagKey) {
+        // Track conversion for A/B test analysis
+        LDUser user = new LDUser.Builder(userId).build();
+        ldClient.track("button-clicked", user, null, null);
+    }
+}
+```
+
+**Strategy 4: Multi-Variate Testing**
+
+```java
+@Service
+public class MultiVariateService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public Map<String, String> getFeatureVariants(String userId) {
+        LDUser user = new LDUser.Builder(userId).build();
+        
+        // Multiple flags evaluated together
+        Map<String, String> variants = new HashMap<>();
+        variants.put("button-color", ldClient.stringVariation("button-color", user, "red"));
+        variants.put("layout", ldClient.stringVariation("layout", user, "standard"));
+        variants.put("pricing", ldClient.stringVariation("pricing", user, "monthly"));
+        
+        return variants;
+    }
+}
+```
+
+**Strategy 5: Context-Based Evaluation**
+
+```java
+@Service
+public class ContextBasedService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, HttpServletRequest request) {
+        // Build user context from request
+        LDUser user = new LDUser.Builder(getUserId(request))
+            .email(getEmail(request))
+            .country(getCountryFromIP(request))
+            .custom("userAgent", request.getHeader("User-Agent"))
+            .custom("deviceType", getDeviceType(request))
+            .custom("subscriptionTier", getSubscriptionTier(request))
+            .custom("accountAge", getAccountAgeDays(request))
+            .build();
+        
+        // Flag rules can target based on any of these attributes
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+**Strategy 6: Prerequisite Flags**
+
+```java
+@Service
+public class PrerequisiteFlagService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        LDUser user = new LDUser.Builder(userId).build();
+        
+        // Flag configured with prerequisites:
+        // - "new-checkout" requires "new-payment-processor" to be enabled
+        // - If prerequisite is false, this flag is false
+        return ldClient.boolVariation(flagKey, user, false);
+    }
+}
+```
+
+#### Example 4: Flag Evaluation with Fallback and Error Handling
+
+```java
+@Service
+public class RobustFlagService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    private static final Logger logger = LoggerFactory.getLogger(RobustFlagService.class);
+    
+    public boolean isEnabled(String flagKey, String userId, boolean defaultValue) {
+        try {
+            LDUser user = new LDUser.Builder(userId).build();
+            
+            // Evaluate flag with default value
+            boolean result = ldClient.boolVariation(flagKey, user, defaultValue);
+            
+            // Log for debugging
+            logger.debug("Flag {} evaluated to {} for user {}", flagKey, result, userId);
+            
+            return result;
+            
+        } catch (Exception e) {
+            // If flag service is down, use default value
+            logger.error("Error evaluating flag {} for user {}, using default {}", 
+                flagKey, userId, defaultValue, e);
+            return defaultValue;
+        }
+    }
+    
+    public String getVariant(String flagKey, String userId, String defaultValue) {
+        try {
+            LDUser user = new LDUser.Builder(userId).build();
+            String variant = ldClient.stringVariation(flagKey, user, defaultValue);
+            
+            // Track variant assignment
+            trackVariantAssignment(userId, flagKey, variant);
+            
+            return variant;
+        } catch (Exception e) {
+            logger.error("Error getting variant for flag {} for user {}, using default {}", 
+                flagKey, userId, defaultValue, e);
+            return defaultValue;
+        }
+    }
+}
+```
+
+#### Example 5: Flag Evaluation with Caching
+
+```java
+@Service
+public class CachedFlagService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    // Local cache for flag values (reduce API calls)
+    private final Cache<String, Boolean> flagCache = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterWrite(30, TimeUnit.SECONDS)  // Cache for 30 seconds
+        .build();
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        // Cache key includes flag and user
+        String cacheKey = flagKey + ":" + userId;
+        
+        Boolean cached = flagCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // Evaluate flag
+        LDUser user = new LDUser.Builder(userId).build();
+        boolean result = ldClient.boolVariation(flagKey, user, false);
+        
+        // Cache result
+        flagCache.put(cacheKey, result);
+        
+        return result;
+    }
+}
+```
+
+#### Example 6: Flag Evaluation with Metrics
+
+```java
+@Service
+public class InstrumentedFlagService {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    @Autowired
+    private MeterRegistry meterRegistry;
+    
+    public boolean isEnabled(String flagKey, String userId) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        try {
+            LDUser user = new LDUser.Builder(userId).build();
+            boolean result = ldClient.boolVariation(flagKey, user, false);
+            
+            // Track flag evaluation metrics
+            meterRegistry.counter("feature_flag.evaluation", 
+                "flag", flagKey,
+                "result", String.valueOf(result))
+                .increment();
+            
+            return result;
+        } finally {
+            sample.stop(meterRegistry.timer("feature_flag.evaluation.duration", 
+                "flag", flagKey));
+        }
+    }
+}
+```
+
+#### Example 7: Flag Evaluation Listeners
+
+```java
+@Component
+public class FlagChangeListener implements ApplicationListener<ContextRefreshedEvent> {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    @Override
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        // Listen for flag changes in real-time
+        ldClient.getFlagTracker().addFlagValueChangeListener(
+            "new-payment-processor",
+            new LDUser.Builder("system").build(),
+            new FlagValueChangeListener() {
+                @Override
+                public void onFlagValueChange(FlagChangeEvent event) {
+                    logger.info("Flag {} changed from {} to {}", 
+                        event.getKey(), 
+                        event.getOldValue(), 
+                        event.getNewValue());
+                    
+                    // React to flag change (e.g., reload configuration)
+                    handleFlagChange(event);
+                }
+            }
+        );
+    }
+}
+```
+
+#### Example 8: Testing with LaunchDarkly
+
+```java
+@SpringBootTest
+public class FeatureFlagTest {
+    
+    @Autowired
+    private LDClient ldClient;
+    
+    @Test
+    void testFeatureFlagEnabled() {
+        // Create test user
+        LDUser user = new LDUser.Builder("test-user-123")
+            .email("test@example.com")
+            .custom("betaTester", true)
+            .build();
+        
+        // Evaluate flag
+        boolean enabled = ldClient.boolVariation("new-feature", user, false);
+        
+        // Assert based on flag configuration
+        assertTrue(enabled, "Beta testers should have feature enabled");
+    }
+    
+    @Test
+    void testFeatureFlagWithMock() {
+        // Mock LDClient for unit tests
+        LDClient mockClient = mock(LDClient.class);
+        when(mockClient.boolVariation(anyString(), any(LDUser.class), anyBoolean()))
+            .thenReturn(true);
+        
+        // Test with mocked client
+        FeatureFlagService service = new FeatureFlagService(mockClient);
+        assertTrue(service.isEnabled("test-flag", "user-123"));
+    }
+}
+```
+
+### Flag Evaluation Strategy Comparison
+
+| Strategy | Use Case | Pros | Cons |
+|----------|----------|------|------|
+| **Remote Evaluation** | Real-time updates needed | Always current, complex targeting | Network latency, requires connection |
+| **Local Evaluation (Polling)** | Performance critical | Fast, works offline | May be stale (poll interval) |
+| **Local Evaluation (Streaming)** | Real-time + performance | Fast + real-time updates | More complex setup |
+| **Caching** | High-throughput systems | Reduces API calls | Staleness, memory usage |
+| **Percentage Rollout** | Gradual feature release | Controlled rollout | Requires consistent hashing |
+| **User Targeting** | Beta testing, canary | Precise control | Manual user management |
+| **A/B Testing** | Experimentation | Statistical analysis | Requires tracking |
+
+### Best Practices for Flag Evaluation
+
+1. **Always Provide Default Values**
+   ```java
+   // GOOD: Safe default
+   boolean enabled = ldClient.boolVariation(flagKey, user, false);
+   
+   // BAD: No default, may throw exception
+   boolean enabled = ldClient.boolVariation(flagKey, user);
+   ```
+
+2. **Handle Errors Gracefully**
+   ```java
+   try {
+       return ldClient.boolVariation(flagKey, user, false);
+   } catch (Exception e) {
+       logger.error("Flag evaluation failed", e);
+       return false;  // Safe default
+   }
+   ```
+
+3. **Use Consistent User Context**
+   ```java
+   // GOOD: Same user attributes every time
+   LDUser user = new LDUser.Builder(userId)
+       .email(email)
+       .country(country)
+       .build();
+   
+   // BAD: Inconsistent attributes
+   // Sometimes includes email, sometimes doesn't
+   ```
+
+4. **Monitor Flag Evaluation Performance**
+   ```java
+   // Track evaluation time
+   Timer.Sample sample = Timer.start();
+   boolean result = ldClient.boolVariation(flagKey, user, false);
+   sample.stop(timer);
+   ```
+
+5. **Cache Strategically**
+   ```java
+   // Cache for high-throughput paths
+   // Don't cache for low-latency requirements
+   ```
+
 ---
 
 ## 5️⃣ Feature Flag Lifecycle

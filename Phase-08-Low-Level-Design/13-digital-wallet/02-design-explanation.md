@@ -176,6 +176,25 @@ public class WalletService {
 }
 ```
 
+**Why We Use Concrete FraudDetector in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use a concrete `FraudDetector` instead of a `FraudDetectionService` interface for the following reasons:
+
+1. **Single Strategy**: The system has a single, well-defined fraud detection strategy. There's no requirement for multiple fraud detection implementations in the interview context.
+
+2. **Focus on Core Logic**: LLD interviews focus on wallet transaction logic, balance management, and state transitions. Adding fraud detection abstraction shifts focus away from these core concepts.
+
+3. **Interview Time Constraints**: Implementing full interface hierarchies takes time away from demonstrating more critical LLD concepts like transaction atomicity and balance calculations.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `FraudDetectionService` and `WalletRepository` interfaces for:
+   - Testability (mock fraud detection in unit tests)
+   - Flexibility (swap fraud detection implementations)
+   - Dependency injection (easier configuration)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on transaction logic and balance management
+- **Production Scope**: Interfaces provide testability and flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -186,7 +205,7 @@ public class WalletService {
 | **OCP** | PASS | System is open for extension (new fraud rules) without modifying existing code. Strategy pattern with FraudRule interface enables this. | N/A | - |
 | **LSP** | PASS | All FraudRule implementations properly implement the FraudRule interface contract. They are substitutable. | N/A | - |
 | **ISP** | PASS | FraudRule interface is minimal and focused. Clients only implement what they need. No unused methods. | N/A | - |
-| **DIP** | WEAK | WalletService depends on concrete FraudDetector. Could depend on FraudDetectionService interface. Mentioned in DIP section but not fully implemented. | Extract FraudDetectionService and WalletRepository interfaces | More abstraction layers, but improves testability and flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | WalletService depends on concrete FraudDetector. For LLD interview scope, this is acceptable as it focuses on core wallet transaction logic. In production, we would depend on FraudDetectionService interface. | See "Why We Use Concrete FraudDetector" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and flexibility |
 
 ---
 

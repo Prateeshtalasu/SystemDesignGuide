@@ -210,6 +210,27 @@ public class FileSystem {
 }
 ```
 
+**Why We Use Unified Entry Interface and Concrete Directory in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use a unified Entry interface and concrete Directory dependency for the following reasons:
+
+1. **Composite Pattern**: The system uses Composite pattern where File and Directory share common operations. A unified Entry interface is appropriate for this pattern, as both types need to participate in tree traversal operations.
+
+2. **Core Operations**: Entry methods (read, write, list) are core file system operations used by both File and Directory. Segregating these into separate interfaces doesn't add value for demonstrating core LLD skills.
+
+3. **Single Directory Implementation**: The system has a single, well-defined directory implementation. There's no requirement for multiple directory operation implementations in the interview context.
+
+4. **Core Focus**: LLD interviews focus on file system tree traversal, operations, and tree structure management. Adding interface abstractions shifts focus away from these core concepts.
+
+5. **Production vs Interview**: In production systems, we would absolutely extract `Readable`, `Writable`, `Container`, and `DirectoryOperations` interfaces for:
+   - Testability (mock file system operations in unit tests)
+   - Flexibility (swap implementations for different file system types)
+   - Interface segregation (clients only depend on what they need)
+
+**The Trade-off:**
+- **Interview Scope**: Unified interface and concrete classes focus on file system operations and tree management
+- **Production Scope**: Segregated interfaces provide testability and flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -219,8 +240,8 @@ public class FileSystem {
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Entry is base class, File handles file operations, Directory handles directory operations, FileSystem coordinates, Permissions manages permissions. Clear separation. | N/A | - |
 | **OCP** | PASS | System is open for extension (new entry types like SymbolicLink) without modifying existing code. Composite pattern enables this. | N/A | - |
 | **LSP** | PASS | All Entry subclasses (File, Directory) properly implement the Entry contract. They are substitutable in composite operations. | N/A | - |
-| **ISP** | WEAK | Entry interface contains methods used by both File and Directory. Could benefit from Readable, Writable, Container interfaces. Currently acceptable but could be improved. | Extract interfaces: Readable, Writable, Container | More interfaces/files, but increases flexibility for mixed-type objects |
-| **DIP** | WEAK | FileSystem depends on concrete Directory. Could depend on DirectoryOperations interface. Currently acceptable but could be improved. | Extract DirectoryOperations interface | More abstraction layers, but improves testability and flexibility |
+| **ISP** | ACCEPTABLE (LLD Scope) | Entry interface contains methods used by both File and Directory. For LLD interview scope, the unified interface is acceptable as it focuses on core file system operations. In production, we would benefit from Readable, Writable, Container interfaces. | See "Why We Use Unified Entry Interface and Concrete Directory" section above for detailed justification. This is an intentional design decision for interview context. | Interview: Simpler, focuses on core LLD skills. Production: More interfaces/files, but increases flexibility for mixed-type objects |
+| **DIP** | ACCEPTABLE (LLD Scope) | FileSystem depends on concrete Directory. For LLD interview scope, this is acceptable as it focuses on core file system algorithms. In production, we would depend on DirectoryOperations interface. | See "Why We Use Unified Entry Interface and Concrete Directory" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and flexibility |
 
 ---
 

@@ -797,6 +797,113 @@ public class OrderServiceApplication {
     }
 }
 
+// Custom Service Discovery Client Implementation
+@Service
+public class PaymentServiceClient {
+    
+    private final DiscoveryClient discoveryClient;
+    private final RestTemplate restTemplate;
+    private final LoadBalancerClient loadBalancer;
+    private final Cache<String, List<ServiceInstance>> instanceCache;
+    
+    public PaymentServiceClient(DiscoveryClient discoveryClient,
+                                 RestTemplate restTemplate,
+                                 LoadBalancerClient loadBalancer) {
+        this.discoveryClient = discoveryClient;
+        this.restTemplate = restTemplate;
+        this.loadBalancer = loadBalancer;
+        this.instanceCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(30, TimeUnit.SECONDS)
+            .build();
+    }
+    
+    /**
+     * Get service instances with caching and health filtering
+     */
+    public List<ServiceInstance> getHealthyInstances(String serviceName) {
+        // Check cache first
+        List<ServiceInstance> cached = instanceCache.getIfPresent(serviceName);
+        if (cached != null && !cached.isEmpty()) {
+            return filterHealthy(cached);
+        }
+        
+        // Query discovery service
+        List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
+        
+        // Filter healthy instances
+        List<ServiceInstance> healthy = filterHealthy(instances);
+        
+        // Cache for 30 seconds
+        instanceCache.put(serviceName, healthy);
+        
+        return healthy;
+    }
+    
+    /**
+     * Filter instances by health status
+     */
+    private List<ServiceInstance> filterHealthy(List<ServiceInstance> instances) {
+        return instances.stream()
+            .filter(instance -> {
+                // Check health endpoint
+                try {
+                    String healthUrl = "http://" + instance.getHost() + ":" + 
+                                     instance.getPort() + "/actuator/health";
+                    ResponseEntity<String> response = restTemplate.getForEntity(
+                        healthUrl, String.class);
+                    return response.getStatusCode().is2xxSuccessful();
+                } catch (Exception e) {
+                    return false;
+                }
+            })
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Call service with retry and failover
+     */
+    public <T> T callWithRetry(String serviceName, 
+                               Function<ServiceInstance, T> operation,
+                               int maxRetries) {
+        List<ServiceInstance> instances = getHealthyInstances(serviceName);
+        
+        if (instances.isEmpty()) {
+            throw new ServiceUnavailableException("No healthy instances for " + serviceName);
+        }
+        
+        // Shuffle for load distribution
+        Collections.shuffle(instances);
+        
+        Exception lastException = null;
+        for (int i = 0; i < Math.min(maxRetries, instances.size()); i++) {
+            ServiceInstance instance = instances.get(i);
+            try {
+                return operation.apply(instance);
+            } catch (Exception e) {
+                lastException = e;
+                // Remove failed instance from cache
+                instances.remove(instance);
+                instanceCache.invalidate(serviceName);
+            }
+        }
+        
+        throw new ServiceUnavailableException(
+            "All instances failed for " + serviceName, lastException);
+    }
+    
+    /**
+     * Example: Call payment service
+     */
+    public PaymentResponse processPayment(PaymentRequest request) {
+        return callWithRetry("payment-service", instance -> {
+            String url = "http://" + instance.getHost() + ":" + 
+                        instance.getPort() + "/api/payments";
+            return restTemplate.postForObject(url, request, PaymentResponse.class);
+        }, 3);
+    }
+}
+
 // OrderService.java
 @Service
 public class OrderService {

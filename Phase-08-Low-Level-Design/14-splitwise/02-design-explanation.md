@@ -148,6 +148,25 @@ public class ExpenseService {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of repository interfaces for the following reasons:
+
+1. **In-Memory Data Structures**: The system operates on in-memory data structures (users, expenses). Repository interfaces are more relevant for persistent storage, which is often out of scope for LLD.
+
+2. **Core Algorithm Focus**: LLD interviews focus on expense splitting algorithms and balance calculation logic. Adding repository abstractions shifts focus away from these core concepts.
+
+3. **Single Implementation**: There's no requirement for multiple data access or calculation implementations in the interview context. The abstraction doesn't provide value for demonstrating LLD skills.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `UserRepository`, `ExpenseRepository`, and `BalanceCalculator` interfaces for:
+   - Testability (mock repositories and calculators in unit tests)
+   - Data access flexibility (swap database implementations)
+   - Algorithm flexibility (swap balance calculation strategies)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on splitting algorithms and balance calculations
+- **Production Scope**: Repository interfaces provide testability and flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -158,7 +177,7 @@ public class ExpenseService {
 | **OCP** | PASS | System is open for extension (new split types) without modifying existing code. Inheritance with Split base class enables this. | N/A | - |
 | **LSP** | PASS | All Split subclasses properly implement the Split contract. They are substitutable in expense calculations. | N/A | - |
 | **ISP** | PASS | Split abstract class is focused. Subclasses only implement what they need. No unused methods forced on clients. | N/A | - |
-| **DIP** | WEAK | ExpenseService depends on concrete classes. Could depend on UserRepository, ExpenseRepository, and BalanceCalculator interfaces. Mentioned in DIP section but not fully implemented. | Extract repository and calculator interfaces | More abstraction layers, but improves testability and data access flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | ExpenseService depends on concrete classes. For LLD interview scope, this is acceptable as it focuses on core expense splitting algorithms. In production, we would depend on UserRepository, ExpenseRepository, and BalanceCalculator interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and data access flexibility |
 
 ---
 

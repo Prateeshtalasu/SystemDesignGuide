@@ -215,6 +215,27 @@ public class AsyncDelivery implements MessageDelivery { }
 public class BatchDelivery implements MessageDelivery { }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes (`Topic` instead of `TopicManager` interface) for the following reasons:
+
+1. **Scope Focus**: LLD interviews focus on core data structures, algorithms, and concurrency patterns. Adding interface abstractions adds complexity without demonstrating core LLD skills.
+
+2. **Single Implementation**: The system has a single, well-defined delivery strategy (synchronous in-memory). There's no requirement for multiple delivery implementations, so the abstraction doesn't provide value.
+
+3. **Interview Time Constraints**: Implementing full interface hierarchies takes time away from demonstrating more critical LLD concepts like thread safety, data structure choices, and algorithm efficiency.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `TopicManager` and `MessageDelivery` interfaces for:
+   - Testability (mock interfaces in unit tests)
+   - Flexibility (swap implementations without changing callers)
+   - Dependency injection (easier configuration)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes are simpler and focus on core LLD skills
+- **Production Scope**: Interfaces provide testability and flexibility at the cost of more abstraction layers
+
+This is a conscious design decision for the interview context, not an oversight.
+
 ---
 
 ## SOLID Principles Check
@@ -225,7 +246,7 @@ public class BatchDelivery implements MessageDelivery { }
 | **OCP** | PASS | System is open for extension (new subscription types, delivery strategies) without modifying existing code. Observer pattern and interfaces enable this. | N/A | - |
 | **LSP** | PASS | All Subscriber implementations properly implement the Subscriber interface contract. All Topic implementations are substitutable. | N/A | - |
 | **ISP** | PASS | Subscriber interface is minimal and focused. Clients only implement onMessage. Topic interface is well-segregated. | N/A | - |
-| **DIP** | WEAK | PubSubService depends on concrete Topic. Could depend on TopicManager and MessageDelivery interfaces. Mentioned in DIP section but not fully implemented. | Extract TopicManager and MessageDelivery interfaces, use dependency injection | More abstraction layers, but improves testability and delivery strategy flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | PubSubService depends on concrete Topic. For LLD interview scope, this is acceptable as it focuses on core algorithms and data structures. In production, we would extract TopicManager and MessageDelivery interfaces for testability and flexibility. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and delivery strategy flexibility |
 
 ---
 

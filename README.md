@@ -16,7 +16,7 @@
 | 3-5 | Phase 3-4 | Data Storage & Caching | 45-55 |
 | 6-7 | Phase 5-6 | Distributed Systems & Messaging | 30-40 |
 | 8 | Phase 7 | Java Backend Core | 20-25 |
-| 9-12 | Phase 8 | Low-Level Design (18 problems) | 45-60 |
+| 9-12 | Phase 8 | Low-Level Design (23 problems) | 45-60 |
 | 13-17 | Phase 9 | High-Level Design (29 systems) | 60-80 |
 | 18-20 | Phase 10-11 | Microservices & Production | 35-45 |
 | 21-22 | Phase 11.5-12 | Security, Performance & Behavioral | 25-35 |
@@ -193,9 +193,23 @@ SystemDesignJava/
 - **Pramp/Interviewing.io**: For mock interviews
 
 ### Reference
-- **Designing Data-Intensive Applications** (book)
-- **System Design Primer** (GitHub)
-- **Engineering Blogs**: Netflix, Uber, Airbnb, Stripe
+- **Designing Data-Intensive Applications** by Martin Kleppmann (essential reading)
+- **System Design Primer** (GitHub) - comprehensive system design resource
+- **Engineering Blogs**: 
+  - [Netflix Tech Blog](https://netflixtechblog.com/)
+  - [Uber Engineering Blog](https://eng.uber.com/)
+  - [Airbnb Engineering Blog](https://medium.com/airbnb-engineering)
+  - [Stripe Engineering Blog](https://stripe.com/blog/engineering)
+  - [Google Cloud Blog](https://cloud.google.com/blog/products/gcp)
+  - [AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/)
+
+### Troubleshooting & Support
+
+For common issues and troubleshooting:
+- **System Design Interview Prep**: See Phase 13 for interview meta-skills
+- **Code Examples**: All LLD problems include complete Java implementations
+- **Architecture Diagrams**: All HLD systems include Mermaid and ASCII diagrams
+- **Cross-References**: Use the cross-reference table above to navigate related topics
 
 ---
 
@@ -216,13 +230,60 @@ The curriculum is designed with intentional overlap and cross-references:
 
 | Topic | Introduction | Deep Dive |
 |-------|--------------|-----------|
-| Consistency Models | Phase 1 | Phase 3 |
-| Idempotency | Phase 1 | Phase 5 |
-| Rate Limiting | Phase 5 | Phase 11.5 |
-| Service Mesh | Phase 5 | Phase 10 |
-| Chaos Engineering | Phase 1 | Phase 11 |
-| CDC | Phase 3 | Phase 6 |
-| Caching | Phase 4 | Phase 11.5 |
+| Consistency Models | Phase 1, Topic 12 | Phase 3, Topic 6 |
+| Idempotency | Phase 1, Topic 13 | Phase 5, Topic 4 |
+| Rate Limiting | Phase 5, Topic 7 | Phase 11.5, Topic 19 |
+| Service Mesh | Phase 5, Topic 9 | Phase 10, Topic 17 |
+| Chaos Engineering | Phase 1, Topic 10 | Phase 11, Topic 14 |
+| CDC | Phase 3, Topic 14 | Phase 6, Topic 7 |
+| Caching | Phase 4, All Topics | Phase 11.5, Topic 23 |
+
+---
+
+## 📊 Quick Reference
+
+### Core Topics Navigation
+
+**Foundational Concepts:**
+- **CAP Theorem**: `Phase-01-System-Foundations/06-cap-theorem.md`
+- **Consistency Models**: `Phase-01-System-Foundations/12-consistency-models.md`
+- **Idempotency**: `Phase-01-System-Foundations/13-idempotency.md`
+- **Back-of-Envelope Calculations**: `Phase-01-System-Foundations/11-back-of-envelope-calculations.md`
+
+**Key Algorithms:**
+- **Raft Consensus**: `Phase-05-Distributed-Systems-Core/03-distributed-consensus.md`
+- **Consistent Hashing**: `Phase-05.5-Practical-Data-Structures/06-consistent-hashing.md`
+- **Bloom Filters**: `Phase-05.5-Practical-Data-Structures/01-bloom-filters.md`
+- **LRU Cache**: `Phase-04-Caching/04-cache-eviction-policies.md` & `Phase-08-Low-Level-Design/05-lru-cache/`
+
+**Production Systems:**
+- **Kafka**: `Phase-06-Messaging-Streaming/05-kafka-deep-dive.md`
+- **Redis**: `Phase-04-Caching/03-redis-deep-dive.md`
+- **mTLS**: `Phase-11.5-Security-Performance/02-mtls.md`
+
+**Design Patterns:**
+- **CQRS**: `Phase-10-Microservices-Architecture/08-cqrs.md`
+- **Saga Pattern**: `Phase-10-Microservices-Architecture/09-saga-pattern.md`
+- **Event Sourcing**: `Phase-06-Messaging-Streaming/07-advanced-patterns.md`
+
+---
+
+## 🔍 Troubleshooting Common Issues
+
+**Q: I'm confused about a topic. Where do I start?**
+A: Start with Phase 1, Topic 1 (Distributed Systems). Each topic includes prerequisites at the beginning.
+
+**Q: How do I find related topics?**
+A: Use the Cross-References section above. Topics that build on each other are clearly linked.
+
+**Q: Where can I find troubleshooting guidance?**
+A: See `Phase-11-Production-Engineering/12-debugging-oncall.md` for production debugging strategies.
+
+**Q: Are the code examples production-ready?**
+A: They're educational examples designed to teach concepts. Production code requires additional error handling, logging, and security considerations.
+
+**Q: How do I practice effectively?**
+A: Follow the learning strategy above. Code the LLD problems yourself before looking at solutions. Draw HLD designs before reading the deep-dives.
 
 ---
 

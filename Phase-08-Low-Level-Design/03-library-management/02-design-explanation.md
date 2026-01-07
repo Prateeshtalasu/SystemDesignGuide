@@ -333,6 +333,25 @@ public class SMSNotificationService implements Notifier { }
 - Easy to swap notification channels
 - Easy to mock for testing
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes instead of fully segregated interfaces for the following reasons:
+
+1. **Single Implementation**: The system has a single, well-defined catalog and notification system. Search capabilities (TitleSearchable, AuthorSearchable) are core catalog behaviors, not separate concerns requiring segregation in the interview context.
+
+2. **Core Focus**: LLD interviews focus on lending workflow, book management, and transaction tracking. Adding interface abstractions shifts focus away from these core concepts.
+
+3. **Interview Time Constraints**: Implementing full interface hierarchies takes time away from demonstrating more critical LLD concepts like book availability tracking and fine calculation.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `Catalog`, `Notifier`, and `Searchable` interfaces for:
+   - Testability (mock catalog and notifier in unit tests)
+   - Flexibility (swap implementations for different scenarios)
+   - Interface segregation (clients only depend on what they need)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes focus on lending algorithms and book tracking
+- **Production Scope**: Interfaces provide testability and flexibility
+
 ---
 
 ## SOLID Principles Check
@@ -342,8 +361,8 @@ public class SMSNotificationService implements Notifier { }
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Book stores metadata, BookItem tracks copy state, Member manages member data, Lending tracks transactions, services handle workflows. Book vs BookItem separation is excellent SRP. | N/A | - |
 | **OCP** | PASS | System is open for extension (new book formats, fine calculators, search strategies) without modifying existing code. Enums and strategy patterns enable this. | N/A | - |
 | **LSP** | PASS | If using inheritance (e.g., BookItem subclasses), all subclasses properly implement contracts. Current design uses composition which naturally satisfies LSP. | N/A | - |
-| **ISP** | WEAK | Could benefit from interface segregation for Catalog (TitleSearchable, AuthorSearchable, etc.) and Notifier interfaces. Currently services depend on concrete implementations. | Extract interfaces: Catalog interface, Notifier interface, Searchable interfaces | More files/interfaces, but increases flexibility and testability |
-| **DIP** | WEAK | BookLendingService depends on concrete BookCatalog and NotificationService. Should depend on Catalog and Notifier interfaces. | Extract Catalog and Notifier interfaces, use constructor injection | More setup/configuration, but improves testability and flexibility |
+| **ISP** | ACCEPTABLE (LLD Scope) | Could benefit from interface segregation for Catalog (TitleSearchable, AuthorSearchable, etc.) and Notifier interfaces. For LLD interview scope, using concrete classes is acceptable as it focuses on core library management algorithms. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context. In production, we would extract Catalog, Notifier, and Searchable interfaces for flexibility and testability. | Interview: Simpler, focuses on core LLD skills. Production: More files/interfaces, but increases flexibility and testability |
+| **DIP** | ACCEPTABLE (LLD Scope) | BookLendingService depends on concrete BookCatalog and NotificationService. For LLD interview scope, this is acceptable as it focuses on core lending logic. In production, we would depend on Catalog and Notifier interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More setup/configuration, but improves testability and flexibility |
 
 ---
 

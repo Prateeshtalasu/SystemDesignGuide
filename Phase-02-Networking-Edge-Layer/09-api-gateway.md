@@ -697,6 +697,176 @@ public class UserKeyResolver implements KeyResolver {
     }
 }
 
+// Circuit Breaker Configuration
+@Configuration
+public class CircuitBreakerConfig {
+    
+    @Bean
+    public Customizer<ReactiveResilience4jCircuitBreakerFactory> defaultCustomizer() {
+        return factory -> factory.configureDefault(id -> new Resilience4jConfigBuilder(id)
+            .circuitBreakerConfig(CircuitBreakerConfig.custom()
+                .failureRateThreshold(50)  // Open circuit if 50% requests fail
+                .waitDurationInOpenState(Duration.ofSeconds(30))  // Wait 30s before retry
+                .slidingWindowSize(10)  // Last 10 requests
+                .minimumNumberOfCalls(5)  // Need 5 calls before opening
+                .build())
+            .timeLimiterConfig(TimeLimiterConfig.custom()
+                .timeoutDuration(Duration.ofSeconds(5))  // 5s timeout
+                .build())
+            .build());
+    }
+}
+
+// Retry Configuration with Exponential Backoff
+@Component
+public class RetryFilter implements GlobalFilter, Ordered {
+    
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        return chain.filter(exchange)
+            .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                .filter(throwable -> throwable instanceof TimeoutException ||
+                                    throwable instanceof ConnectException)
+                .doBeforeRetry(retrySignal -> 
+                    log.warn("Retrying request: {}", retrySignal.totalRetries()))
+                .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> {
+                    log.error("Retries exhausted for request");
+                    return new ServiceUnavailableException("Service temporarily unavailable");
+                }));
+    }
+    
+    @Override
+    public int getOrder() {
+        return -50;
+    }
+}
+
+// Request/Response Logging Filter
+@Component
+public class LoggingFilter implements GlobalFilter, Ordered {
+    
+    private static final Logger log = LoggerFactory.getLogger(LoggingFilter.class);
+    
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        long startTime = System.currentTimeMillis();
+        
+        // Log request
+        log.info("Incoming request: {} {} from {}", 
+            request.getMethod(), 
+            request.getURI(), 
+            request.getRemoteAddress());
+        
+        // Capture response
+        ServerHttpResponseDecorator responseDecorator = new ServerHttpResponseDecorator(
+            exchange.getResponse()) {
+            @Override
+            public Mono<Void> writeWith(org.reactivestreams.Publisher<? extends org.springframework.core.io.buffer.DataBuffer> body) {
+                return super.writeWith(body).doFinally(signalType -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    log.info("Request completed: {} {} - Status: {} - Duration: {}ms",
+                        request.getMethod(),
+                        request.getURI(),
+                        getStatusCode(),
+                        duration);
+                });
+            }
+        };
+        
+        return chain.filter(exchange.mutate().response(responseDecorator).build());
+    }
+    
+    @Override
+    public int getOrder() {
+        return -200;
+    }
+}
+
+// Request ID Propagation
+@Component
+public class RequestIdFilter implements GlobalFilter, Ordered {
+    
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        
+        // Get or generate request ID
+        String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
+        if (requestId == null) {
+            requestId = UUID.randomUUID().toString();
+        }
+        
+        // Add to MDC for logging
+        MDC.put("requestId", requestId);
+        
+        // Add to downstream requests
+        ServerHttpRequest modifiedRequest = request.mutate()
+            .header(REQUEST_ID_HEADER, requestId)
+            .build();
+        
+        // Add to response
+        exchange.getResponse().getHeaders().add(REQUEST_ID_HEADER, requestId);
+        
+        return chain.filter(exchange.mutate().request(modifiedRequest).build())
+            .doFinally(signalType -> MDC.clear());
+    }
+    
+    @Override
+    public int getOrder() {
+        return -150;
+    }
+}
+
+// Health Check Aggregation
+@RestController
+@RequestMapping("/gateway")
+public class GatewayHealthController {
+    
+    private final DiscoveryClient discoveryClient;
+    private final RestTemplate restTemplate;
+    
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> health() {
+        Map<String, Object> health = new HashMap<>();
+        health.put("status", "UP");
+        health.put("timestamp", Instant.now());
+        
+        // Check downstream services
+        Map<String, String> services = new HashMap<>();
+        List<String> serviceNames = discoveryClient.getServices();
+        
+        for (String serviceName : serviceNames) {
+            try {
+                List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
+                long healthyCount = instances.stream()
+                    .filter(this::isHealthy)
+                    .count();
+                services.put(serviceName, 
+                    healthyCount + "/" + instances.size() + " healthy");
+            } catch (Exception e) {
+                services.put(serviceName, "ERROR: " + e.getMessage());
+            }
+        }
+        
+        health.put("services", services);
+        return ResponseEntity.ok(health);
+    }
+    
+    private boolean isHealthy(ServiceInstance instance) {
+        try {
+            String url = "http://" + instance.getHost() + ":" + 
+                        instance.getPort() + "/actuator/health";
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
 // Fallback Controller
 @RestController
 @RequestMapping("/fallback")

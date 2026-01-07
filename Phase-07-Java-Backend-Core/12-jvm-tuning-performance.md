@@ -717,6 +717,237 @@ java \
   -jar app.jar
 ```
 
+### Real-World Production Examples
+
+#### Example 1: High-Throughput API Service (Spring Boot)
+
+**Requirements**: Handle 10,000 RPS, p95 latency < 100ms, 8GB container
+
+```bash
+java \
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -XX:InitialRAMPercentage=75.0 \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=100 \
+  -XX:G1HeapRegionSize=16m \
+  -XX:InitiatingHeapOccupancyPercent=45 \
+  -XX:+ParallelRefProcEnabled \
+  -XX:+UseStringDeduplication \
+  -Xlog:gc*:file=/var/log/gc.log:time,uptime,level,tags:filecount=5,filesize=10m \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/var/log/heap-dumps/ \
+  -XX:+ExitOnOutOfMemoryError \
+  -Dspring.profiles.active=production \
+  -jar api-service.jar
+```
+
+**Tuning rationale**:
+- G1 GC for balanced throughput/latency
+- 100ms max pause for API responsiveness
+- String deduplication saves memory (Spring Boot creates many strings)
+- Parallel reference processing reduces GC pauses
+- Exit on OOM for Kubernetes restart
+
+#### Example 2: Low-Latency Trading System
+
+**Requirements**: Sub-millisecond p99 latency, 16GB heap, minimal GC pauses
+
+```bash
+java \
+  -Xms16g \
+  -Xmx16g \
+  -XX:+UseZGC \
+  -XX:+UnlockExperimentalVMOptions \
+  -XX:+UseTransparentHugePages \
+  -XX:+AlwaysPreTouch \
+  -XX:+UseLargePages \
+  -XX:MaxDirectMemorySize=2g \
+  -Xlog:gc*:file=/var/log/gc.log:time \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/var/log/heap-dumps/ \
+  -XX:ReservedCodeCacheSize=512m \
+  -XX:InitialCodeCacheSize=256m \
+  -XX:+TieredCompilation \
+  -XX:TieredStopAtLevel=1 \
+  -XX:CompileThreshold=1000 \
+  -jar trading-engine.jar
+```
+
+**Tuning rationale**:
+- ZGC for sub-ms pauses
+- Fixed heap size to avoid resizing
+- AlwaysPreTouch to eliminate page faults during trading
+- Large pages for better memory performance
+- Tiered compilation with lower threshold for faster warmup
+- Reserved code cache for JIT compiled code
+
+#### Example 3: Batch Processing Job (High Throughput)
+
+**Requirements**: Process 1TB data, maximize throughput, pauses < 1s acceptable
+
+```bash
+java \
+  -Xms32g \
+  -Xmx32g \
+  -XX:+UseParallelGC \
+  -XX:ParallelGCThreads=8 \
+  -XX:+UseAdaptiveSizePolicy \
+  -XX:MaxGCPauseMillis=1000 \
+  -Xlog:gc*:file=/var/log/gc.log:time \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/var/log/heap-dumps/ \
+  -jar batch-processor.jar
+```
+
+**Tuning rationale**:
+- Parallel GC for maximum throughput
+- Larger pause times acceptable for batch jobs
+- Adaptive size policy lets JVM tune automatically
+- 8 GC threads for 8-core machine
+
+#### Example 4: Microservice in Kubernetes (Small Footprint)
+
+**Requirements**: 512MB container, fast startup, low memory usage
+
+```bash
+java \
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -XX:InitialRAMPercentage=50.0 \
+  -XX:+UseSerialGC \
+  -Xlog:gc*:file=/var/log/gc.log:time \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/var/log/heap-dumps/ \
+  -XX:+UseCompressedOops \
+  -XX:+UseCompressedClassPointers \
+  -jar microservice.jar
+```
+
+**Tuning rationale**:
+- Serial GC for small heaps (< 100MB effective)
+- Lower initial RAM percentage for faster startup
+- Compressed OOPs saves memory
+- Minimal flags for simplicity
+
+#### Example 5: Data-Intensive Application (Large Heap)
+
+**Requirements**: 64GB heap, process large datasets in memory, minimize GC overhead
+
+```bash
+java \
+  -Xms64g \
+  -Xmx64g \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=500 \
+  -XX:G1HeapRegionSize=32m \
+  -XX:InitiatingHeapOccupancyPercent=40 \
+  -XX:G1ReservePercent=15 \
+  -XX:ConcGCThreads=4 \
+  -XX:ParallelGCThreads=8 \
+  -XX:+UseStringDeduplication \
+  -Xlog:gc*:file=/var/log/gc.log:time,uptime,level,tags:filecount=10,filesize=50m \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/var/log/heap-dumps/ \
+  -XX:+PrintGCDetails \
+  -jar data-processor.jar
+```
+
+**Tuning rationale**:
+- G1 for large heaps
+- Larger regions (32m) for better efficiency
+- Higher reserve percent for promotion safety
+- More concurrent GC threads for large heap
+- Detailed GC logging for analysis
+
+### JVM Tuning Decision Tree
+
+```mermaid
+flowchart TD
+    Start["Start JVM Tuning"]
+    Q1["Heap size?"]
+    Q2["Latency requirements?"]
+    Q3["Throughput vs Latency?"]
+    
+    Small["< 4GB: Serial GC<br/>-XX:+UseSerialGC"]
+    Medium["4-32GB: G1 GC<br/>-XX:+UseG1GC<br/>-XX:MaxGCPauseMillis=200"]
+    Large["> 32GB: G1 or ZGC<br/>-XX:+UseG1GC or<br/>-XX:+UseZGC"]
+    
+    LowLatency["< 10ms: ZGC<br/>-XX:+UseZGC<br/>-XX:+UnlockExperimentalVMOptions"]
+    MediumLatency["10-200ms: G1<br/>-XX:+UseG1GC<br/>-XX:MaxGCPauseMillis=100"]
+    HighLatency["> 200ms: Parallel<br/>-XX:+UseParallelGC"]
+    
+    Throughput["Max Throughput:<br/>-XX:+UseParallelGC<br/>-XX:ParallelGCThreads=8"]
+    Balanced["Balanced:<br/>-XX:+UseG1GC<br/>-XX:MaxGCPauseMillis=200"]
+    
+    Start --> Q1
+    Q1 -->|Small| Small
+    Q1 -->|Medium| Q2
+    Q1 -->|Large| Q2
+    
+    Q2 -->|Critical| LowLatency
+    Q2 -->|Important| MediumLatency
+    Q2 -->|Acceptable| Q3
+    
+    Q3 -->|Throughput| Throughput
+    Q3 -->|Balanced| Balanced
+```
+
+### Monitoring JVM Flags in Production
+
+```bash
+# Check current JVM flags
+jcmd <pid> VM.flags
+
+# Check GC configuration
+jcmd <pid> VM.info | grep -i gc
+
+# Monitor GC activity
+jstat -gc <pid> 1000  # Every 1 second
+
+# Check memory usage
+jcmd <pid> VM.native_memory summary
+
+# Get thread dump
+jcmd <pid> Thread.print
+
+# Continuous GC logging analysis
+tail -f /var/log/gc.log | grep -E "GC|pause"
+```
+
+### Common JVM Flag Mistakes
+
+**Mistake 1: Too Many Flags**
+```bash
+# BAD: Adding flags without understanding
+java -XX:+UseG1GC -XX:+UseParallelGC -XX:+UseZGC ...  # Conflicting!
+
+# GOOD: Start minimal, add based on profiling
+java -XX:+UseG1GC -Xmx4g -Xlog:gc*:file=gc.log
+```
+
+**Mistake 2: Ignoring Container Limits**
+```bash
+# BAD: Fixed heap in container
+java -Xmx8g ...  # Ignores container memory limits
+
+# GOOD: Use percentage
+java -XX:MaxRAMPercentage=75.0 ...
+```
+
+**Mistake 3: Not Measuring Impact**
+```bash
+# BAD: Change flags without baseline
+# Changed -XX:MaxGCPauseMillis from 200 to 100
+# No measurement of before/after
+
+# GOOD: Measure first
+# 1. Baseline: jstat -gc <pid> 1000 > baseline.txt
+# 2. Change flag
+# 3. Measure again: jstat -gc <pid> 1000 > after.txt
+# 4. Compare: diff baseline.txt after.txt
+```
+
 ---
 
 ## 8️⃣ Troubleshooting Checklist

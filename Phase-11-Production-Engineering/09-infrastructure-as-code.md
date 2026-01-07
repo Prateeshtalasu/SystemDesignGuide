@@ -646,6 +646,904 @@ resource "aws_subnet" "public" {
 }
 ```
 
+### Step 4: Common Infrastructure Patterns
+
+#### Pattern 1: Auto Scaling Group with Load Balancer
+
+```hcl
+# Application Load Balancer
+resource "aws_lb" "app" {
+  name               = "${var.environment}-app-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb.id]
+  subnets            = var.public_subnet_ids
+  
+  enable_deletion_protection = false
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "${var.environment}-app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/health"
+    matcher             = "200"
+  }
+  
+  stickiness {
+    type            = "lb_cookie"
+    cookie_duration = 86400
+  }
+}
+
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# Launch Template
+resource "aws_launch_template" "app" {
+  name_prefix   = "${var.environment}-app-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  
+  vpc_security_group_ids = [aws_security_group.app.id]
+  
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    environment = var.environment
+    db_endpoint = aws_db_instance.main.endpoint
+  }))
+  
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "${var.environment}-app"
+      Environment = var.environment
+    }
+  }
+}
+
+# Auto Scaling Group
+resource "aws_autoscaling_group" "app" {
+  name                = "${var.environment}-app-asg"
+  vpc_zone_identifier = var.private_subnet_ids
+  target_group_arns   = [aws_lb_target_group.app.arn]
+  
+  min_size         = var.min_instances
+  max_size         = var.max_instances
+  desired_capacity = var.desired_instances
+  
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+  
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  
+  tag {
+    key                 = "Name"
+    value               = "${var.environment}-app"
+    propagate_at_launch = true
+  }
+}
+
+# Auto Scaling Policies
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${var.environment}-scale-up"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = 2
+  cooldown               = 300
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${var.environment}-scale-down"
+  autoscaling_group_name   = aws_autoscaling_group.app.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = -1
+  cooldown               = 300
+}
+
+# CloudWatch Alarms for Auto Scaling
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${var.environment}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+  
+  alarm_actions = [aws_autoscaling_policy.scale_up.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${var.environment}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 30
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+  
+  alarm_actions = [aws_autoscaling_policy.scale_down.arn]
+}
+```
+
+#### Pattern 2: Multi-AZ RDS with Read Replicas
+
+```hcl
+# RDS Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.environment}-db-subnet-group"
+  subnet_ids = var.private_subnet_ids
+  
+  tags = {
+    Name = "${var.environment}-db-subnet-group"
+  }
+}
+
+# RDS Parameter Group
+resource "aws_db_parameter_group" "main" {
+  family = "postgres15"
+  name   = "${var.environment}-db-params"
+  
+  parameter {
+    name  = "max_connections"
+    value = "200"
+  }
+  
+  parameter {
+    name  = "shared_buffers"
+    value = "256MB"
+  }
+}
+
+# RDS Instance (Primary)
+resource "aws_db_instance" "primary" {
+  identifier             = "${var.environment}-db-primary"
+  engine                 = "postgres"
+  engine_version          = "15.4"
+  instance_class         = var.db_instance_class
+  allocated_storage       = 100
+  max_allocated_storage  = 1000
+  storage_type           = "gp3"
+  storage_encrypted      = true
+  
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
+  
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.db.id]
+  parameter_group_name   = aws_db_parameter_group.main.name
+  
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "mon:04:00-mon:05:00"
+  
+  multi_az               = true
+  publicly_accessible    = false
+  skip_final_snapshot    = false
+  final_snapshot_identifier = "${var.environment}-db-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  
+  tags = {
+    Name        = "${var.environment}-db-primary"
+    Environment = var.environment
+  }
+}
+
+# Read Replica
+resource "aws_db_instance" "replica" {
+  identifier             = "${var.environment}-db-replica"
+  replicate_source_db    = aws_db_instance.primary.identifier
+  instance_class         = var.db_instance_class
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  
+  vpc_security_group_ids = [aws_security_group.db.id]
+  
+  tags = {
+    Name        = "${var.environment}-db-replica"
+    Environment = var.environment
+  }
+}
+```
+
+#### Pattern 3: Redis Cluster with Replication
+
+```hcl
+# ElastiCache Subnet Group
+resource "aws_elasticache_subnet_group" "redis" {
+  name       = "${var.environment}-redis-subnet-group"
+  subnet_ids = var.private_subnet_ids
+}
+
+# ElastiCache Parameter Group
+resource "aws_elasticache_parameter_group" "redis" {
+  name   = "${var.environment}-redis-params"
+  family = "redis7"
+  
+  parameter {
+    name  = "maxmemory-policy"
+    value = "allkeys-lru"
+  }
+}
+
+# ElastiCache Replication Group (Redis Cluster)
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id       = "${var.environment}-redis"
+  description                = "Redis cluster for ${var.environment}"
+  
+  engine                     = "redis"
+  engine_version             = "7.0"
+  node_type                  = var.redis_node_type
+  num_cache_clusters         = 3
+  
+  port                       = 6379
+  parameter_group_name       = aws_elasticache_parameter_group.redis.name
+  subnet_group_name          = aws_elasticache_subnet_group.redis.name
+  security_group_ids         = [aws_security_group.redis.id]
+  
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = var.redis_auth_token
+  
+  automatic_failover_enabled = true
+  multi_az_enabled          = true
+  
+  snapshot_retention_limit   = 5
+  snapshot_window            = "03:00-05:00"
+  
+  maintenance_window         = "mon:05:00-mon:07:00"
+  
+  tags = {
+    Name        = "${var.environment}-redis"
+    Environment = var.environment
+  }
+}
+```
+
+#### Pattern 4: S3 Bucket with Lifecycle Policies
+
+```hcl
+# S3 Bucket
+resource "aws_s3_bucket" "app_data" {
+  bucket = "${var.environment}-app-data-${random_id.bucket_suffix.hex}"
+  
+  tags = {
+    Name        = "${var.environment}-app-data"
+    Environment = var.environment
+  }
+}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+# S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Lifecycle Policy
+resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  
+  rule {
+    id     = "transition-to-ia"
+    status = "Enabled"
+    
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+  }
+  
+  rule {
+    id     = "transition-to-glacier"
+    status = "Enabled"
+    
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+  }
+  
+  rule {
+    id     = "delete-old-versions"
+    status = "Enabled"
+    
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+  
+  rule {
+    id     = "delete-incomplete-multipart"
+    status = "Enabled"
+    
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+# S3 Bucket Policy
+resource "aws_s3_bucket_policy" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowAppAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.app.arn
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.app_data.arn}/*"
+      }
+    ]
+  })
+}
+```
+
+#### Pattern 5: CloudFront Distribution with S3 Origin
+
+```hcl
+# CloudFront Origin Access Identity
+resource "aws_cloudfront_origin_access_identity" "app" {
+  comment = "OAI for ${var.environment} app"
+}
+
+# CloudFront Distribution
+resource "aws_cloudfront_distribution" "app" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "CloudFront for ${var.environment}"
+  default_root_object = "index.html"
+  
+  aliases = [var.domain_name]
+  
+  origin {
+    domain_name = aws_s3_bucket.app_data.bucket_regional_domain_name
+    origin_id   = "S3-${aws_s3_bucket.app_data.id}"
+    
+    s3_origin_config {
+      origin_access_identity = aws_cloudfront_origin_access_identity.app.cloudfront_access_identity_path
+    }
+  }
+  
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "S3-${aws_s3_bucket.app_data.id}"
+    
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+    
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+    compress               = true
+  }
+  
+  # Cache behavior for API
+  ordered_cache_behavior {
+    path_pattern     = "/api/*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = aws_lb.app.dns_name
+    
+    forwarded_values {
+      query_string = true
+      headers      = ["Authorization"]
+      cookies {
+        forward = "none"
+      }
+    }
+    
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 300
+    max_ttl                = 3600
+  }
+  
+  restrictions {
+    geo_restriction {
+      restriction_type = "whitelist"
+      locations        = ["US", "CA", "GB", "DE"]
+    }
+  }
+  
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate.app.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+  
+  custom_error_response {
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+```
+
+#### Pattern 6: IAM Roles and Policies
+
+```hcl
+# IAM Role for EC2 Instances
+resource "aws_iam_role" "app" {
+  name = "${var.environment}-app-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# IAM Policy for S3 Access
+resource "aws_iam_policy" "s3_access" {
+  name        = "${var.environment}-s3-access"
+  description = "Policy for S3 access"
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.app_data.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.app_data.arn
+      }
+    ]
+  })
+}
+
+# Attach Policy to Role
+resource "aws_iam_role_policy_attachment" "app_s3" {
+  role       = aws_iam_role.app.name
+  policy_arn = aws_iam_policy.s3_access.arn
+}
+
+# IAM Instance Profile
+resource "aws_iam_instance_profile" "app" {
+  name = "${var.environment}-app-profile"
+  role = aws_iam_role.app.name
+}
+```
+
+#### Pattern 7: VPC with NAT Gateway
+
+```hcl
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = {
+    Name = "${var.environment}-vpc"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  
+  tags = {
+    Name = "${var.environment}-igw"
+  }
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  map_public_ip_on_launch = true
+  
+  tags = {
+    Name = "${var.environment}-public-subnet-${count.index + 1}"
+    Type = "public"
+  }
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  tags = {
+    Name = "${var.environment}-private-subnet-${count.index + 1}"
+    Type = "private"
+  }
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = 2
+  domain = "vpc"
+  
+  tags = {
+    Name = "${var.environment}-nat-eip-${count.index + 1}"
+  }
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count         = 2
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+  
+  tags = {
+    Name = "${var.environment}-nat-${count.index + 1}"
+  }
+  
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  
+  tags = {
+    Name = "${var.environment}-public-rt"
+  }
+}
+
+# Route Table Associations for Public Subnets
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Route Tables for Private Subnets
+resource "aws_route_table" "private" {
+  count  = 2
+  vpc_id = aws_vpc.main.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+  
+  tags = {
+    Name = "${var.environment}-private-rt-${count.index + 1}"
+  }
+}
+
+# Route Table Associations for Private Subnets
+resource "aws_route_table_association" "private" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+```
+
+#### Pattern 8: Security Groups with Rules
+
+```hcl
+# Security Group for Load Balancer
+resource "aws_security_group" "lb" {
+  name        = "${var.environment}-lb-sg"
+  description = "Security group for load balancer"
+  vpc_id      = aws_vpc.main.id
+  
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "${var.environment}-lb-sg"
+  }
+}
+
+# Security Group for Application Servers
+resource "aws_security_group" "app" {
+  name        = "${var.environment}-app-sg"
+  description = "Security group for application servers"
+  vpc_id      = aws_vpc.main.id
+  
+  ingress {
+    description     = "HTTP from LB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb.id]
+  }
+  
+  ingress {
+    description     = "HTTPS from LB"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lb.id]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "${var.environment}-app-sg"
+  }
+}
+
+# Security Group for Database
+resource "aws_security_group" "db" {
+  name        = "${var.environment}-db-sg"
+  description = "Security group for database"
+  vpc_id      = aws_vpc.main.id
+  
+  ingress {
+    description     = "PostgreSQL from app servers"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "${var.environment}-db-sg"
+  }
+}
+```
+
+#### Pattern 9: CloudWatch Alarms and Logs
+
+```hcl
+# CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/aws/ec2/${var.environment}-app"
+  retention_in_days = 30
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# CloudWatch Alarm for High CPU
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  alarm_name          = "${var.environment}-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+  
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# CloudWatch Alarm for High Memory
+resource "aws_cloudwatch_metric_alarm" "high_memory" {
+  alarm_name          = "${var.environment}-high-memory"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryUtilization"
+  namespace           = "CWAgent"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  alarm_description   = "This metric monitors memory utilization"
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+  
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "alerts" {
+  name = "${var.environment}-alerts"
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# SNS Topic Subscription
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+```
+
+#### Pattern 10: Route53 DNS and SSL Certificate
+
+```hcl
+# ACM Certificate
+resource "aws_acm_certificate" "app" {
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  
+  subject_alternative_names = [
+    "*.${var.domain_name}"
+  ]
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Route53 Zone
+resource "aws_route53_zone" "main" {
+  name = var.domain_name
+  
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Route53 Record for CloudFront
+resource "aws_route53_record" "app" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = var.domain_name
+  type    = "A"
+  
+  alias {
+    name                   = aws_cloudfront_distribution.app.domain_name
+    zone_id                = aws_cloudfront_distribution.app.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+```
+
 ---
 
 ## 5️⃣ State Management

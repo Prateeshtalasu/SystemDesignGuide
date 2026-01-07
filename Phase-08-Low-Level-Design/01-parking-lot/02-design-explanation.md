@@ -721,6 +721,27 @@ public synchronized ParkingTicket parkVehicle(Vehicle vehicle) {
 }
 ```
 
+**Why We Use Abstract Classes and Concrete PaymentService in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use abstract classes for Vehicle hierarchy and concrete PaymentService for the following reasons:
+
+1. **Inheritance Hierarchy**: The system has a clear inheritance hierarchy (Vehicle types) with shared implementation code. Abstract classes are appropriate when there's shared behavior between subclasses.
+
+2. **Single Payment Strategy**: The system has a single, well-defined payment processing strategy. There's no requirement for multiple payment implementations in the interview context.
+
+3. **Core Focus**: LLD interviews focus on parking algorithms, fee calculation, and spot management. Adding interface abstractions shifts focus away from these core concepts.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `Parkable`, `Reservable`, `ChargingCapable`, and `PaymentProcessor` interfaces for:
+   - Testability (mock interfaces in unit tests)
+   - Flexibility (swap implementations for different scenarios)
+   - Dependency injection (easier configuration)
+
+**The Trade-off:**
+- **Interview Scope**: Abstract classes and concrete services focus on parking algorithms and fee calculation
+- **Production Scope**: Interfaces provide testability and flexibility
+
+Note: We do use Vehicle abstraction well (good DIP!), showing we understand when abstractions add value.
+
 ---
 
 ## SOLID Principles Check
@@ -730,8 +751,8 @@ public synchronized ParkingTicket parkVehicle(Vehicle vehicle) {
 | **SRP**   | PASS   | Each class has a single, well-defined responsibility. Vehicle handles identity/type, ParkingSpot manages state, ParkingTicket tracks sessions, etc. Minor concern: ParkingTicket calculates fees, but this is acceptable for scope. | N/A                                                                                                                | -                                                                  |
 | **OCP**   | PASS   | System is open for extension (new vehicle types, payment methods, spot types) without modifying existing code. Vehicle/Payment hierarchies enable this.                                                                             | N/A                                                                                                                | -                                                                  |
 | **LSP**   | PASS   | All Vehicle subclasses properly implement canFitInSpot() without violating base contract. No unexpected exceptions or stricter preconditions.                                                                                       | N/A                                                                                                                | -                                                                  |
-| **ISP**   | WEAK   | Using abstract classes instead of interfaces. For interview scope this is acceptable, but in production would benefit from interface segregation (Parkable, Reservable, ChargingCapable).                                           | Extract interfaces for capabilities (Parkable, Reservable, ChargingCapable) where multiple capabilities are needed | Adds abstraction layer and more files, but increases flexibility   |
-| **DIP**   | WEAK   | ExitPanel depends on concrete PaymentService. Vehicle abstraction is used well, but payment processing could use interface.                                                                                                         | Extract PaymentProcessor interface, inject into ExitPanel constructor                                              | More setup/configuration, but improves testability and flexibility |
+| **ISP**   | ACCEPTABLE (LLD Scope)   | Using abstract classes instead of interfaces. For LLD interview scope, this is acceptable as it focuses on parking algorithms and fee calculation. In production, we would benefit from interface segregation (Parkable, Reservable, ChargingCapable).                                           | See "Why We Use Abstract Classes and Concrete PaymentService" section above for detailed justification. This is an intentional design decision for interview context. | Interview: Focuses on core parking algorithms. Production: Adds abstraction layer and more files, but increases flexibility   |
+| **DIP**   | ACCEPTABLE (LLD Scope)   | ExitPanel depends on concrete PaymentService. Vehicle abstraction is used well (demonstrating DIP understanding), but payment processing uses concrete class for interview simplicity.                                                                                                         | See "Why We Use Abstract Classes and Concrete PaymentService" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More setup/configuration, but improves testability and flexibility |
 
 ---
 

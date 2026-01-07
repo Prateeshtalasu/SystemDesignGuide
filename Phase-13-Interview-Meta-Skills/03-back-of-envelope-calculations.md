@@ -837,6 +837,873 @@ Always be ready to show your work.
 
 ---
 
+## 🔟 Practice Problems with Solutions
+
+### Problem 1: Design a URL Shortener
+
+**Given**:
+- 100 million URLs shortened per day
+- 1 billion total URLs in system
+- Each URL mapping: 500 bytes
+- Read/write ratio: 100:1 (reads >> writes)
+
+**Calculate**:
+1. Write QPS
+2. Read QPS (average and peak)
+3. Storage for 5 years
+4. Cache size (cache hot 20%)
+
+**Solution**:
+
+**1. Write QPS**:
+```
+Daily writes = 100M URLs/day
+Write QPS = 100M / 100K = 1,000 QPS
+Peak write QPS = 1,000 × 3 = 3,000 QPS
+```
+
+**2. Read QPS**:
+```
+Read/write ratio = 100:1
+Read QPS = 1,000 × 100 = 100,000 QPS
+Peak read QPS = 100,000 × 3 = 300,000 QPS
+```
+
+**3. Storage (5 years)**:
+```
+Daily storage = 100M URLs × 500 bytes = 50 GB/day
+Yearly storage = 50 GB × 365 = 18.25 TB/year ≈ 20 TB/year
+5-year storage = 20 TB × 5 = 100 TB
+
+With replication (3x): 100 TB × 3 = 300 TB
+```
+
+**4. Cache size**:
+```
+Hot URLs = 1B × 20% = 200M URLs
+Cache size = 200M × 500 bytes = 100 GB
+
+This fits in a large Redis instance or small Redis cluster.
+```
+
+---
+
+### Problem 2: Design a Chat System
+
+**Given**:
+- 50 million daily active users
+- Average user sends 20 messages per day
+- Average message size: 200 bytes
+- Average user is in 3 group chats
+- Messages stored for 1 year
+
+**Calculate**:
+1. Write QPS (message sends)
+2. Storage for 1 year
+3. Bandwidth for real-time delivery
+4. Cache size for active conversations
+
+**Solution**:
+
+**1. Write QPS**:
+```
+Daily messages = 50M users × 20 messages = 1 billion messages/day
+Write QPS = 1B / 100K = 10,000 QPS
+Peak write QPS = 10,000 × 3 = 30,000 QPS
+```
+
+**2. Storage (1 year)**:
+```
+Daily storage = 1B messages × 200 bytes = 200 GB/day
+Yearly storage = 200 GB × 365 = 73 TB/year ≈ 75 TB/year
+
+With replication (3x): 75 TB × 3 = 225 TB
+```
+
+**3. Bandwidth (real-time delivery)**:
+```
+Peak write QPS = 30,000 QPS
+Average message = 200 bytes
+Bandwidth = 30,000 × 200 bytes = 6 MB/s = 48 Mbps
+
+This is manageable for a single data center.
+But with global distribution, need multiple regions.
+```
+
+**4. Cache size (active conversations)**:
+```
+Active users = 50M DAU
+Average 3 conversations per user
+Active conversations = 50M × 3 = 150M conversations
+
+Cache recent messages per conversation:
+- Last 100 messages per conversation
+- 100 messages × 200 bytes = 20 KB per conversation
+
+Cache size = 150M × 20 KB = 3 TB
+
+This is too large for single cache. Need:
+- Cache only top 10% active conversations = 300 GB
+- Or use distributed cache across multiple instances
+```
+
+---
+
+### Problem 3: Design a Social Media Feed
+
+**Given**:
+- 200 million daily active users
+- Average user follows 200 people
+- Average user posts 1 post per day
+- Average post size: 1 KB (text + metadata)
+- Average user views feed 5 times per day
+- Feed shows 20 posts per view
+
+**Calculate**:
+1. Write QPS (posts)
+2. Read QPS (feed views)
+3. Storage for posts (5 years)
+4. Bandwidth for feed delivery
+
+**Solution**:
+
+**1. Write QPS**:
+```
+Daily posts = 200M users × 1 post = 200M posts/day
+Write QPS = 200M / 100K = 2,000 QPS
+Peak write QPS = 2,000 × 3 = 6,000 QPS
+```
+
+**2. Read QPS**:
+```
+Daily feed views = 200M users × 5 views = 1 billion views/day
+Posts per view = 20
+Total post reads = 1B × 20 = 20 billion reads/day
+Read QPS = 20B / 100K = 200,000 QPS
+Peak read QPS = 200,000 × 3 = 600,000 QPS
+```
+
+**3. Storage (5 years)**:
+```
+Daily storage = 200M posts × 1 KB = 200 GB/day
+Yearly storage = 200 GB × 365 = 73 TB/year ≈ 75 TB/year
+5-year storage = 75 TB × 5 = 375 TB
+
+With replication (3x): 375 TB × 3 = 1.1 PB
+```
+
+**4. Bandwidth**:
+```
+Peak read QPS = 600,000 QPS
+Posts per request = 20
+Size per post = 1 KB
+Response size = 20 × 1 KB = 20 KB per request
+
+Bandwidth = 600K × 20 KB = 12 GB/s = 96 Gbps
+
+This requires multiple servers and CDN for global distribution.
+```
+
+---
+
+### Problem 4: Design a File Storage System
+
+**Given**:
+- 10 million users
+- Average user stores 1,000 files
+- Average file size: 5 MB
+- 10% of users are active daily
+- Active users upload 10 files per day
+
+**Calculate**:
+1. Total storage needed
+2. Daily upload QPS
+3. Daily download QPS (assume users download 5 files/day)
+4. Bandwidth for uploads and downloads
+
+**Solution**:
+
+**1. Total storage**:
+```
+Total files = 10M users × 1,000 files = 10 billion files
+Total storage = 10B × 5 MB = 50 PB
+
+With replication (3x): 50 PB × 3 = 150 PB
+```
+
+**2. Upload QPS**:
+```
+Active users = 10M × 10% = 1M users
+Daily uploads = 1M × 10 files = 10M files/day
+Upload QPS = 10M / 100K = 100 QPS
+Peak upload QPS = 100 × 3 = 300 QPS
+```
+
+**3. Download QPS**:
+```
+Daily downloads = 1M × 5 files = 5M files/day
+Download QPS = 5M / 100K = 50 QPS
+Peak download QPS = 50 × 3 = 150 QPS
+```
+
+**4. Bandwidth**:
+```
+Upload bandwidth:
+Peak upload QPS = 300 QPS
+File size = 5 MB
+Upload bandwidth = 300 × 5 MB = 1.5 GB/s = 12 Gbps
+
+Download bandwidth:
+Peak download QPS = 150 QPS
+File size = 5 MB
+Download bandwidth = 150 × 5 MB = 750 MB/s = 6 Gbps
+
+Total bandwidth = 12 + 6 = 18 Gbps
+```
+
+---
+
+### Problem 5: Design a Search Engine
+
+**Given**:
+- 1 billion web pages indexed
+- Average page size: 50 KB (text content)
+- 100 million searches per day
+- Average search returns 10 results
+- Index stored for 1 year
+
+**Calculate**:
+1. Total index storage
+2. Search QPS
+3. Bandwidth for search results
+4. Cache size for popular searches
+
+**Solution**:
+
+**1. Index storage**:
+```
+Total pages = 1B pages
+Size per page = 50 KB
+Total index = 1B × 50 KB = 50 TB
+
+With replication (3x): 50 TB × 3 = 150 TB
+```
+
+**2. Search QPS**:
+```
+Daily searches = 100M searches/day
+Search QPS = 100M / 100K = 1,000 QPS
+Peak search QPS = 1,000 × 3 = 3,000 QPS
+```
+
+**3. Bandwidth**:
+```
+Peak search QPS = 3,000 QPS
+Results per search = 10
+Metadata per result = 1 KB
+Response size = 10 × 1 KB = 10 KB
+
+Bandwidth = 3,000 × 10 KB = 30 MB/s = 240 Mbps
+
+Very manageable bandwidth.
+```
+
+**4. Cache size**:
+```
+Popular searches = 20% of searches (80/20 rule)
+Daily popular searches = 100M × 20% = 20M searches
+Cache these for 1 day
+
+Cache size = 20M × 10 KB = 200 GB
+
+Fits in Redis cluster.
+```
+
+---
+
+### Problem 6: Design a Notification System
+
+**Given**:
+- 500 million users
+- Average user receives 10 notifications per day
+- Notification size: 500 bytes
+- 50% of users are active daily
+- Notifications delivered in real-time (<100ms latency)
+
+**Calculate**:
+1. Notification QPS
+2. Storage for notifications (30 days retention)
+3. Bandwidth for delivery
+4. Cache size for unread notifications
+
+**Solution**:
+
+**1. Notification QPS**:
+```
+Active users = 500M × 50% = 250M users
+Daily notifications = 250M × 10 = 2.5 billion/day
+Notification QPS = 2.5B / 100K = 25,000 QPS
+Peak notification QPS = 25,000 × 3 = 75,000 QPS
+```
+
+**2. Storage (30 days)**:
+```
+Daily storage = 2.5B × 500 bytes = 1.25 TB/day
+30-day storage = 1.25 TB × 30 = 37.5 TB ≈ 40 TB
+
+With replication (3x): 40 TB × 3 = 120 TB
+```
+
+**3. Bandwidth**:
+```
+Peak notification QPS = 75,000 QPS
+Notification size = 500 bytes
+Bandwidth = 75K × 500 bytes = 37.5 MB/s = 300 Mbps
+
+Manageable, but need global distribution for low latency.
+```
+
+**4. Cache size (unread notifications)**:
+```
+Active users = 250M
+Average unread notifications = 5 per user
+Cache size = 250M × 5 × 500 bytes = 625 GB
+
+Need Redis cluster for this.
+```
+
+---
+
+### Problem 7: Design an E-commerce Product Catalog
+
+**Given**:
+- 10 million products
+- Average product data: 10 KB (name, description, images metadata)
+- 50 million daily active users
+- Average user views 20 products per day
+- Products updated 1% per day
+
+**Calculate**:
+1. Total product storage
+2. Read QPS (product views)
+3. Write QPS (product updates)
+4. Cache size for popular products
+
+**Solution**:
+
+**1. Total storage**:
+```
+Total products = 10M
+Size per product = 10 KB
+Total storage = 10M × 10 KB = 100 GB
+
+With replication (3x): 100 GB × 3 = 300 GB
+```
+
+**2. Read QPS**:
+```
+Daily product views = 50M users × 20 views = 1 billion views/day
+Read QPS = 1B / 100K = 10,000 QPS
+Peak read QPS = 10,000 × 3 = 30,000 QPS
+```
+
+**3. Write QPS**:
+```
+Products updated = 10M × 1% = 100K products/day
+Write QPS = 100K / 100K = 1 QPS
+Peak write QPS = 1 × 3 = 3 QPS
+
+Very write-light system.
+```
+
+**4. Cache size**:
+```
+Popular products = 20% (80/20 rule)
+Popular products = 10M × 20% = 2M products
+Cache size = 2M × 10 KB = 20 GB
+
+Easily fits in single Redis instance.
+```
+
+---
+
+### Problem 8: Design a Real-time Analytics Dashboard
+
+**Given**:
+- 1 million events per second (peak)
+- Average event size: 1 KB
+- Events stored for 7 days
+- Dashboard serves 10,000 concurrent users
+- Each user refreshes dashboard every 10 seconds
+
+**Calculate**:
+1. Storage for 7 days
+2. Dashboard read QPS
+3. Bandwidth for event ingestion
+4. Bandwidth for dashboard delivery
+
+**Solution**:
+
+**1. Storage (7 days)**:
+```
+Peak events = 1M events/sec
+Average events = 1M / 3 = 333K events/sec (assuming 3x peak multiplier)
+Daily events = 333K × 100K seconds = 33.3 billion events/day
+
+Event size = 1 KB
+Daily storage = 33.3B × 1 KB = 33.3 TB/day
+7-day storage = 33.3 TB × 7 = 233 TB ≈ 250 TB
+
+With replication (3x): 250 TB × 3 = 750 TB
+```
+
+**2. Dashboard read QPS**:
+```
+Concurrent users = 10,000
+Refresh rate = every 10 seconds
+Read QPS = 10,000 / 10 = 1,000 QPS
+```
+
+**3. Event ingestion bandwidth**:
+```
+Peak events = 1M events/sec
+Event size = 1 KB
+Ingestion bandwidth = 1M × 1 KB = 1 GB/s = 8 Gbps
+
+Requires multiple ingestion servers.
+```
+
+**4. Dashboard delivery bandwidth**:
+```
+Read QPS = 1,000 QPS
+Average dashboard response = 100 KB (aggregated data)
+Bandwidth = 1,000 × 100 KB = 100 MB/s = 800 Mbps
+
+Manageable bandwidth.
+```
+
+---
+
+### Problem 9: Design a Gaming Leaderboard
+
+**Given**:
+- 10 million players
+- Average player plays 10 games per day
+- Each game generates 1 score update
+- Leaderboard shows top 1,000 players
+- Scores stored for 30 days
+
+**Calculate**:
+1. Score update QPS
+2. Leaderboard read QPS (assume 1M reads/day)
+3. Storage for scores (30 days)
+4. Cache size for leaderboard
+
+**Solution**:
+
+**1. Score update QPS**:
+```
+Daily games = 10M players × 10 games = 100M games/day
+Score updates = 100M (1 per game)
+Update QPS = 100M / 100K = 1,000 QPS
+Peak update QPS = 1,000 × 3 = 3,000 QPS
+```
+
+**2. Leaderboard read QPS**:
+```
+Daily reads = 1M reads/day
+Read QPS = 1M / 100K = 10 QPS
+Peak read QPS = 10 × 3 = 30 QPS
+```
+
+**3. Storage (30 days)**:
+```
+Daily scores = 100M scores/day
+Score size = 100 bytes (player_id, score, timestamp)
+Daily storage = 100M × 100 bytes = 10 GB/day
+30-day storage = 10 GB × 30 = 300 GB
+
+With replication (3x): 300 GB × 3 = 900 GB
+```
+
+**4. Cache size**:
+```
+Leaderboard = top 1,000 players
+Score entry = 100 bytes
+Cache size = 1,000 × 100 bytes = 100 KB
+
+Tiny cache! Can store in application memory.
+```
+
+---
+
+### Problem 10: Design a Video Streaming Service
+
+**Given**:
+- 50 million daily active users
+- Average user watches 5 videos per day
+- Average video length: 10 minutes
+- Average bitrate: 5 Mbps (HD quality)
+- Videos stored in 4 quality levels (360p, 720p, 1080p, 4K)
+- Average storage per minute: 50 MB (single quality)
+
+**Calculate**:
+1. Video view QPS
+2. Storage for videos (assume 1M total videos, average 10 min)
+3. Streaming bandwidth (outbound)
+4. Cache size for popular videos
+
+**Solution**:
+
+**1. Video view QPS**:
+```
+Daily views = 50M users × 5 videos = 250M views/day
+View QPS = 250M / 100K = 2,500 QPS
+Peak view QPS = 2,500 × 3 = 7,500 QPS
+```
+
+**2. Storage**:
+```
+Total videos = 1M videos
+Average length = 10 minutes
+Storage per video (single quality) = 10 min × 50 MB = 500 MB
+Storage per video (4 qualities) = 500 MB × 2 (average) = 1 GB
+
+Total storage = 1M × 1 GB = 1 PB
+
+With replication (3x): 1 PB × 3 = 3 PB
+```
+
+**3. Streaming bandwidth**:
+```
+Peak view QPS = 7,500 QPS
+Average view duration = 5 minutes (not all watch full video)
+Concurrent streams = 7,500 × 300 seconds = 2.25M concurrent streams
+
+Bitrate = 5 Mbps
+Bandwidth = 2.25M × 5 Mbps = 11.25 Tbps
+
+This requires massive CDN with thousands of edge servers globally.
+```
+
+**4. Cache size**:
+```
+Popular videos = 1% (viral + recent)
+Popular videos = 1M × 1% = 10K videos
+Cache metadata per video = 10 KB
+Cache size = 10K × 10 KB = 100 MB
+
+Very small cache for metadata. Video content served from CDN.
+```
+
+---
+
+### Problem 11: Design a Distributed Logging System
+
+**Given**:
+- 1,000 application servers
+- Each server generates 1,000 log entries per second
+- Average log entry: 1 KB
+- Logs stored for 90 days
+- 100 analysts query logs (10 queries per analyst per day)
+
+**Calculate**:
+1. Total log ingestion QPS
+2. Storage for 90 days
+3. Query QPS
+4. Bandwidth for log ingestion
+
+**Solution**:
+
+**1. Log ingestion QPS**:
+```
+Servers = 1,000
+Logs per server = 1,000 logs/sec
+Total ingestion = 1,000 × 1,000 = 1M logs/sec = 1M QPS
+```
+
+**2. Storage (90 days)**:
+```
+Daily logs = 1M logs/sec × 100K seconds = 100 billion logs/day
+Log size = 1 KB
+Daily storage = 100B × 1 KB = 100 TB/day
+90-day storage = 100 TB × 90 = 9 PB
+
+With replication (3x): 9 PB × 3 = 27 PB
+```
+
+**3. Query QPS**:
+```
+Analysts = 100
+Queries per analyst = 10 queries/day
+Daily queries = 100 × 10 = 1,000 queries/day
+Query QPS = 1,000 / 100K = 0.01 QPS
+
+Very low query rate (analytical workload).
+```
+
+**4. Ingestion bandwidth**:
+```
+Ingestion QPS = 1M logs/sec
+Log size = 1 KB
+Bandwidth = 1M × 1 KB = 1 GB/s = 8 Gbps
+
+Requires distributed ingestion across multiple servers.
+```
+
+---
+
+### Problem 12: Design a Recommendation System
+
+**Given**:
+- 100 million users
+- 10 million items (products, videos, etc.)
+- Average user-item interaction: 1 KB
+- 50 million daily active users
+- Average user has 100 interactions per day
+- Recommendations computed daily for all users
+
+**Calculate**:
+1. Interaction write QPS
+2. Storage for interactions (1 year)
+3. Recommendation computation load
+4. Cache size for recommendations
+
+**Solution**:
+
+**1. Interaction write QPS**:
+```
+Active users = 50M
+Interactions per user = 100/day
+Daily interactions = 50M × 100 = 5 billion/day
+Write QPS = 5B / 100K = 50,000 QPS
+Peak write QPS = 50K × 3 = 150,000 QPS
+```
+
+**2. Storage (1 year)**:
+```
+Daily interactions = 5B
+Interaction size = 1 KB
+Daily storage = 5B × 1 KB = 5 TB/day
+Yearly storage = 5 TB × 365 = 1.8 PB/year ≈ 2 PB/year
+
+With replication (3x): 2 PB × 3 = 6 PB
+```
+
+**3. Recommendation computation**:
+```
+Users = 100M
+Recommendations computed daily
+Recommendations per user = 100
+Total recommendations = 100M × 100 = 10 billion/day
+
+If computed over 1 hour:
+Computation rate = 10B / 3,600 seconds = 2.8M recommendations/sec
+
+Requires distributed computation (Spark, Hadoop, etc.)
+```
+
+**4. Cache size**:
+```
+Active users = 50M
+Recommendations per user = 100
+Recommendation size = 1 KB (item IDs + scores)
+Cache size = 50M × 100 × 1 KB = 5 TB
+
+Too large for single cache. Need distributed cache or 
+cache only top 10 recommendations per user = 500 GB
+```
+
+---
+
+### Problem 13: Design a Payment Processing System
+
+**Given**:
+- 10 million transactions per day
+- Average transaction: 2 KB
+- Transactions stored for 7 years (compliance)
+- 1 million daily active users
+- Average user makes 2 payments per day
+
+**Calculate**:
+1. Transaction QPS
+2. Storage for 7 years
+3. Bandwidth for transaction processing
+4. Cache size for recent transactions
+
+**Solution**:
+
+**1. Transaction QPS**:
+```
+Daily transactions = 10M transactions/day
+Transaction QPS = 10M / 100K = 100 QPS
+Peak transaction QPS = 100 × 3 = 300 QPS
+```
+
+**2. Storage (7 years)**:
+```
+Daily transactions = 10M
+Transaction size = 2 KB
+Daily storage = 10M × 2 KB = 20 GB/day
+Yearly storage = 20 GB × 365 = 7.3 TB/year
+7-year storage = 7.3 TB × 7 = 51 TB
+
+With replication (3x): 51 TB × 3 = 153 TB
+```
+
+**3. Bandwidth**:
+```
+Peak transaction QPS = 300 QPS
+Transaction size = 2 KB
+Bandwidth = 300 × 2 KB = 600 KB/s = 4.8 Mbps
+
+Very manageable bandwidth.
+```
+
+**4. Cache size**:
+```
+Recent transactions = last 24 hours
+Daily transactions = 10M
+Transaction size = 2 KB
+Cache size = 10M × 2 KB = 20 GB
+
+Fits in Redis instance.
+```
+
+---
+
+### Problem 14: Design a Content Delivery Network (CDN)
+
+**Given**:
+- 1 billion requests per day
+- Average response size: 500 KB
+- 80% cache hit rate
+- 20% requests go to origin
+- Global distribution across 50 edge locations
+
+**Calculate**:
+1. Total request QPS
+2. Origin request QPS (cache misses)
+3. Total bandwidth (edge + origin)
+4. Storage per edge location (cache 1% of content)
+
+**Solution**:
+
+**1. Total request QPS**:
+```
+Daily requests = 1B requests/day
+Request QPS = 1B / 100K = 10,000 QPS
+Peak request QPS = 10K × 3 = 30,000 QPS
+```
+
+**2. Origin request QPS**:
+```
+Cache hit rate = 80%
+Cache miss rate = 20%
+Origin QPS = 10K × 20% = 2,000 QPS
+Peak origin QPS = 2K × 3 = 6,000 QPS
+```
+
+**3. Total bandwidth**:
+```
+Edge bandwidth (serving cached content):
+Peak edge QPS = 30K × 80% = 24,000 QPS
+Response size = 500 KB
+Edge bandwidth = 24K × 500 KB = 12 GB/s = 96 Gbps
+
+Origin bandwidth (cache misses):
+Peak origin QPS = 6,000 QPS
+Response size = 500 KB
+Origin bandwidth = 6K × 500 KB = 3 GB/s = 24 Gbps
+
+Total bandwidth = 96 + 24 = 120 Gbps
+```
+
+**4. Storage per edge**:
+```
+Total content = Assume 1M unique items
+Cache 1% = 1M × 1% = 10K items
+Item size = 500 KB
+Storage per edge = 10K × 500 KB = 5 GB
+
+Very small per edge, but 50 edges × 5 GB = 250 GB total cache
+```
+
+---
+
+### Problem 15: Design a Distributed File System
+
+**Given**:
+- 100 million files
+- Average file size: 10 MB
+- 10,000 concurrent users
+- Average user uploads 5 files per day
+- Average user downloads 10 files per day
+- Files stored for 5 years
+
+**Calculate**:
+1. Total storage
+2. Upload QPS
+3. Download QPS
+4. Bandwidth requirements
+
+**Solution**:
+
+**1. Total storage**:
+```
+Total files = 100M
+Average file size = 10 MB
+Total storage = 100M × 10 MB = 1 PB
+
+With replication (3x): 1 PB × 3 = 3 PB
+```
+
+**2. Upload QPS**:
+```
+Concurrent users = 10K
+Uploads per user = 5 files/day
+Daily uploads = 10K × 5 = 50K files/day
+Upload QPS = 50K / 100K = 0.5 QPS
+Peak upload QPS = 0.5 × 3 = 1.5 QPS
+```
+
+**3. Download QPS**:
+```
+Downloads per user = 10 files/day
+Daily downloads = 10K × 10 = 100K files/day
+Download QPS = 100K / 100K = 1 QPS
+Peak download QPS = 1 × 3 = 3 QPS
+```
+
+**4. Bandwidth**:
+```
+Upload bandwidth:
+Peak upload QPS = 1.5 QPS
+File size = 10 MB
+Upload bandwidth = 1.5 × 10 MB = 15 MB/s = 120 Mbps
+
+Download bandwidth:
+Peak download QPS = 3 QPS
+File size = 10 MB
+Download bandwidth = 3 × 10 MB = 30 MB/s = 240 Mbps
+
+Total bandwidth = 120 + 240 = 360 Mbps
+```
+
+---
+
+## Practice Tips
+
+1. **Start with assumptions**: Always state your assumptions clearly
+2. **Show your work**: Write out calculations step by step
+3. **Use round numbers**: 100K seconds per day, 3x peak multiplier
+4. **Include replication**: Multiply storage by 3 for redundancy
+5. **Consider peak traffic**: Always calculate peak (3x average)
+6. **Check reasonableness**: Does your answer make sense?
+7. **Identify bottlenecks**: Which number is the constraint?
+
+---
+
 ## 🔟 One Clean Mental Summary
 
 Back-of-envelope calculations are about getting the right order of magnitude, not precision. Master four calculations: QPS (traffic), storage, bandwidth, and cache sizing. Use round numbers and simplify aggressively. One day is 100,000 seconds. One million daily actions equals 10 QPS.

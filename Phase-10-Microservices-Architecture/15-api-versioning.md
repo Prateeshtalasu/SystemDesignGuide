@@ -1051,6 +1051,421 @@ public OrderResponse getOrder(@PathVariable String orderId) {
 
 ---
 
+## 8️⃣ Semantic Versioning and Backward Compatibility Strategies
+
+### Semantic Versioning (SemVer) for APIs
+
+Semantic versioning uses a three-part version number: `MAJOR.MINOR.PATCH` (e.g., `v2.1.3`).
+
+**Version Number Meaning:**
+- **MAJOR** (v2 → v3): Breaking changes that require client updates
+- **MINOR** (v2.1 → v2.2): New features, backward compatible
+- **PATCH** (v2.1.0 → v2.1.1): Bug fixes, backward compatible
+
+**API Versioning with SemVer:**
+
+```java
+// Version 2.1.0 API
+@RestController
+@RequestMapping("/v2/orders")
+public class OrderV2Controller {
+    
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderV2Response> getOrder(@PathVariable String orderId) {
+        // v2.1.0: Added discount field (minor version, backward compatible)
+        Order order = orderService.getOrder(orderId);
+        return ResponseEntity.ok(mapToV2(order));
+    }
+}
+
+// Version 2.2.0 API (same endpoint, backward compatible)
+@RestController
+@RequestMapping("/v2/orders")
+public class OrderV2Controller {
+    
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderV2Response> getOrder(@PathVariable String orderId) {
+        // v2.2.0: Added tax breakdown (minor version, backward compatible)
+        // Old clients still work, new clients get additional fields
+        Order order = orderService.getOrder(orderId);
+        return ResponseEntity.ok(mapToV2(order));
+    }
+}
+
+// Version 3.0.0 API (breaking changes, new major version)
+@RestController
+@RequestMapping("/v3/orders")
+public class OrderV3Controller {
+    
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderV3Response> getOrder(@PathVariable String orderId) {
+        // v3.0.0: Changed field names (breaking change)
+        // Old v2 clients won't work, need to migrate
+        Order order = orderService.getOrder(orderId);
+        return ResponseEntity.ok(mapToV3(order));
+    }
+}
+```
+
+**SemVer Decision Tree:**
+
+```
+Is the change breaking?
+├─ YES → Increment MAJOR version (v2 → v3)
+│         - Remove fields
+│         - Rename fields
+│         - Change field types
+│         - Make optional fields required
+│         - Remove endpoints
+│
+└─ NO → Is it a new feature?
+        ├─ YES → Increment MINOR version (v2.1 → v2.2)
+        │         - Add optional fields
+        │         - Add new endpoints
+        │         - Add new query parameters
+        │
+        └─ NO → Increment PATCH version (v2.1.0 → v2.1.1)
+                  - Bug fixes
+                  - Performance improvements
+                  - Documentation updates
+```
+
+### Backward Compatibility Strategies
+
+Backward compatibility means new API versions work with old clients without breaking them.
+
+#### Strategy 1: Additive Changes Only
+
+**Principle**: Only add, never remove or change existing fields.
+
+**Example:**
+
+```java
+// v1.0 Response
+{
+  "orderId": "123",
+  "total": 100.00
+}
+
+// v1.1 Response (backward compatible)
+{
+  "orderId": "123",
+  "total": 100.00,
+  "discount": 10.00  // NEW field, optional
+}
+
+// v1.2 Response (backward compatible)
+{
+  "orderId": "123",
+  "total": 100.00,
+  "discount": 10.00,
+  "tax": 9.00,       // NEW field, optional
+  "items": [...]     // NEW field, optional
+}
+```
+
+**Implementation:**
+
+```java
+// DTO with optional fields
+public class OrderResponse {
+    private String orderId;      // Required (existing)
+    private BigDecimal total;    // Required (existing)
+    private BigDecimal discount; // Optional (new in v1.1)
+    private BigDecimal tax;      // Optional (new in v1.2)
+    private List<Item> items;    // Optional (new in v1.2)
+    
+    // Jackson: @JsonInclude(JsonInclude.Include.NON_NULL)
+    // Only include non-null fields in response
+}
+```
+
+**Benefits:**
+- Old clients continue working
+- New clients can use new features
+- No versioning needed for minor changes
+
+**Limitations:**
+- Can't remove deprecated fields
+- Can't rename fields
+- Response size grows over time
+
+#### Strategy 2: Field Deprecation with Sunset
+
+**Principle**: Mark fields as deprecated, remove in next major version.
+
+**Example:**
+
+```java
+public class OrderResponse {
+    @Deprecated
+    @JsonProperty("orderId")  // Keep for backward compatibility
+    private String orderId;
+    
+    @JsonProperty("id")      // New field name
+    private String id;
+    
+    // Deprecation notice in response
+    @JsonIgnore
+    public Map<String, String> getDeprecationWarnings() {
+        return Map.of(
+            "orderId", "Deprecated in v2.0, use 'id' instead. Will be removed in v3.0"
+        );
+    }
+}
+```
+
+**HTTP Headers for Deprecation:**
+
+```java
+@GetMapping("/{orderId}")
+public ResponseEntity<OrderResponse> getOrder(@PathVariable String orderId) {
+    OrderResponse response = orderService.getOrder(orderId);
+    
+    HttpHeaders headers = new HttpHeaders();
+    headers.add("Deprecation", "true");
+    headers.add("Sunset", "Sat, 31 Dec 2024 23:59:59 GMT");
+    headers.add("Link", "</v2/orders/{orderId}>; rel=\"successor-version\"");
+    headers.add("Warning", "299 - \"orderId field is deprecated, use 'id' instead\"");
+    
+    return ResponseEntity.ok()
+        .headers(headers)
+        .body(response);
+}
+```
+
+#### Strategy 3: Default Values for Missing Fields
+
+**Principle**: Provide sensible defaults when clients don't send new fields.
+
+**Example:**
+
+```java
+// v1.0 Request
+{
+  "orderId": "123",
+  "amount": 100.00
+}
+
+// v1.1 Request (backward compatible)
+{
+  "orderId": "123",
+  "amount": 100.00,
+  "currency": "USD"  // NEW field
+}
+
+// Server handles both:
+public Order createOrder(OrderRequest request) {
+    // Default currency if not provided (backward compatible)
+    String currency = request.getCurrency() != null 
+        ? request.getCurrency() 
+        : "USD";  // Default
+    
+    return orderService.create(request.getOrderId(), request.getAmount(), currency);
+}
+```
+
+#### Strategy 4: Version Negotiation
+
+**Principle**: Server supports multiple versions, client negotiates best version.
+
+**Example:**
+
+```java
+@GetMapping("/orders/{orderId}")
+public ResponseEntity<?> getOrder(
+        @PathVariable String orderId,
+        @RequestHeader(value = "API-Version", required = false) String requestedVersion,
+        @RequestHeader(value = "Accept", required = false) String accept) {
+    
+    // Determine client's preferred version
+    String clientVersion = determineClientVersion(requestedVersion, accept);
+    
+    // Return appropriate version
+    Order order = orderService.getOrder(orderId);
+    
+    if (clientVersion == null || clientVersion.startsWith("v1")) {
+        return ResponseEntity.ok()
+            .header("API-Version", "v1.0")
+            .body(mapToV1(order));
+    } else if (clientVersion.startsWith("v2")) {
+        return ResponseEntity.ok()
+            .header("API-Version", "v2.1")
+            .body(mapToV2(order));
+    } else {
+        return ResponseEntity.badRequest()
+            .body(new ErrorResponse("Unsupported API version: " + clientVersion));
+    }
+}
+```
+
+#### Strategy 5: Parallel Versions with Migration Path
+
+**Principle**: Run both versions simultaneously, provide migration guide.
+
+**Migration Timeline Example:**
+
+```
+Month 1-3: v1 and v2 both supported
+  - v1: Deprecated, sunset in 6 months
+  - v2: Active, recommended
+  - Clients can migrate gradually
+
+Month 4-6: v1 deprecation period
+  - v1: Still works, but warnings in headers
+  - v2: Fully supported
+  - Migration assistance provided
+
+Month 7+: v1 removed
+  - Only v2 supported
+  - v1 requests return 410 Gone
+```
+
+**Implementation:**
+
+```java
+@GetMapping("/v1/orders/{orderId}")
+@Deprecated
+public ResponseEntity<OrderV1Response> getOrderV1(@PathVariable String orderId) {
+    // Check if v1 is still supported
+    if (isVersionDeprecated("v1")) {
+        return ResponseEntity.status(HttpStatus.GONE)
+            .header("Link", "</v2/orders/{orderId}>; rel=\"successor-version\"")
+            .body(null);
+    }
+    
+    // Add deprecation warnings
+    HttpHeaders headers = new HttpHeaders();
+    headers.add("Deprecation", "true");
+    headers.add("Sunset", getSunsetDate("v1"));
+    headers.add("Link", "</v2/orders/{orderId}>; rel=\"successor-version\"");
+    
+    Order order = orderService.getOrder(orderId);
+    return ResponseEntity.ok()
+        .headers(headers)
+        .body(mapToV1(order));
+}
+```
+
+### Backward Compatibility Checklist
+
+**When making API changes, ask:**
+
+1. **Will old clients break?**
+   - ✅ Adding optional fields → Safe
+   - ✅ Adding new endpoints → Safe
+   - ❌ Removing fields → Breaking
+   - ❌ Renaming fields → Breaking
+   - ❌ Changing field types → Breaking
+
+2. **Can we maintain both?**
+   - If yes → Use versioning
+   - If no → Consider backward-compatible alternative
+
+3. **What's the migration path?**
+   - How long will clients need to migrate?
+   - What support will we provide?
+   - What's the deprecation timeline?
+
+### Real-World Backward Compatibility Examples
+
+**Stripe API (Date-Based Versioning):**
+
+```http
+Stripe-Version: 2020-08-27
+```
+
+- Each date is a version snapshot
+- Old versions maintained for years
+- New versions add features, maintain compatibility
+- Breaking changes only in new date versions
+
+**GitHub API (URL Versioning):**
+
+```http
+GET /v3/repos/owner/repo
+GET /v4 (GraphQL)
+```
+
+- v3: REST API, maintained since 2013
+- v4: GraphQL API, different paradigm
+- Both maintained simultaneously
+- Clear deprecation notices
+
+**Twitter API (URL Versioning):**
+
+```http
+GET /1.1/statuses/user_timeline.json
+GET /2/tweets
+```
+
+- v1.1: Legacy REST API
+- v2: Modern REST API
+- Gradual migration path
+- v1.1 still supported for legacy clients
+
+### Best Practices for Backward Compatibility
+
+1. **Design for Evolution**
+   - Make fields optional when possible
+   - Use extensible data structures
+   - Avoid tight coupling to specific formats
+
+2. **Document Changes**
+   - Changelog for each version
+   - Migration guides
+   - Deprecation timelines
+
+3. **Monitor Usage**
+   - Track which versions are used
+   - Identify clients on deprecated versions
+   - Proactively reach out for migration
+
+4. **Provide Migration Tools**
+   - Code examples for migration
+   - Automated migration scripts
+   - Testing tools for new versions
+
+5. **Set Clear Expectations**
+   - How long versions are supported
+   - When deprecation happens
+   - What happens after sunset date
+
+### Backward Compatibility Anti-Patterns
+
+**Anti-Pattern 1: Breaking Changes Without Versioning**
+
+```java
+// BAD: Changed field name without versioning
+// v1.0: { "orderId": "123" }
+// v1.1: { "id": "123" }  // BREAKS all v1.0 clients!
+```
+
+**Anti-Pattern 2: Too Many Versions**
+
+```java
+// BAD: Maintaining 10 versions
+/v1/orders, /v2/orders, /v3/orders, ..., /v10/orders
+// Maintenance nightmare
+```
+
+**Anti-Pattern 3: No Deprecation Strategy**
+
+```java
+// BAD: No warning before removing version
+// One day v1 just stops working
+// Clients are surprised and angry
+```
+
+**Anti-Pattern 4: Breaking Changes in Minor Versions**
+
+```java
+// BAD: v2.1 removes a field (should be v3.0)
+// Clients expect backward compatibility in minor versions
+```
+
+---
+
 ## 8️⃣ When NOT to Use This
 
 ### Anti-Patterns and Misuse Cases

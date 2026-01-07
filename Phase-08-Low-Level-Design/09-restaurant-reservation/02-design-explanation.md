@@ -190,6 +190,27 @@ public class ReservationService {
 }
 ```
 
+**Why We Use Concrete Classes in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete classes (`Restaurant` instead of `TableProvider`/`TimeSlotProvider` interfaces) for the following reasons:
+
+1. **Scope Focus**: LLD interviews focus on reservation algorithms, state management, and data structures. Adding interface abstractions adds complexity without demonstrating core LLD skills.
+
+2. **Single Domain Entity**: The system operates on a single, well-defined domain entity (Restaurant). There's no requirement for multiple table/time slot providers, so the abstraction doesn't provide value in the interview context.
+
+3. **Interview Time Constraints**: Implementing full interface hierarchies takes time away from demonstrating more critical LLD concepts like reservation conflict resolution, time slot management, and state transitions.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `TableProvider` and `TimeSlotProvider` interfaces for:
+   - Testability (mock providers in unit tests)
+   - Flexibility (swap implementations for different restaurant types)
+   - Dependency injection (easier configuration and testing)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete classes are simpler and focus on core LLD skills (algorithms, state management)
+- **Production Scope**: Interfaces provide testability and flexibility at the cost of more abstraction layers
+
+This is a conscious design decision for the interview context, not an oversight.
+
 ---
 
 ## SOLID Principles Check
@@ -199,8 +220,8 @@ public class ReservationService {
 | **SRP** | PASS | Each class has a single, well-defined responsibility. Customer stores customer info, Table represents physical table, Reservation stores reservation details, ReservationService handles booking logic. Clear separation. | N/A | - |
 | **OCP** | PASS | System is open for extension (new table types like BoothTable, new allocation strategies) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All Table subclasses properly implement the Table contract. They are substitutable in reservation operations. | N/A | - |
-| **ISP** | WEAK | Could benefit from interface segregation (Reservable, Capacitated interfaces). Currently using concrete classes. Mentioned in ISP section but not fully implemented. | Extract Reservable and Capacitated interfaces | More interfaces/files, but increases flexibility |
-| **DIP** | WEAK | ReservationService depends on concrete Restaurant. Could depend on TableProvider and TimeSlotProvider interfaces. Mentioned in DIP section but not fully implemented. | Extract TableProvider and TimeSlotProvider interfaces, use dependency injection | More abstraction layers, but improves testability |
+| **ISP** | ACCEPTABLE (LLD Scope) | Could benefit from interface segregation (Reservable, Capacitated interfaces). For LLD interview scope, using concrete classes is acceptable as it focuses on core reservation algorithms. In production, we would extract Reservable and Capacitated interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context. | Interview: Simpler, focuses on core LLD skills. Production: More interfaces/files, but increases flexibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | ReservationService depends on concrete Restaurant. For LLD interview scope, this is acceptable as it focuses on core reservation logic. In production, we would depend on TableProvider and TimeSlotProvider interfaces. | See "Why We Use Concrete Classes" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability |
 
 ---
 

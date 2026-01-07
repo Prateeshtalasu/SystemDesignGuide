@@ -506,6 +506,1148 @@ Action needed: DB upgrade before month 4
 
 ---
 
+## 7️⃣ Additional Follow-ups with Detailed Answers
+
+### Database Follow-ups (Continued)
+
+#### Follow-up 5: "How do you handle backup and recovery?"
+
+**Answer**:
+"Backup and recovery strategy depends on RTO (Recovery Time Objective) and RPO (Recovery Point Objective).
+
+**Backup Strategy**:
+1. **Full backups**: Weekly or monthly, depending on data volume
+2. **Incremental backups**: Daily, only changed data
+3. **Continuous backup**: WAL (Write-Ahead Log) archiving for point-in-time recovery
+
+**Storage**:
+- Store backups in different region (disaster recovery)
+- Encrypt backups (security)
+- Test restore regularly (verify backups work)
+
+**Recovery Process**:
+- **Point-in-time recovery**: Restore full backup + apply WAL logs to specific time
+- **RTO target**: How fast? 1 hour? 24 hours?
+- **RPO target**: How much data loss acceptable? 1 hour? 1 day?
+
+**Example**:
+- Full backup: Weekly, stored in S3 (different region)
+- Incremental: Daily
+- WAL archiving: Continuous
+- RTO: 1 hour (automated restore)
+- RPO: 5 minutes (WAL archiving every 5 min)
+
+**Testing**:
+- Monthly restore tests to verify process
+- Documented runbook for recovery"
+
+#### Follow-up 6: "What indexes would you create?"
+
+**Answer**:
+"Indexes are critical for query performance. I'd create indexes based on query patterns:
+
+**Primary indexes**:
+- Primary key (automatic in most DBs)
+- Foreign keys (for joins)
+
+**Query-based indexes**:
+- Columns in WHERE clauses
+- Columns in JOIN conditions
+- Columns in ORDER BY
+
+**Example for user table**:
+```sql
+-- Primary key (automatic)
+PRIMARY KEY (user_id)
+
+-- Email lookups (login)
+CREATE INDEX idx_email ON users(email);
+
+-- Username searches
+CREATE INDEX idx_username ON users(username);
+
+-- Composite index for common query
+CREATE INDEX idx_status_created ON users(status, created_at);
+```
+
+**Trade-offs**:
+- **Reads**: Faster queries
+- **Writes**: Slower inserts/updates (index maintenance)
+- **Storage**: Additional disk space
+
+**Monitoring**:
+- Track index usage (unused indexes waste space)
+- Monitor query performance
+- Add indexes based on slow query logs"
+
+#### Follow-up 7: "How do you handle connection pooling?"
+
+**Answer**:
+"Connection pooling is essential for database performance. Each database connection has overhead.
+
+**Why pooling matters**:
+- Creating connections is expensive (TCP handshake, authentication)
+- Databases have connection limits (typically 100-1000)
+- Without pooling, each request creates a new connection
+
+**Configuration**:
+- **Min connections**: Keep warm connections ready (e.g., 10)
+- **Max connections**: Don't exceed DB limit (e.g., 100)
+- **Idle timeout**: Close unused connections after X minutes
+- **Connection timeout**: Fail fast if can't get connection
+
+**Example**:
+```
+Application servers: 10
+Connections per server: 10 (min) to 20 (max)
+Total connections: 100-200
+Database max connections: 500
+Headroom: 300 connections for other services
+```
+
+**Monitoring**:
+- Connection pool utilization
+- Wait time for connections
+- Connection errors
+
+**Common issues**:
+- **Connection leaks**: Connections not returned to pool
+- **Too many connections**: Exceeding DB limit
+- **Too few connections**: Requests waiting for connections"
+
+#### Follow-up 8: "What's your replication strategy?"
+
+**Answer**:
+"Replication strategy depends on read/write ratio and consistency needs.
+
+**Read replicas** (most common):
+- Primary handles writes
+- Replicas handle reads
+- Async replication (eventual consistency)
+- Use case: Read-heavy workloads
+
+**Synchronous replication**:
+- Write waits for replica confirmation
+- Strong consistency
+- Higher latency
+- Use case: Critical data, low write volume
+
+**Multi-master**:
+- Multiple primaries accept writes
+- Need conflict resolution
+- More complex
+- Use case: Geographic distribution, high availability
+
+**For this system**:
+- Primary + 3 read replicas
+- Async replication (acceptable for our use case)
+- Read replicas in different AZs
+- Automatic failover if primary fails
+
+**Replication lag**:
+- Monitor lag (seconds behind)
+- Alert if lag > 10 seconds
+- Route critical reads to primary if needed"
+
+---
+
+### Cache Follow-ups (Continued)
+
+#### Follow-up 4: "How do you handle cache stampede?"
+
+**Answer**:
+"Cache stampede (thundering herd) occurs when cache expires and many requests simultaneously try to refresh it.
+
+**The problem**:
+```
+Cache expires → 1000 requests miss cache → 1000 DB queries
+```
+
+**Solutions**:
+
+1. **Distributed locking**:
+   - First request acquires lock, fetches from DB
+   - Other requests wait for lock, then read from cache
+   - Only one DB query instead of 1000
+
+2. **Probabilistic early expiration**:
+   - Expire cache slightly before TTL (e.g., 90% of TTL)
+   - Spreads expiration times
+   - Reduces simultaneous misses
+
+3. **Cache warming**:
+   - Refresh cache before expiration
+   - Background job refreshes popular items
+   - Prevents expiration
+
+4. **Request coalescing**:
+   - Multiple requests for same key → one fetches, others wait
+   - Similar to locking but lighter weight
+
+**Example implementation**:
+```java
+public Product getProduct(Long id) {
+    Product cached = cache.get(id);
+    if (cached != null) {
+        return cached;
+    }
+    
+    // Acquire lock
+    if (lock.tryLock(id)) {
+        try {
+            // Double-check (another thread might have cached it)
+            cached = cache.get(id);
+            if (cached != null) return cached;
+            
+            // Fetch from DB
+            Product product = db.getProduct(id);
+            cache.set(id, product, TTL);
+            return product;
+        } finally {
+            lock.unlock(id);
+        }
+    } else {
+        // Another thread is fetching, wait and retry
+        Thread.sleep(100);
+        return getProduct(id); // Retry
+    }
+}
+```"
+
+#### Follow-up 5: "What's your eviction policy?"
+
+**Answer**:
+"Eviction policy determines what gets removed when cache is full.
+
+**Common policies**:
+
+1. **LRU (Least Recently Used)**:
+   - Remove least recently accessed items
+   - Good for: General purpose, temporal locality
+   - Redis default
+
+2. **LFU (Least Frequently Used)**:
+   - Remove least frequently accessed items
+   - Good for: Long-term popularity patterns
+   - More complex to implement
+
+3. **FIFO (First In First Out)**:
+   - Remove oldest items
+   - Simple but may remove hot items
+   - Rarely used
+
+4. **TTL-based**:
+   - Remove expired items
+   - Good for: Time-sensitive data
+   - Often combined with LRU
+
+**For this system**:
+- **LRU** for general caching (user profiles, product data)
+- **TTL + LRU** for time-sensitive data (sessions, rate limits)
+
+**Configuration**:
+- Max memory: 10GB
+- Eviction policy: allkeys-lru (evict any key, LRU)
+- When full: Evict least recently used keys
+
+**Monitoring**:
+- Eviction rate (keys evicted per second)
+- Hit rate (should be > 95%)
+- Memory usage"
+
+#### Follow-up 6: "How do you warm up the cache?"
+
+**Answer**:
+"Cache warming pre-loads data into cache before it's needed.
+
+**When to warm**:
+- After cache restart/recovery
+- Before traffic spikes (Black Friday, product launches)
+- For predictable access patterns
+
+**Strategies**:
+
+1. **On startup**:
+   - Load most popular items
+   - Based on historical access patterns
+   - Example: Top 10K products, top 1M user profiles
+
+2. **Scheduled warming**:
+   - Background job refreshes cache periodically
+   - Before expiration (e.g., refresh at 80% of TTL)
+   - Prevents cache misses
+
+3. **Predictive warming**:
+   - ML predicts what will be accessed
+   - Pre-load predicted items
+   - More sophisticated
+
+**Example**:
+```java
+@Scheduled(cron = "0 0 * * * *") // Every hour
+public void warmCache() {
+    // Get top 10K products by views
+    List<Product> popularProducts = db.getTopProducts(10000);
+    
+    // Pre-load into cache
+    for (Product product : popularProducts) {
+        cache.set("product:" + product.getId(), product, Duration.ofHours(1));
+    }
+}
+```
+
+**Trade-offs**:
+- **Benefit**: Higher hit rate, faster responses
+- **Cost**: Extra DB load, cache memory usage
+- **Balance**: Warm only what's needed"
+
+#### Follow-up 7: "Cache-aside vs write-through?"
+
+**Answer**:
+"These are two common caching patterns with different trade-offs.
+
+**Cache-Aside (Lazy Loading)**:
+```
+Read:  Check cache → if miss, read DB → update cache
+Write: Update DB → invalidate cache
+```
+
+**Pros**:
+- Simple to implement
+- Cache only contains accessed data
+- Works with any database
+
+**Cons**:
+- Cache miss on first access (slower)
+- Potential race condition (two requests miss, both query DB)
+- Cache can be stale until invalidation
+
+**Write-Through**:
+```
+Read:  Check cache → return if found
+Write: Update cache → cache updates DB
+```
+
+**Pros**:
+- Cache always consistent
+- No cache misses (data always in cache)
+- Simpler read path
+
+**Cons**:
+- Slower writes (must update both cache and DB)
+- Cache contains all data (even rarely accessed)
+- More complex (cache must handle DB failures)
+
+**When to use each**:
+- **Cache-aside**: Read-heavy, write-light workloads (most common)
+- **Write-through**: Write-heavy, need strong consistency
+
+**For this system**:
+- Cache-aside for user profiles, product data (read-heavy)
+- Write-through for session data (write-heavy, need consistency)"
+
+---
+
+### Messaging Follow-ups (Continued)
+
+#### Follow-up 4: "How do you handle poison messages?"
+
+**Answer**:
+"Poison messages are messages that cause consumer to crash repeatedly.
+
+**The problem**:
+- Consumer processes message → crashes
+- Message returns to queue
+- Consumer processes again → crashes
+- Infinite loop
+
+**Solutions**:
+
+1. **Dead Letter Queue (DLQ)**:
+   - After N failed attempts, move to DLQ
+   - Process DLQ separately (manual review, fix, or discard)
+   - Prevents infinite retry loop
+
+2. **Exponential backoff**:
+   - Retry with increasing delays
+   - Gives system time to recover
+   - Eventually give up and move to DLQ
+
+3. **Message validation**:
+   - Validate message format before processing
+   - Reject invalid messages immediately
+   - Prevents crashes
+
+4. **Idempotency**:
+   - Make operations idempotent
+   - Can safely retry
+   - Reduces impact of poison messages
+
+**Example**:
+```java
+public void processMessage(Message msg) {
+    int retryCount = msg.getRetryCount();
+    
+    if (retryCount > MAX_RETRIES) {
+        // Move to DLQ
+        deadLetterQueue.send(msg);
+        return;
+    }
+    
+    try {
+        // Process message
+        process(msg);
+    } catch (Exception e) {
+        // Increment retry count
+        msg.setRetryCount(retryCount + 1);
+        
+        // Exponential backoff: 2^retryCount seconds
+        long delay = (long) Math.pow(2, retryCount);
+        queue.sendWithDelay(msg, delay);
+    }
+}
+```
+
+**Monitoring**:
+- Track messages moved to DLQ
+- Alert on high DLQ rate
+- Review DLQ regularly"
+
+#### Follow-up 5: "What's your retry strategy?"
+
+**Answer**:
+"Retry strategy handles transient failures (network issues, temporary DB unavailability).
+
+**Retry policies**:
+
+1. **Exponential backoff**:
+   - Retry after 1s, 2s, 4s, 8s, 16s...
+   - Prevents overwhelming failing service
+   - Most common approach
+
+2. **Fixed interval**:
+   - Retry every N seconds
+   - Simpler but less efficient
+   - Can overwhelm failing service
+
+3. **Jitter**:
+   - Add randomness to backoff
+   - Prevents thundering herd
+   - Example: 2s ± 0.5s random
+
+**Configuration**:
+- **Max retries**: 3-5 attempts
+- **Initial delay**: 100ms
+- **Max delay**: 30 seconds
+- **Backoff multiplier**: 2x
+
+**When to retry**:
+- **Transient errors**: Network timeouts, 5xx errors
+- **Not retry**: 4xx errors (client errors), validation failures
+
+**Example**:
+```java
+public Response callService(Request req) {
+    int retries = 0;
+    long delay = 100; // 100ms
+    
+    while (retries < MAX_RETRIES) {
+        try {
+            return httpClient.send(req);
+        } catch (TransientException e) {
+            retries++;
+            if (retries >= MAX_RETRIES) throw e;
+            
+            Thread.sleep(delay);
+            delay *= 2; // Exponential backoff
+            delay = Math.min(delay, 30000); // Cap at 30s
+        }
+    }
+}
+```
+
+**Circuit breaker**:
+- If failure rate > threshold, stop retrying
+- Fail fast instead of wasting resources
+- Resume after cooldown period"
+
+#### Follow-up 6: "How do you handle dead letter queues?"
+
+**Answer**:
+"Dead Letter Queue (DLQ) stores messages that couldn't be processed after multiple retries.
+
+**Purpose**:
+- Prevent infinite retry loops
+- Isolate problematic messages
+- Enable manual review and recovery
+
+**Configuration**:
+- **Max retries**: 3-5 attempts before DLQ
+- **DLQ retention**: 7-30 days (long enough to investigate)
+- **DLQ monitoring**: Alert on new messages
+
+**Processing DLQ**:
+1. **Manual review**: Investigate why message failed
+2. **Fix and reprocess**: Correct message, send back to main queue
+3. **Discard**: If message is invalid or no longer relevant
+
+**Example**:
+```java
+// Main queue consumer
+public void processMessage(Message msg) {
+    try {
+        process(msg);
+    } catch (Exception e) {
+        if (msg.getRetryCount() >= MAX_RETRIES) {
+            // Move to DLQ
+            deadLetterQueue.send(msg);
+            log.error("Message moved to DLQ: " + msg.getId());
+        } else {
+            // Retry
+            retry(msg);
+        }
+    }
+}
+
+// DLQ processor (manual or automated)
+public void processDLQ() {
+    List<Message> dlqMessages = deadLetterQueue.receive();
+    for (Message msg : dlqMessages) {
+        // Review, fix, or discard
+        if (isFixable(msg)) {
+            fixMessage(msg);
+            mainQueue.send(msg); // Reprocess
+        } else {
+            dlq.delete(msg); // Discard
+        }
+    }
+}
+```
+
+**Monitoring**:
+- DLQ size (alert if growing)
+- DLQ processing rate
+- Common failure reasons (for prevention)"
+
+#### Follow-up 7: "Kafka vs RabbitMQ - why?"
+
+**Answer**:
+"This is a common trade-off question. The choice depends on requirements.
+
+**Kafka**:
+- **Strengths**: High throughput, ordering guarantees, replay capability, long retention
+- **Use cases**: Event streaming, log aggregation, high-volume data pipelines
+- **Trade-offs**: More complex, higher latency, overkill for simple queues
+
+**RabbitMQ**:
+- **Strengths**: Simple, low latency, flexible routing, good for request-response
+- **Use cases**: Task queues, RPC, simple pub/sub
+- **Trade-offs**: Lower throughput, no built-in replay
+
+**Decision matrix**:
+
+| Requirement | Kafka | RabbitMQ |
+|------------|-------|----------|
+| High throughput (>100K msg/sec) | ✅ | ❌ |
+| Message ordering | ✅ | ⚠️ (per queue) |
+| Low latency (<10ms) | ❌ | ✅ |
+| Replay messages | ✅ | ❌ |
+| Simple setup | ❌ | ✅ |
+| Complex routing | ❌ | ✅ |
+
+**For this system**:
+- If event streaming, high volume → Kafka
+- If simple task queue, low latency → RabbitMQ
+- If both needs → Use both (Kafka for events, RabbitMQ for tasks)"
+
+---
+
+### Consistency Follow-ups (Continued)
+
+#### Follow-up 3: "Strong vs eventual consistency - why?"
+
+**Answer**:
+"This is a fundamental trade-off. The choice depends on correctness vs. performance.
+
+**Strong Consistency**:
+- All reads see latest write immediately
+- **Use when**: Financial transactions, inventory, critical data
+- **Trade-off**: Higher latency, lower availability during partitions
+
+**Eventual Consistency**:
+- Reads may see stale data temporarily
+- **Use when**: Social feeds, analytics, non-critical data
+- **Trade-off**: Lower latency, higher availability, but may serve stale data
+
+**Decision factors**:
+1. **Correctness requirement**: Can stale data cause harm?
+2. **Staleness tolerance**: How old can data be?
+3. **Scale**: Eventual consistency scales better
+4. **Latency requirement**: Eventual consistency is faster
+
+**Example**:
+- **Payment system**: Strong consistency (can't double-charge)
+- **Social feed**: Eventual consistency (few seconds stale is okay)
+- **User profile**: Eventual consistency (updates propagate in seconds)
+- **Inventory**: Strong consistency (can't oversell)
+
+**Hybrid approach**:
+- Critical operations: Strong consistency
+- Non-critical: Eventual consistency
+- Example: Payment (strong) + recommendations (eventual)"
+
+#### Follow-up 4: "How do you handle conflicts?"
+
+**Answer**:
+"Conflicts occur in eventually consistent systems when multiple writes happen concurrently.
+
+**Conflict resolution strategies**:
+
+1. **Last-write-wins (LWW)**:
+   - Use timestamp, keep latest write
+   - Simple but may lose data
+   - Good for: Session data, user preferences
+
+2. **Vector clocks**:
+   - Track causality of writes
+   - Detect conflicts, merge if possible
+   - More complex but preserves more data
+
+3. **CRDTs (Conflict-free Replicated Data Types)**:
+   - Data structures that merge automatically
+   - Example: Counters, sets, maps
+   - No conflicts by design
+
+4. **Application-level merging**:
+   - Application defines merge logic
+   - Most flexible but most complex
+   - Example: Merge user profile fields
+
+5. **Manual resolution**:
+   - Flag conflicts for human review
+   - For critical data
+   - Slow but safe
+
+**Example - User profile updates**:
+```java
+// Last-write-wins
+if (update1.timestamp > update2.timestamp) {
+    return update1;
+} else {
+    return update2;
+}
+
+// Merge (application-level)
+Profile merged = new Profile();
+merged.name = update1.name != null ? update1.name : update2.name;
+merged.email = update1.email != null ? update1.email : update2.email;
+// Merge non-conflicting fields
+```
+
+**For this system**:
+- User sessions: Last-write-wins
+- User profiles: Merge non-conflicting fields
+- Financial data: Prevent conflicts (strong consistency)"
+
+#### Follow-up 5: "What's your isolation level?"
+
+**Answer**:
+"Isolation level determines what transactions can see from other concurrent transactions.
+
+**Levels (from weakest to strongest)**:
+
+1. **Read Uncommitted**:
+   - Can see uncommitted changes
+   - Dirty reads possible
+   - Rarely used
+
+2. **Read Committed**:
+   - Only see committed changes
+   - Default in PostgreSQL
+   - Prevents dirty reads
+
+3. **Repeatable Read**:
+   - Same read returns same result
+   - Prevents non-repeatable reads
+   - Default in MySQL InnoDB
+
+4. **Serializable**:
+   - Transactions execute as if serial
+   - Strongest isolation
+   - Prevents all anomalies
+   - Slower, more locking
+
+**Trade-offs**:
+- **Stronger isolation**: More correctness, more locking, slower
+- **Weaker isolation**: Faster, less locking, potential anomalies
+
+**For this system**:
+- **Financial transactions**: Serializable (correctness critical)
+- **User data**: Read Committed (balance of performance and correctness)
+- **Analytics**: Read Uncommitted (speed over correctness)
+
+**Example**:
+```sql
+-- Set isolation level per transaction
+BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+-- ... financial operations ...
+COMMIT;
+```"
+
+#### Follow-up 6: "How do you ensure exactly-once processing?"
+
+**Answer**:
+"Exactly-once processing is challenging in distributed systems. Multiple approaches:
+
+**Approach 1: Idempotency keys**:
+- Each operation has unique ID
+- Track processed IDs
+- Skip if already processed
+
+```java
+public void processPayment(String idempotencyKey, Payment payment) {
+    if (processedKeys.contains(idempotencyKey)) {
+        return; // Already processed
+    }
+    
+    process(payment);
+    processedKeys.add(idempotencyKey);
+}
+```
+
+**Approach 2: Idempotent operations**:
+- Design operations to be naturally idempotent
+- SET balance = 100 (idempotent)
+- vs INCREMENT balance by 10 (not idempotent)
+
+**Approach 3: Database constraints**:
+- Unique constraint on operation ID
+- Insert fails if duplicate
+- Atomic check-and-insert
+
+**Approach 4: Kafka transactions**:
+- Kafka supports exactly-once semantics
+- Producer and consumer transactions
+- More complex, slower
+
+**Approach 5: Two-phase commit**:
+- Coordinator ensures exactly-once
+- Complex, doesn't scale well
+
+**For this system**:
+- **Payments**: Idempotency keys + database constraints
+- **Notifications**: At-least-once (idempotent operations)
+- **Analytics**: At-least-once (duplicates don't matter much)
+
+**Trade-off**:
+- Exactly-once: More complex, slower, higher cost
+- At-least-once: Simpler, faster, need idempotency"
+
+---
+
+### Scale Follow-ups (Continued)
+
+#### Follow-up 3: "What's the first bottleneck?"
+
+**Answer**:
+"Identifying bottlenecks early is crucial. Usually follows this order:
+
+**Typical bottleneck progression**:
+1. **Database** (most common first bottleneck)
+   - Single database can handle ~10K QPS
+   - Solutions: Read replicas, caching, sharding
+
+2. **Application servers**
+   - CPU or memory limits
+   - Solutions: Horizontal scaling, optimization
+
+3. **Network bandwidth**
+   - Especially for large payloads
+   - Solutions: Compression, CDN, regional distribution
+
+4. **Cache**
+   - If cache is too small
+   - Solutions: Increase cache size, better eviction
+
+**How to identify**:
+- Load testing to find breaking point
+- Monitor metrics: CPU, memory, QPS, latency
+- Profile to find slow operations
+
+**Example analysis**:
+```
+System: 100K QPS
+Database: 10K QPS capacity → BOTTLENECK
+Application: 50K QPS capacity → OK
+Cache: 1M QPS capacity → OK
+
+Solution: Add read replicas (5 replicas = 50K read QPS)
+```
+
+**Prevention**:
+- Do capacity estimation early
+- Monitor utilization
+- Scale proactively before hitting limits"
+
+#### Follow-up 4: "How do you handle traffic spikes?"
+
+**Answer**:
+"Traffic spikes (10x normal traffic) require special handling.
+
+**Strategies**:
+
+1. **Auto-scaling**:
+   - Automatically add servers during spikes
+   - Scale down after spike
+   - Works for predictable and unpredictable spikes
+
+2. **Reserved capacity**:
+   - Keep extra capacity for known events (Black Friday)
+   - Pre-scale before event
+   - More cost-effective than auto-scaling
+
+3. **Caching**:
+   - Cache popular content
+   - Reduces load on backend
+   - Critical for spikes
+
+4. **Rate limiting**:
+   - Protect backend from overload
+   - Queue requests
+   - Graceful degradation
+
+5. **CDN**:
+   - Serve static content from edge
+   - Reduces origin load
+   - Global distribution
+
+6. **Load shedding**:
+   - Drop non-critical requests
+   - Prioritize important traffic
+   - Last resort
+
+**Example**:
+```
+Normal traffic: 10K QPS
+Black Friday: 100K QPS (10x spike)
+
+Strategy:
+- Pre-scale: 50 servers (5x normal)
+- Auto-scale: Up to 100 servers
+- Caching: 95% hit rate → 5K QPS to backend
+- CDN: 80% of traffic → 20K QPS to origin
+- Effective load: 20K QPS (manageable)
+```
+
+**Monitoring**:
+- Alert on traffic spikes
+- Monitor auto-scaling
+- Track cache hit rates during spikes"
+
+#### Follow-up 5: "Horizontal vs vertical scaling?"
+
+**Answer**:
+"This is a fundamental scaling decision.
+
+**Vertical Scaling (Scale Up)**:
+- Add more resources to same server (CPU, RAM, disk)
+- **Pros**: Simple, no code changes
+- **Cons**: Limited by hardware, single point of failure, expensive at scale
+- **Use when**: Small scale, simple system
+
+**Horizontal Scaling (Scale Out)**:
+- Add more servers
+- **Pros**: Unlimited scale, fault tolerance, cost-effective
+- **Cons**: More complex (stateless, load balancing), network overhead
+- **Use when**: Large scale, need redundancy
+
+**Decision factors**:
+- **Scale**: <10K users → vertical, >100K → horizontal
+- **Availability**: Need redundancy → horizontal
+- **Complexity tolerance**: Simple → vertical, can handle complexity → horizontal
+
+**For this system**:
+- Start vertical (simple, cost-effective)
+- Migrate to horizontal when needed (scale, redundancy)
+- Design stateless from start (easier migration)"
+
+#### Follow-up 6: "How do you handle global users?"
+
+**Answer**:
+"Global users require geographic distribution for low latency.
+
+**Strategies**:
+
+1. **CDN for static content**:
+   - Serve static assets from edge locations
+   - Reduces latency for images, CSS, JS
+   - Doesn't help with dynamic content
+
+2. **Multi-region deployment**:
+   - Deploy application in multiple regions
+   - Route users to nearest region
+   - Reduces latency for dynamic content
+
+3. **Database replication**:
+   - Read replicas in each region
+   - Writes go to primary (or multi-master)
+   - Trade-off: Replication lag
+
+4. **Geographic sharding**:
+   - Partition data by region
+   - Users in region access local data
+   - Reduces cross-region latency
+
+**Example**:
+```
+Regions: US-East, EU-West, Asia-Pacific
+
+Architecture:
+- Application servers in each region
+- Database: Primary in US-East, replicas in other regions
+- CDN: Global edge locations
+- Routing: Route users to nearest region
+
+Latency:
+- US user → US-East: 50ms
+- EU user → EU-West: 50ms (vs 200ms to US-East)
+- Asia user → Asia-Pacific: 50ms (vs 300ms to US-East)
+```
+
+**Challenges**:
+- **Data consistency**: Replication lag
+- **Data locality**: Where to store user data?
+- **Cost**: 3x infrastructure (3 regions)
+
+**For this system**:
+- Start single region (simpler, cheaper)
+- Add regions as user base grows
+- Use CDN from day one (easy win)"
+
+---
+
+### Reliability Follow-ups
+
+#### Follow-up 1: "What if [component] fails?"
+
+**Answer structure**:
+"For each component, I consider:
+
+1. **Failure detection**: How do we know it failed?
+2. **Impact**: What breaks when it fails?
+3. **Recovery**: How do we restore service?
+4. **Mitigation**: How do we reduce impact?
+
+**Example - Database fails**:
+- **Detection**: Health checks every 10 seconds
+- **Impact**: All writes fail, reads from replicas continue
+- **Recovery**: Automatic failover to replica (1-2 minutes)
+- **Mitigation**: Read replicas for read availability, queue writes during failover
+
+**Example - Cache fails**:
+- **Detection**: Health checks, connection errors
+- **Impact**: All requests hit database (slower, higher load)
+- **Recovery**: Restart cache, warm from database
+- **Mitigation**: Graceful degradation, circuit breaker
+
+**Example - Application server fails**:
+- **Detection**: Load balancer health checks
+- **Impact**: Reduced capacity, requests routed to other servers
+- **Recovery**: Auto-scaling replaces failed server (2-5 minutes)
+- **Mitigation**: Multiple servers, stateless design"
+
+#### Follow-up 2: "How do you handle cascading failures?"
+
+**Answer**:
+"Cascading failures occur when one failure causes others, leading to system-wide outage.
+
+**Common causes**:
+- Service A fails → Service B retries → Overwhelms Service A → Service A stays down
+- Database slow → Application waits → Threads exhausted → Application fails
+- Cache miss → All requests hit DB → DB overloaded → DB fails
+
+**Prevention strategies**:
+
+1. **Circuit breaker**:
+   - Stop calling failing service
+   - Fail fast instead of waiting
+   - Resume after cooldown
+
+2. **Timeouts**:
+   - Don't wait forever
+   - Fail fast on timeout
+   - Prevents resource exhaustion
+
+3. **Rate limiting**:
+   - Limit requests to downstream
+   - Prevents overwhelming services
+   - Protects both sides
+
+4. **Bulkheads**:
+   - Isolate resources (thread pools, connections)
+   - Failure in one area doesn't affect others
+   - Like ship bulkheads
+
+5. **Graceful degradation**:
+   - Reduce functionality instead of failing
+   - Show cached data, disable features
+   - Better than complete outage
+
+**Example**:
+```java
+// Circuit breaker
+if (failureRate > 0.5 && requestCount > 100) {
+    circuitOpen = true; // Stop calling service
+    return cachedData; // Return stale data
+}
+
+// Timeout
+try {
+    response = httpClient.send(request, timeout=1s);
+} catch (TimeoutException e) {
+    return defaultResponse; // Don't wait
+}
+
+// Rate limiting
+if (requestsToServiceB > 1000/sec) {
+    queueRequest(request); // Don't overwhelm
+}
+```"
+
+#### Follow-up 3: "What's your disaster recovery plan?"
+
+**Answer**:
+"Disaster recovery (DR) handles complete region/data center failures.
+
+**RTO (Recovery Time Objective)**: How fast to recover?
+- **RTO = 1 hour**: Need hot standby
+- **RTO = 24 hours**: Can restore from backups
+
+**RPO (Recovery Point Objective)**: How much data loss acceptable?
+- **RPO = 0**: No data loss (continuous replication)
+- **RPO = 1 hour**: Can lose 1 hour of data
+
+**DR strategies**:
+
+1. **Backup and restore**:
+   - Regular backups to different region
+   - Restore when needed
+   - RTO: Hours to days
+   - RPO: Backup frequency
+
+2. **Warm standby**:
+   - Secondary region with infrastructure ready
+   - Data replicated
+   - RTO: Minutes to hours
+   - RPO: Replication lag
+
+3. **Hot standby (active-active)**:
+   - Both regions active
+   - Automatic failover
+   - RTO: Seconds to minutes
+   - RPO: Near zero
+
+**For this system**:
+- **Critical data**: Hot standby (payments, user accounts)
+- **Non-critical**: Warm standby (analytics, logs)
+- **Backups**: Daily to S3 in different region
+
+**Testing**:
+- Quarterly DR drills
+- Test failover process
+- Measure actual RTO/RPO"
+
+---
+
+### Security Follow-ups
+
+#### Follow-up 1: "How do you handle authentication?"
+
+**Answer**:
+"Authentication verifies user identity.
+
+**Approaches**:
+
+1. **Session-based**:
+   - Server creates session after login
+   - Session ID stored in cookie
+   - Server validates session on each request
+   - **Pros**: Simple, server controls
+   - **Cons**: Server must store sessions, doesn't scale well
+
+2. **Token-based (JWT)**:
+   - Server issues JWT after login
+   - Client sends JWT in each request
+   - Server validates JWT signature
+   - **Pros**: Stateless, scalable
+   - **Cons**: Hard to revoke, larger tokens
+
+3. **OAuth 2.0**:
+   - Third-party authentication (Google, Facebook)
+   - User authorizes app
+   - App gets access token
+   - **Pros**: Users don't need new account
+   - **Cons**: Dependency on third party
+
+**For this system**:
+- **Web app**: Session-based (simpler, server controls)
+- **Mobile/API**: JWT (stateless, scalable)
+- **Third-party login**: OAuth 2.0
+
+**Security considerations**:
+- HTTPS only
+- Secure cookie flags (HttpOnly, Secure, SameSite)
+- Token expiration
+- Rate limiting on login"
+
+#### Follow-up 2: "How do you handle authorization?"
+
+**Answer**:
+"Authorization determines what authenticated users can do.
+
+**Models**:
+
+1. **RBAC (Role-Based Access Control)**:
+   - Users have roles (admin, user, guest)
+   - Roles have permissions
+   - Simple, common
+
+2. **ABAC (Attribute-Based Access Control)**:
+   - Permissions based on attributes
+   - More flexible, more complex
+   - Example: "User can edit if owner AND not archived"
+
+3. **ACL (Access Control Lists)**:
+   - Per-resource permissions
+   - Fine-grained but complex
+   - Example: File permissions
+
+**Implementation**:
+```java
+// RBAC example
+if (user.hasRole("admin") || user.isOwner(resource)) {
+    allow();
+} else {
+    deny();
+}
+
+// ABAC example
+if (resource.owner == user.id && resource.status != "archived") {
+    allow();
+}
+```
+
+**For this system**:
+- **Simple**: RBAC (admin, user roles)
+- **Complex**: ABAC for fine-grained permissions
+
+**Best practices**:
+- Principle of least privilege
+- Check permissions on every request
+- Log authorization failures"
+
+---
+
 ## 7️⃣ Quick Reference: 50+ Follow-ups
 
 ```

@@ -268,6 +268,358 @@ public class SearchService {
 
 ---
 
+## 4. Log Aggregation Implementation
+
+### Log Aggregation Service
+
+```java
+@Service
+public class LogAggregationService {
+    
+    private final KafkaTemplate<String, LogEvent> kafkaTemplate;
+    private final ObjectMapper objectMapper;
+    private final LogParser logParser;
+    
+    /**
+     * Aggregate logs from multiple services.
+     * Handles batching, parsing, and routing to Kafka.
+     */
+    public void aggregateLogs(List<RawLog> rawLogs) {
+        // Batch logs by service for efficient processing
+        Map<String, List<RawLog>> logsByService = rawLogs.stream()
+            .collect(Collectors.groupingBy(RawLog::getServiceName));
+        
+        // Process each service's logs
+        for (Map.Entry<String, List<RawLog>> entry : logsByService.entrySet()) {
+            String serviceName = entry.getKey();
+            List<RawLog> serviceLogs = entry.getValue();
+            
+            // Parse logs
+            List<LogEvent> parsedLogs = serviceLogs.stream()
+                .map(logParser::parse)
+                .filter(Objects::nonNull)  // Filter parsing errors
+                .collect(Collectors.toList());
+            
+            // Send to Kafka (batched by service)
+            for (LogEvent logEvent : parsedLogs) {
+                kafkaTemplate.send("logs", serviceName, logEvent);
+            }
+        }
+    }
+    
+    /**
+     * Aggregate logs with deduplication.
+     */
+    public void aggregateLogsWithDeduplication(List<RawLog> rawLogs) {
+        Set<String> seenLogIds = ConcurrentHashMap.newKeySet();
+        
+        List<LogEvent> uniqueLogs = rawLogs.stream()
+            .map(logParser::parse)
+            .filter(Objects::nonNull)
+            .filter(log -> {
+                String logId = generateLogId(log);
+                return seenLogIds.add(logId);  // Only add if not seen
+            })
+            .collect(Collectors.toList());
+        
+        // Send to Kafka
+        for (LogEvent logEvent : uniqueLogs) {
+            kafkaTemplate.send("logs", logEvent.getServiceName(), logEvent);
+        }
+    }
+    
+    private String generateLogId(LogEvent log) {
+        return log.getServiceName() + ":" + log.getTimestamp() + ":" + 
+               DigestUtils.md5Hex(log.getMessage());
+    }
+}
+```
+
+### Log Parser Implementation
+
+```java
+@Component
+public class LogParser {
+    
+    private final List<LogFormatParser> parsers;
+    
+    public LogParser() {
+        this.parsers = Arrays.asList(
+            new JSONLogParser(),
+            new StructuredLogParser(),
+            new PlainTextLogParser()
+        );
+    }
+    
+    /**
+     * Parse raw log into structured LogEvent.
+     */
+    public LogEvent parse(RawLog rawLog) {
+        for (LogFormatParser parser : parsers) {
+            if (parser.canParse(rawLog)) {
+                try {
+                    return parser.parse(rawLog);
+                } catch (Exception e) {
+                    // Try next parser
+                    continue;
+                }
+            }
+        }
+        
+        // Fallback: parse as plain text
+        return parseAsPlainText(rawLog);
+    }
+    
+    /**
+     * Parse JSON log format.
+     */
+    private static class JSONLogParser implements LogFormatParser {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+        
+        @Override
+        public boolean canParse(RawLog rawLog) {
+            try {
+                objectMapper.readTree(rawLog.getContent());
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        
+        @Override
+        public LogEvent parse(RawLog rawLog) throws Exception {
+            JsonNode json = objectMapper.readTree(rawLog.getContent());
+            
+            return LogEvent.builder()
+                .timestamp(parseTimestamp(json.get("timestamp").asText()))
+                .level(LogLevel.valueOf(json.get("level").asText().toUpperCase()))
+                .serviceName(rawLog.getServiceName())
+                .message(json.get("message").asText())
+                .fields(extractFields(json))
+                .build();
+        }
+        
+        private Map<String, String> extractFields(JsonNode json) {
+            Map<String, String> fields = new HashMap<>();
+            json.fields().forEachRemaining(entry -> {
+                if (!entry.getKey().equals("timestamp") && 
+                    !entry.getKey().equals("level") && 
+                    !entry.getKey().equals("message")) {
+                    fields.put(entry.getKey(), entry.getValue().asText());
+                }
+            });
+            return fields;
+        }
+    }
+    
+    /**
+     * Parse structured log format (e.g., "2024-01-15 10:30:00 [INFO] service: message").
+     */
+    private static class StructuredLogParser implements LogFormatParser {
+        private static final Pattern STRUCTURED_PATTERN = Pattern.compile(
+            "(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) \\[(\\w+)\\] (\\w+): (.+)"
+        );
+        
+        @Override
+        public boolean canParse(RawLog rawLog) {
+            return STRUCTURED_PATTERN.matcher(rawLog.getContent()).matches();
+        }
+        
+        @Override
+        public LogEvent parse(RawLog rawLog) throws Exception {
+            Matcher matcher = STRUCTURED_PATTERN.matcher(rawLog.getContent());
+            if (!matcher.find()) {
+                throw new IllegalArgumentException("Invalid structured log format");
+            }
+            
+            return LogEvent.builder()
+                .timestamp(parseTimestamp(matcher.group(1)))
+                .level(LogLevel.valueOf(matcher.group(2).toUpperCase()))
+                .serviceName(matcher.group(3))
+                .message(matcher.group(4))
+                .build();
+        }
+    }
+    
+    /**
+     * Parse plain text log (fallback).
+     */
+    private LogEvent parseAsPlainText(RawLog rawLog) {
+        return LogEvent.builder()
+            .timestamp(Instant.now())
+            .level(LogLevel.INFO)  // Default level
+            .serviceName(rawLog.getServiceName())
+            .message(rawLog.getContent())
+            .build();
+    }
+    
+    interface LogFormatParser {
+        boolean canParse(RawLog rawLog);
+        LogEvent parse(RawLog rawLog) throws Exception;
+    }
+}
+```
+
+## 5. Log Indexing Implementation
+
+### Elasticsearch Indexing Service
+
+```java
+@Service
+public class LogIndexingService {
+    
+    private final ElasticsearchClient elasticsearchClient;
+    private final ObjectMapper objectMapper;
+    
+    /**
+     * Index log events to Elasticsearch.
+     */
+    public void indexLogs(List<LogEvent> logEvents) {
+        // Batch index for efficiency
+        BulkRequest.Builder bulkRequest = new BulkRequest.Builder();
+        
+        for (LogEvent logEvent : logEvents) {
+            String indexName = generateIndexName(logEvent.getTimestamp());
+            
+            bulkRequest.operations(op -> op
+                .index(idx -> idx
+                    .index(indexName)
+                    .id(generateDocumentId(logEvent))
+                    .document(toDocument(logEvent))
+                )
+            );
+        }
+        
+        // Execute bulk index
+        try {
+            BulkResponse response = elasticsearchClient.bulk(bulkRequest.build());
+            if (response.errors()) {
+                log.error("Some log indexing failed: {}", response);
+            }
+        } catch (Exception e) {
+            log.error("Failed to index logs", e);
+            throw new LogIndexingException("Failed to index logs", e);
+        }
+    }
+    
+    /**
+     * Generate index name based on timestamp (daily indices).
+     */
+    private String generateIndexName(Instant timestamp) {
+        LocalDate date = timestamp.atZone(ZoneOffset.UTC).toLocalDate();
+        return String.format("logs-%04d-%02d-%02d", 
+            date.getYear(), date.getMonthValue(), date.getDayOfMonth());
+    }
+    
+    /**
+     * Generate unique document ID.
+     */
+    private String generateDocumentId(LogEvent logEvent) {
+        String content = logEvent.getServiceName() + ":" + 
+                        logEvent.getTimestamp() + ":" + 
+                        logEvent.getMessage();
+        return DigestUtils.sha256Hex(content);
+    }
+    
+    /**
+     * Convert LogEvent to Elasticsearch document.
+     */
+    private Map<String, Object> toDocument(LogEvent logEvent) {
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("timestamp", logEvent.getTimestamp().toString());
+        doc.put("level", logEvent.getLevel().name());
+        doc.put("service", logEvent.getServiceName());
+        doc.put("message", logEvent.getMessage());
+        
+        if (logEvent.getFields() != null && !logEvent.getFields().isEmpty()) {
+            doc.put("fields", logEvent.getFields());
+        }
+        
+        return doc;
+    }
+    
+    /**
+     * Create index template for log indices.
+     */
+    public void createIndexTemplate() {
+        try {
+            elasticsearchClient.indices().putTemplate(t -> t
+                .name("logs-template")
+                .indexPatterns("logs-*")
+                .template(tmpl -> tmpl
+                    .mappings(m -> m
+                        .properties("timestamp", p -> p.date(d -> d))
+                        .properties("level", p -> p.keyword(k -> k))
+                        .properties("service", p -> p.keyword(k -> k))
+                        .properties("message", p -> p.text(txt -> txt.analyzer("standard")))
+                        .properties("fields", p -> p.object(o -> o.dynamic(DynamicMapping.True)))
+                    )
+                    .settings(s -> s
+                        .numberOfShards("5")
+                        .numberOfReplicas("1")
+                        .refreshInterval("30s")
+                    )
+                )
+            );
+        } catch (Exception e) {
+            log.error("Failed to create index template", e);
+        }
+    }
+}
+```
+
+### Kafka Consumer for Log Indexing
+
+```java
+@Component
+public class LogIndexingConsumer {
+    
+    private final LogIndexingService indexingService;
+    private final int batchSize = 1000;
+    private final List<LogEvent> batch = new ArrayList<>();
+    private final ScheduledExecutorService scheduler;
+    
+    @KafkaListener(topics = "logs", groupId = "log-indexing")
+    public void consume(ConsumerRecord<String, LogEvent> record) {
+        LogEvent logEvent = record.value();
+        batch.add(logEvent);
+        
+        // Index when batch is full
+        if (batch.size() >= batchSize) {
+            indexBatch();
+        }
+    }
+    
+    /**
+     * Index batch of logs.
+     */
+    private synchronized void indexBatch() {
+        if (batch.isEmpty()) return;
+        
+        List<LogEvent> logsToIndex = new ArrayList<>(batch);
+        batch.clear();
+        
+        try {
+            indexingService.indexLogs(logsToIndex);
+        } catch (Exception e) {
+            log.error("Failed to index batch, will retry", e);
+            // Could implement retry logic or dead letter queue
+        }
+    }
+    
+    /**
+     * Periodic batch indexing (for low-volume scenarios).
+     */
+    @PostConstruct
+    public void startPeriodicIndexing() {
+        scheduler.scheduleAtFixedRate(
+            this::indexBatch,
+            5, 5, TimeUnit.SECONDS
+        );
+    }
+}
+```
+
 ## Summary
 
 | Aspect | Decision | Rationale |
@@ -275,4 +627,7 @@ public class SearchService {
 | Kafka Partitioning | Service hash | Efficient batching |
 | Search Cache TTL | 1 minute | Balance hit rate and freshness |
 | Search Engine | Elasticsearch | Full-text search, time-series optimized |
+| Log Parsing | Multi-format parser | Support JSON, structured, plain text |
+| Log Indexing | Daily indices | Efficient time-range queries, easy retention |
+| Batch Indexing | 1000 logs/batch | Balance throughput and latency |
 

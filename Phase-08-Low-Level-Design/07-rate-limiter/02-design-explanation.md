@@ -236,6 +236,27 @@ public class RateLimiterFactory {
 }
 ```
 
+**Why We Use Concrete Factory Implementations in This LLD Implementation:**
+
+For low-level design interviews, we intentionally use concrete factory implementations instead of a RateLimiterProvider interface for the following reasons:
+
+1. **Well-Known Types**: The factory creates well-known rate limiter types (TokenBucket, SlidingWindow, LeakyBucket). There's no requirement for multiple factory implementations in the interview context.
+
+2. **Core Algorithm Focus**: LLD interviews focus on rate limiting algorithms and token management. Adding factory abstraction shifts focus away from these core concepts.
+
+3. **Interview Time Constraints**: Implementing full provider interface hierarchies takes time away from demonstrating more critical LLD concepts like algorithm implementation and concurrency control.
+
+4. **Production vs Interview**: In production systems, we would absolutely extract `RateLimiterProvider` interface and use dependency injection for:
+   - Testability (mock providers in unit tests)
+   - Algorithm extensibility (add new algorithms without modifying factory)
+   - Plugin architecture (dynamically load rate limiter implementations)
+
+**The Trade-off:**
+- **Interview Scope**: Concrete factory focuses on algorithm implementation and token management
+- **Production Scope**: Provider interface provides testability and algorithm extensibility
+
+Note: We do use the RateLimiter interface well (good DIP!), showing we understand when interfaces add value.
+
 ---
 
 ## SOLID Principles Check
@@ -246,7 +267,7 @@ public class RateLimiterFactory {
 | **OCP** | PASS | System is open for extension (new rate limiting algorithms) without modifying existing code. Strategy pattern enables this. | N/A | - |
 | **LSP** | PASS | All RateLimiter implementations properly implement the RateLimiter interface contract. They are substitutable. | N/A | - |
 | **ISP** | PASS | RateLimiter interface is minimal and focused. Clients only depend on what they need (tryAcquire method). No unused methods. | N/A | - |
-| **DIP** | WEAK | Factory depends on concrete implementations. Could use RateLimiterProvider interface abstraction. Mentioned in DIP section but not fully implemented. | Extract RateLimiterProvider interface, use dependency injection | More abstraction layers, but improves testability and algorithm extensibility |
+| **DIP** | ACCEPTABLE (LLD Scope) | Factory depends on concrete implementations. For LLD interview scope, this is acceptable as it focuses on core rate limiting algorithms. In production, we would use RateLimiterProvider interface abstraction. | See "Why We Use Concrete Factory Implementations" section above for detailed justification. This is an intentional design decision for interview context, not an oversight. | Interview: Simpler, focuses on core LLD skills. Production: More abstraction layers, but improves testability and algorithm extensibility |
 
 ---
 
